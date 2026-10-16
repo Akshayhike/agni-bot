@@ -75,8 +75,8 @@ protocol package first.
 - **S1 constant prompt** — system + persona + the last 16 messages, hard cap.
   Nothing grows with history (`agent/loop.ts`).
 - **S2 memory is a tool** — FTS5 indexes (memories, links) are read by tools
-  on demand, never injected into the prompt prefix. Schema is ready; tools
-  arrive with P2.
+  on demand, never injected into the prompt prefix. The task persona exposes
+  bounded memory, link, and task store tools.
 - **S3 lane isolation** — instant lane is one call, no tools, no steps
   (`runInstantTurn`). Task/deep lanes get their own runner with the job queue.
 - **S4 write-time work** — summaries/indexes are written when data lands, not
@@ -87,6 +87,19 @@ protocol package first.
   (frames are ready; the app consumes them in P1).
 - **S7 bounded everything** — per-turn timeout, first-token timeout, step
   budgets in the lane runner, daily caps on the usage ledger.
+
+## Task lane
+
+The `agni-task` persona uses `agent/task-loop.ts`; `agni` continues through
+the one-call instant runner. Each task step sends the same system prompt and
+tool schemas first, then the compacted session and recent messages. That keeps
+the leading request prefix stable for provider-side prefix caching when the
+provider supports it. The loop has an eight-tool-call and 16k-token budget,
+persists its message log and each tool result, and only registers the P2 store
+tools. An interrupted session restores saved tool results; calls with an
+uncertain outcome are returned as errors and never replayed automatically.
+Approval decisions are stored in SQLite and resolve the active loop through
+the approval broker.
 
 ## Failure honesty
 

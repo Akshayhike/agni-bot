@@ -187,4 +187,46 @@ export const MIGRATIONS: Migration[] = [
       );
     `,
   },
+  {
+    id: 6,
+    name: "p3_tool_calls_and_sessions",
+    sql: `
+      -- Durable tool-call records: one row per tool invocation in a task lane turn.
+      CREATE TABLE tool_calls (
+        id TEXT PRIMARY KEY,
+        thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+        turn_id TEXT NOT NULL REFERENCES turns(id) ON DELETE CASCADE,
+        call_id TEXT NOT NULL,
+        tool_name TEXT NOT NULL,
+        args TEXT NOT NULL,
+        result TEXT,
+        ok INTEGER NOT NULL DEFAULT 1,
+        error TEXT,
+        duration_ms INTEGER,
+        created_at TEXT NOT NULL
+      );
+      CREATE INDEX idx_tool_calls_turn ON tool_calls(turn_id, created_at);
+
+      -- Durable session state for long-running task turns: the raw model
+      -- message array, compaction summaries, and the HITL approval ledger.
+      CREATE TABLE agent_sessions (
+        thread_id TEXT PRIMARY KEY,
+        turn_id TEXT NOT NULL,
+        state TEXT NOT NULL,            -- running | awaiting_approval | done | failed
+        message_log TEXT NOT NULL,      -- JSON array of ChatMessage + tool records
+        summary TEXT,                   -- compaction summary of pruned history
+        step_count INTEGER NOT NULL DEFAULT 0,
+        token_count INTEGER NOT NULL DEFAULT 0,
+        max_steps INTEGER NOT NULL,
+        max_tokens INTEGER NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX idx_agent_sessions_turn ON agent_sessions(turn_id);
+
+      -- HITL approval ledger: one row per pending approval request.
+      ALTER TABLE approvals ADD COLUMN call_id TEXT;
+      ALTER TABLE approvals ADD COLUMN tool_name TEXT;
+    `,
+  },
 ];

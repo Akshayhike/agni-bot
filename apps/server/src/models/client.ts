@@ -6,8 +6,29 @@
 import { log } from "../log";
 
 export interface ChatMessage {
-  role: "system" | "user" | "assistant";
+  role: "system" | "user" | "assistant" | "tool";
   content: string;
+  /** Tool calls the assistant made (only on `assistant` messages). */
+  toolCalls?: ToolCall[];
+  /** Required on tool replies so OpenAI-compatible APIs can pair the result. */
+  toolCallID?: string;
+}
+
+/** One tool-call fragment, as returned by the provider. */
+export interface ToolCall {
+  id: string;
+  type: "function";
+  function: { name: string; arguments: string };
+}
+
+/** A tool definition surfaced to the model as JSON-schema-shaped args. */
+export interface ToolSpec {
+  type: "function";
+  function: {
+    name: string;
+    description: string;
+    parameters: Record<string, unknown>;
+  };
 }
 
 export type ProviderErrorKind = "http" | "network" | "timeout" | "aborted" | "parse";
@@ -38,6 +59,10 @@ export interface ChatRequest {
   temperature?: number;
   maxTokens?: number;
   fetchFn?: typeof fetch;
+  /** Tool schemas injected into the request; the model may emit tool_calls. */
+  tools?: ToolSpec[];
+  /** When true, the model is forced to pick exactly one tool (HITL gate flow). */
+  toolChoice?: "auto" | "required" | "none" | { type: "function"; function: { name: string } };
 }
 
 export interface ChatResult {
@@ -45,6 +70,8 @@ export interface ChatResult {
   firstTokenMs: number;
   inputTokens?: number;
   outputTokens?: number;
+  /** Structured tool calls the model emitted, if any. */
+  toolCalls?: ToolCall[];
 }
 
 /** Parse an HTTP Retry-After header (seconds or HTTP date) into milliseconds. */
@@ -85,8 +112,14 @@ export async function streamChat(request: ChatRequest): Promise<ChatResult> {
       },
       body: JSON.stringify({
         model: request.model,
-        messages: request.messages,
+        messages: request.messages.map((message) => ({
+          role: message.role,
+          content: message.content,
+          ...(message.toolCalls ? { tool_calls: message.toolCalls } : {}),
+          ...(message.toolCallID ? { tool_call_id: message.toolCallID } : {}),
+        })),
         stream: true,
+        ...(request.tools?.length ? { tools: request.tools, tool_choice: request.toolChoice ?? "auto" } : {}),
         ...(request.temperature !== undefined ? { temperature: request.temperature } : {}),
         ...(request.maxTokens !== undefined ? { max_tokens: request.maxTokens } : {}),
       }),
@@ -125,6 +158,8 @@ export async function streamChat(request: ChatRequest): Promise<ChatResult> {
   let firstTokenMs = -1;
   let inputTokens: number | undefined;
   let outputTokens: number | undefined;
+  // Tool calls arrive as incremental fragments keyed by index; accumulate them.
+  const toolFragments = new Map<number, { id?: string; name?: string; arguments: string }>();
 
   try {
     // SSE: one JSON event per `data:` line, terminated by `data: [DONE]`.
@@ -145,15 +180,35 @@ export async function streamChat(request: ChatRequest): Promise<ChatResult> {
         } catch {
           continue; // keep-alive comments and partial junk are not fatal
         }
-        const choice = (payload as { choices?: Array<{ delta?: { content?: unknown } }> }).choices?.[0];
-        const delta = choice?.delta?.content;
-        if (typeof delta === "string" && delta.length > 0) {
+        const choice = (payload as { choices?: Array<{ delta?: Record<string, unknown> }> }).choices?.[0];
+        if (!choice?.delta) continue;
+        const delta = choice.delta;
+        const content = delta.content;
+        if (typeof content === "string" && content.length > 0) {
           if (firstTokenMs < 0) {
             firstTokenMs = Date.now() - startedAt;
             if (firstTokenTimer !== undefined) clearTimeout(firstTokenTimer);
           }
-          text += delta;
-          request.onDelta(delta);
+          text += content;
+          request.onDelta(content);
+        }
+        // Accumulate tool-call fragments (OpenAI streaming shape).
+        const calls = delta.tool_calls;
+        if (Array.isArray(calls)) {
+          if (calls.length > 0 && firstTokenTimer !== undefined) {
+            firstTokenMs = Date.now() - startedAt;
+            clearTimeout(firstTokenTimer);
+            firstTokenTimer = undefined;
+          }
+          for (const fragment of calls as Array<Record<string, unknown>>) {
+            const index = typeof fragment.index === "number" ? fragment.index : 0;
+            const existing = toolFragments.get(index) ?? { arguments: "" };
+            if (typeof fragment.id === "string") existing.id = fragment.id;
+            const fn = fragment.function as { name?: string; arguments?: string } | undefined;
+            if (typeof fn?.name === "string") existing.name = fn.name;
+            if (typeof fn?.arguments === "string") existing.arguments += fn.arguments;
+            toolFragments.set(index, existing);
+          }
         }
         const usage = (payload as { usage?: { prompt_tokens?: number; completion_tokens?: number } }).usage;
         if (usage) {
@@ -176,7 +231,22 @@ export async function streamChat(request: ChatRequest): Promise<ChatResult> {
     log.debug(`provider returned no content tokens for model ${request.model}`);
     firstTokenMs = Date.now() - startedAt;
   }
-  return { text, firstTokenMs, inputTokens, outputTokens };
+  const toolCalls = buildToolCalls(toolFragments);
+  return { text, firstTokenMs, inputTokens, outputTokens, ...(toolCalls.length ? { toolCalls } : {}) };
+}
+
+/** Reassemble streaming tool-call fragments into complete ToolCall objects. */
+function buildToolCalls(fragments: Map<number, { id?: string; name?: string; arguments: string }>): ToolCall[] {
+  const calls: ToolCall[] = [];
+  for (const [, fragment] of fragments) {
+    if (!fragment.id || !fragment.name) continue;
+    calls.push({
+      id: fragment.id,
+      type: "function",
+      function: { name: fragment.name, arguments: fragment.arguments },
+    });
+  }
+  return calls;
 }
 
 function truncate(text: string, max: number): string {

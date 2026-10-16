@@ -14,12 +14,15 @@ export interface ToolContext {
   signal: AbortSignal;
 }
 
+export type ToolKind = "static" | "dynamic";
+
 export interface ToolDefinition<Args = unknown, Result = unknown> {
   name: string;
   description: string;
   /** JSON-schema-shaped argument description, surfaced to the model. */
   schema: unknown;
   timeoutMs: number;
+  kind?: ToolKind;
   handler: (args: Args, ctx: ToolContext) => Promise<Result>;
 }
 
@@ -40,9 +43,20 @@ export class ToolRegistry {
     return [...this.tools.values()];
   }
 
+  /** Get tools filtered by kind. */
+  listByKind(kind: ToolKind): ToolDefinition<never, unknown>[] {
+    return [...this.tools.values()].filter((tool) => (tool.kind ?? "static") === kind);
+  }
+
   /** Intersect a persona's allowlist with what is actually registered. */
   allowlist(names: string[]): ToolDefinition<never, unknown>[] {
     return names.map((name) => this.tools.get(name)).filter((tool): tool is ToolDefinition<never, unknown> => Boolean(tool));
+  }
+
+  allowlistByKind(names: string[], kind: ToolKind): ToolDefinition<never, unknown>[] {
+    return names
+      .map((name) => this.tools.get(name))
+      .filter((tool): tool is ToolDefinition<never, unknown> => tool !== undefined && (tool.kind ?? "static") === kind);
   }
 }
 

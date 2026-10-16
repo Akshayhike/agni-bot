@@ -19,6 +19,8 @@ import {
 } from "@agni/protocol";
 import { defaultPersona, getPersona, personaInfo } from "../agent/personas";
 import { runInstantTurn } from "../agent/loop";
+import { runTaskTurn } from "../agent/task-loop";
+import { resolveApprovalWaiter } from "../agent/approval-broker";
 import { verifyToken } from "../auth/tokens";
 import type { Config } from "../config";
 import { log } from "../log";
@@ -188,19 +190,12 @@ function handleMsgSend(deps: DispatchDeps, session: Session, frame: Extract<Clie
   const turnID = newID("trn");
   const controller = new AbortController();
   session.aborts.set(turnID, controller);
+  const turnSettings = { firstTokenTimeoutMs: deps.config.firstTokenTimeoutMs, turnTimeoutMs: deps.config.turnTimeoutMs };
+  const turn = persona.tier === "task"
+    ? runTaskTurn(deps.db, deps.router, turnSettings, { turnID, threadID: thread.id, text: frame.text, persona, emit: deps.emit, signal: controller.signal })
+    : runInstantTurn(deps.db, deps.router, turnSettings, { threadID: thread.id, text: frame.text, persona, emit: deps.emit, signal: controller.signal });
 
-  void runInstantTurn(
-    deps.db,
-    deps.router,
-    { firstTokenTimeoutMs: deps.config.firstTokenTimeoutMs, turnTimeoutMs: deps.config.turnTimeoutMs },
-    {
-      threadID: thread.id,
-      text: frame.text,
-      persona,
-      emit: deps.emit,
-      signal: controller.signal,
-    },
-  )
+  void turn
     .catch((error: unknown) => {
       // The turn runner reports its own failures through frames; landing here
       // means something unexpected (e.g. the database) failed.
@@ -344,6 +339,7 @@ function handleApproveReply(
   if (result.changes === 0) {
     sendError(deps, session, "unknown_request", `no pending approval ${frame.requestID}`);
   }
+  resolveApprovalWaiter(frame.requestID, frame.decision);
 }
 
 function handleAgentSelect(

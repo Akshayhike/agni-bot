@@ -33,6 +33,14 @@ export const PERSONAS: Persona[] = [
     systemPrompt: AGNI_SYSTEM_PROMPT,
     tools: [],
   },
+  {
+    id: "agni-task",
+    name: "Agni · Tasks",
+    color: "#82c8a0",
+    tier: "task",
+    systemPrompt: AGNI_SYSTEM_PROMPT,
+    tools: ["memory_search", "memory_write", "links_search", "link_save", "tasks_list", "task_create", "task_update"],
+  },
 ];
 
 export function getPersona(id: string): Persona | undefined {

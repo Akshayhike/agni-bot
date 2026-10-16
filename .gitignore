@@ -16,6 +16,7 @@ data/
 # generated artifacts / evidence stay local (fleet convention)
 artifacts/
 .evidence/
+apps/mac/.build/
 
 .DS_Store
 *.log

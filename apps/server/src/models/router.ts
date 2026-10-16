@@ -3,7 +3,7 @@
  * one case it cannot fix: a stream that already emitted tokens is not retried
  * on another provider (that would duplicate text into the thread).
  */
-import { ProviderError, streamChat, type ChatMessage } from "./client";
+import { ProviderError, streamChat, type ChatMessage, type ToolSpec } from "./client";
 import type { HealthTracker } from "./health";
 import { TIER_ORDER, type ProviderConfig, type Tier } from "./providers";
 import { log } from "../log";
@@ -43,6 +43,12 @@ export interface RouteOptions {
   signal?: AbortSignal;
   firstTokenTimeoutMs: number;
   onDelta: (delta: string) => void;
+  /** Tool schemas injected into the request (task lane only). */
+  tools?: ToolSpec[];
+  /** Force the model to pick a tool, or forbid tool use entirely. */
+  toolChoice?: "auto" | "required" | "none" | { type: "function"; function: { name: string } };
+  /** Bound each model response in the task lane. */
+  maxTokens?: number;
 }
 
 export interface RouteResult {
@@ -54,6 +60,8 @@ export interface RouteResult {
   inputTokens?: number;
   outputTokens?: number;
   attempts: number;
+  /** Structured tool calls the model emitted (task lane). */
+  toolCalls?: import("./client").ToolCall[];
 }
 
 export interface ProviderStatus {
@@ -149,6 +157,9 @@ export class Router {
           signal: options.signal,
           firstTokenTimeoutMs: options.firstTokenTimeoutMs,
           fetchFn: this.fetchFn,
+          tools: options.tools,
+          toolChoice: options.toolChoice,
+          maxTokens: options.maxTokens,
           onDelta: (delta) => {
             emitted = true;
             options.onDelta(delta);
@@ -164,6 +175,7 @@ export class Router {
           inputTokens: result.inputTokens,
           outputTokens: result.outputTokens,
           attempts,
+          ...(result.toolCalls ? { toolCalls: result.toolCalls } : {}),
         };
       } catch (error) {
         const providerError =
