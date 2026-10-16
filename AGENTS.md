@@ -30,7 +30,8 @@ product decisions. `docs/architecture.md` is the 2-minute summary.
 
 ## Conventions
 
-- Bun workspaces; TypeScript strict; no build step — Bun runs `.ts` directly.
+- Bun workspaces; TypeScript strict; no build step — Bun runs `.ts`
+  directly and `bun run typecheck` uses the TS 7 native compiler.
 - `bun test` and `bun run typecheck` must pass before committing.
 - Conventional Commits (`feat:`, `fix:`, `docs:`, `chore:`, …), body wrapped
   at 72 characters.
