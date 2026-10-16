@@ -44,6 +44,16 @@ export function getThread(db: Database, id: string): ThreadRow | null {
   );
 }
 
+/** Most recently touched threads — the chat client's `/threads` list. */
+export function listThreads(db: Database, limit = 20): ThreadRow[] {
+  return db
+    .query<ThreadRow, [number]>(
+      `SELECT id, agent_id, title, created_at, updated_at
+       FROM threads ORDER BY updated_at DESC LIMIT ?`,
+    )
+    .all(limit);
+}
+
 export function touchThread(db: Database, id: string): void {
   db.run("UPDATE threads SET updated_at = ? WHERE id = ?", [nowISO(), id]);
 }

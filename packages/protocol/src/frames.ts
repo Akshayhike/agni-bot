@@ -43,6 +43,25 @@ export const AgentInfoSchema = z.object({
 });
 export type AgentInfo = z.infer<typeof AgentInfoSchema>;
 
+/** One thread, as listed by `thread.list`. */
+export const ThreadInfoSchema = z.object({
+  id: z.string().min(1),
+  agentID: z.string().min(1),
+  title: z.string().optional(),
+  updatedAt: z.string(),
+});
+export type ThreadInfo = z.infer<typeof ThreadInfoSchema>;
+
+/** One durable message, as returned by `thread.history`. */
+export const MessageInfoSchema = z.object({
+  id: z.string().min(1),
+  role: z.string().min(1),
+  text: z.string(),
+  createdAt: z.string(),
+  turnID: z.string().optional(),
+});
+export type MessageInfo = z.infer<typeof MessageInfoSchema>;
+
 // ---------------------------------------------------------------------------
 // client → server
 // ---------------------------------------------------------------------------
@@ -70,6 +89,16 @@ export const ClientFrameSchema = z.discriminatedUnion("type", [
   }),
   z.object({ type: z.literal("agent.select"), agentID: z.string().min(1) }),
   z.object({ type: z.literal("thread.open"), threadID: z.string().min(1) }),
+  /**
+   * Durable-state reads. Replies are addressed to the requesting connection
+   * and stay out of the replay log (they are answers, not stream state).
+   */
+  z.object({ type: z.literal("thread.list"), limit: z.number().int().positive().max(200).optional() }),
+  z.object({
+    type: z.literal("thread.history"),
+    threadID: z.string().min(1),
+    limit: z.number().int().positive().max(500).optional(),
+  }),
 ]);
 export type ClientFrame = z.infer<typeof ClientFrameSchema>;
 export type ClientFrameType = ClientFrame["type"];
@@ -124,6 +153,14 @@ export const ServerFrameSchema = z.discriminatedUnion("type", [
   }),
   z.object({ type: z.literal("notify"), seq, title: z.string(), body: z.string(), sound: z.boolean().optional() }),
   z.object({ type: z.literal("agents.update"), seq, agents: z.array(AgentInfoSchema) }),
+  z.object({ type: z.literal("thread.list.ok"), seq, threads: z.array(ThreadInfoSchema) }),
+  z.object({
+    type: z.literal("thread.history.ok"),
+    seq,
+    threadID: z.string().min(1),
+    title: z.string().optional(),
+    messages: z.array(MessageInfoSchema),
+  }),
   z.object({ type: z.literal("presence"), seq, state: z.enum(["online", "offline"]) }),
   z.object({ type: z.literal("error"), seq, code: z.string(), message: z.string(), retryAfter: z.number().optional() }),
 ]);

@@ -138,4 +138,11 @@ export const MIGRATIONS: Migration[] = [
       CREATE VIRTUAL TABLE links_fts USING fts5(id UNINDEXED, title, summary, note, tags);
     `,
   },
+  {
+    id: 2,
+    name: "jobs_result",
+    sql: `
+      ALTER TABLE jobs ADD COLUMN result TEXT;
+    `,
+  },
 ];

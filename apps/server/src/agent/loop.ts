@@ -29,12 +29,19 @@ export interface TurnRun {
   signal: AbortSignal;
 }
 
+export interface TurnResult {
+  turnID: string;
+  /** Full assistant text -- partial when the turn was cancelled, timed out, or errored. */
+  text: string;
+  stopReason: StopReason;
+}
+
 export async function runInstantTurn(
   db: Database,
   router: Router,
   settings: TurnSettings,
   run: TurnRun,
-): Promise<void> {
+): Promise<TurnResult> {
   const { threadID, persona } = run;
   const turnID = newID("trn");
 
@@ -134,4 +141,6 @@ export async function runInstantTurn(
         }
       : {}),
   });
+
+  return { turnID, text, stopReason };
 }

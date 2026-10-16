@@ -9,7 +9,9 @@ import {
   encodeFrame,
   parseServerFrame,
   type ClientFrame,
+  type MessageInfo,
   type ServerFrame,
+  type ThreadInfo,
   type Usage,
 } from "@agni/protocol";
 
@@ -46,6 +48,7 @@ export interface AskStats {
 export class AgniSocket {
   private readonly frameHandlers = new Set<(frame: ServerFrame) => void>();
   private readonly closeHandlers = new Set<(code: number, reason: string) => void>();
+  private lastSeqValue = 0;
 
   private constructor(private readonly ws: WebSocket) {
     ws.addEventListener("message", (event) => {
@@ -54,6 +57,7 @@ export class AgniSocket {
       if (!decoded.ok) return;
       const parsed = parseServerFrame(decoded.value);
       if (!parsed.ok) return;
+      if (parsed.frame.seq > this.lastSeqValue) this.lastSeqValue = parsed.frame.seq;
       for (const handler of [...this.frameHandlers]) handler(parsed.frame);
     });
     ws.addEventListener("close", (event) => {
@@ -111,6 +115,21 @@ export class AgniSocket {
     this.ws.send(encodeFrame(frame));
   }
 
+  /** Highest seq received on this connection — what `resync` replays after. */
+  get lastSeq(): number {
+    return this.lastSeqValue;
+  }
+
+  /** True once the socket is no longer open. */
+  get closed(): boolean {
+    return this.ws.readyState !== WebSocket.OPEN;
+  }
+
+  /** Ask the server to replay frames after `lastSeq` (used after reconnect). */
+  resync(lastSeq: number): void {
+    this.send({ type: "resync", lastSeq });
+  }
+
   onFrame(handler: (frame: ServerFrame) => void): () => void {
     this.frameHandlers.add(handler);
     return () => this.frameHandlers.delete(handler);
@@ -123,6 +142,45 @@ export class AgniSocket {
 
   close(): void {
     this.ws.close();
+  }
+
+  /** Most recently touched threads, newest first. */
+  async threadList(limit = 20, timeoutMs = 5000): Promise<ThreadInfo[]> {
+    const pending = this.once("thread.list.ok", timeoutMs);
+    this.send({ type: "thread.list", limit });
+    return (await pending).threads;
+  }
+
+  /** Durable message history for one thread (last `limit`, chronological). */
+  async threadHistory(
+    threadID: string,
+    limit = 50,
+    timeoutMs = 5000,
+  ): Promise<{ threadID: string; title?: string; messages: MessageInfo[] }> {
+    const pending = this.once("thread.history.ok", timeoutMs, (frame) => frame.threadID === threadID);
+    this.send({ type: "thread.history", threadID, limit });
+    return await pending;
+  }
+
+  private once<T extends ServerFrame["type"]>(
+    type: T,
+    timeoutMs: number,
+    match?: (frame: Extract<ServerFrame, { type: T }>) => boolean,
+  ): Promise<Extract<ServerFrame, { type: T }>> {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        unsubscribe();
+        reject(new Error(`timed out after ${timeoutMs}ms waiting for ${type}`));
+      }, timeoutMs);
+      const unsubscribe = this.onFrame((frame) => {
+        if (frame.type !== type) return;
+        const typed = frame as Extract<ServerFrame, { type: T }>;
+        if (match && !match(typed)) return;
+        clearTimeout(timer);
+        unsubscribe();
+        resolve(typed);
+      });
+    });
   }
 
   /** Send one message and wait for its turn to complete. */

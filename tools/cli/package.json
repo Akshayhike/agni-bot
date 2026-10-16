@@ -6,6 +6,7 @@
     "agni": "./src/index.ts"
   },
   "scripts": {
+    "chat": "bun src/index.ts chat",
     "ask": "bun src/index.ts ask",
     "bench": "bun src/index.ts bench",
     "ping": "bun src/index.ts ping",

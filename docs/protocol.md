@@ -16,8 +16,9 @@ if the two disagree, the code wins, then fix this doc.
   bounded replay log, the client gets `error {code: "resync_gap"}` and reloads
   state from the server's durable storage.
 - Handshake: connect → `hello {v, token, device}` → `hello.ok` +
-  `agents.update`. The server closes connections that don't complete the
-  handshake within `AGNI_HELLO_TIMEOUT_MS` (code 4001), on version mismatch
+  `agents.update`. `hello.ok` answers the connecting socket only and is not
+  part of the replay log. The server closes connections that don't complete
+  the handshake within `AGNI_HELLO_TIMEOUT_MS` (code 4001), on version mismatch
   (4002), or on a bad token (4003).
 - `lastSeq` in `hello.ok` is the server's current sequence; a client whose own
   `lastSeq` is higher (server crash + restart) must treat the difference as a
@@ -34,6 +35,8 @@ if the two disagree, the code wins, then fix this doc.
 | `approve.reply` | `{requestID, decision}` | `decision`: `once \| always \| reject`. |
 | `agent.select` | `{agentID}` | Sets the persona for subsequent `msg.send` on this connection. |
 | `thread.open` | `{threadID}` | Pins the session's active thread. Silent; history comes via `resync`. |
+| `thread.list` | `{limit?}` | Recent threads, newest first (default 20, max 200). |
+| `thread.history` | `{threadID, limit?}` | Durable messages, last N chronological (default 50, max 500). |
 
 ## server → client
 
@@ -50,6 +53,8 @@ if the two disagree, the code wins, then fix this doc.
 | `form.request` | `{requestID, question, options?}` | Ad-hoc question to the user. |
 | `notify` | `{title, body, sound?}` | Push-worthy event (ntfy mirrors this on Android). |
 | `agents.update` | `{agents: [{id, name, color?, model?, tools?}]}` | Roster snapshot. |
+| `thread.list.ok` | `{threads: [{id, agentID, title?, updatedAt}]}` | Answer to `thread.list`; addressed to the requester. |
+| `thread.history.ok` | `{threadID, title?, messages: [{id, role, text, createdAt, turnID?}]}` | Answer to `thread.history`; addressed to the requester. |
 | `presence` | `{state}` | `online \| offline`. |
 | `error` | `{code, message, retryAfter?}` | See codes below. |
 
@@ -72,3 +77,9 @@ The server keeps the last `AGNI_FRAME_LOG_CAPACITY` outbound frames (default
 1000) for `resync`. Deltas are frames too, so a client offline through a long
 turn will likely reload rather than replay — by design: messages are durable
 in SQLite, replay is a latency optimization, not a storage layer.
+
+`hello.ok` and the `thread.list.ok` / `thread.history.ok` answers are for one
+connection, not the shared stream: they consume a `seq` like every frame but
+are skipped on replay. A client never "missed" a reply addressed to someone
+else. Everything else — turns, tokens, tool strips, approvals, notifications —
+is replayable.

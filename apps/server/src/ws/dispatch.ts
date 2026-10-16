@@ -21,7 +21,7 @@ import { verifyToken } from "../auth/tokens";
 import type { Config } from "../config";
 import { log } from "../log";
 import type { Router } from "../models/router";
-import { createThread, getThread } from "../stores/threads";
+import { createThread, getThread, listThreads, recentMessages } from "../stores/threads";
 import { newID, nowISO } from "../util/ids";
 import type { FrameLog } from "./frame-log";
 
@@ -52,6 +52,8 @@ export interface DispatchDeps {
   frameLog: FrameLog;
   /** Assign a seq, record in the frame log, fan out to every authed session. */
   emit: (body: ServerFrameBody) => ServerFrame;
+  /** Answer the connection that produced the current message (not replayed). */
+  reply: (body: ServerFrameBody) => ServerFrame;
   /** Send one frame to the connection that produced the current message. */
   send: (frame: ServerFrame) => void;
   /** Close the connection that produced the current message. */
@@ -80,6 +82,10 @@ export async function dispatch(deps: DispatchDeps, session: Session, raw: string
       return handleAgentSelect(deps, session, frame);
     case "thread.open":
       return handleThreadOpen(deps, session, frame);
+    case "thread.list":
+      return handleThreadList(deps, session, frame);
+    case "thread.history":
+      return handleThreadHistory(deps, session, frame);
   }
 }
 
@@ -106,8 +112,10 @@ function handleHello(deps: DispatchDeps, session: Session, frame: Extract<Client
     }
     log.info(`hello from "${device.name}" (${device.id}) as agent ${session.agentID}`);
     // lastSeq must equal the seq this very frame is about to receive; no
-    // await can interleave between the read and the emit, so this is exact.
-    deps.emit({
+    // await can interleave between the read and the reply, so this is exact.
+    // The handshake answer goes only to this connection and stays out of the
+    // replay log — other clients never see it, and it is not stream state.
+    deps.reply({
       type: "hello.ok",
       v: PROTOCOL_VERSION,
       serverTime: nowISO(),
@@ -213,6 +221,44 @@ function handleThreadOpen(
   // No frames in response: history arrives through resync replay, live
   // activity through the normal stream. This just pins the session's thread.
   session.openThreadID = thread.id;
+}
+
+function handleThreadList(
+  deps: DispatchDeps,
+  session: Session,
+  frame: Extract<ClientFrame, { type: "thread.list" }>,
+): void {
+  if (!requireAuth(deps, session)) return;
+  const threads = listThreads(deps.db, frame.limit ?? 20).map((thread) => ({
+    id: thread.id,
+    agentID: thread.agent_id,
+    ...(thread.title ? { title: thread.title } : {}),
+    updatedAt: thread.updated_at,
+  }));
+  deps.reply({ type: "thread.list.ok", threads });
+}
+
+function handleThreadHistory(
+  deps: DispatchDeps,
+  session: Session,
+  frame: Extract<ClientFrame, { type: "thread.history" }>,
+): void {
+  if (!requireAuth(deps, session)) return;
+  const thread = getThread(deps.db, frame.threadID);
+  if (!thread) return sendError(deps, session, "unknown_thread", `no thread ${frame.threadID}`);
+  const messages = recentMessages(deps.db, thread.id, frame.limit ?? 50).map((message) => ({
+    id: message.id,
+    role: message.role,
+    text: message.text,
+    createdAt: message.created_at,
+    ...(message.turn_id ? { turnID: message.turn_id } : {}),
+  }));
+  deps.reply({
+    type: "thread.history.ok",
+    threadID: thread.id,
+    ...(thread.title ? { title: thread.title } : {}),
+    messages,
+  });
 }
 
 // ---------------------------------------------------------------------------

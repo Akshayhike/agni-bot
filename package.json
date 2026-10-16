@@ -10,10 +10,13 @@
   "scripts": {
     "dev": "bun --watch apps/server/src/index.ts serve",
     "serve": "bun apps/server/src/index.ts serve",
+    "daemon": "bun apps/server/src/index.ts daemon",
+    "job": "bun apps/server/src/index.ts job",
     "migrate": "bun apps/server/src/index.ts migrate",
     "pair": "bun apps/server/src/index.ts pair",
     "devices": "bun apps/server/src/index.ts devices",
     "revoke": "bun apps/server/src/index.ts revoke",
+    "chat": "bun tools/cli/src/index.ts chat",
     "ask": "bun tools/cli/src/index.ts ask",
     "bench": "bun tools/cli/src/index.ts bench",
     "ping": "bun tools/cli/src/index.ts ping",

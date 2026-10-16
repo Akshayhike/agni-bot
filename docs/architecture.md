@@ -14,6 +14,8 @@ CLI (tools/cli) ────┘                                                �
                                                       apps/server  (Bun + TypeScript)
                                                       ├─ ws: server / dispatch / frame log
                                                       ├─ agent: personas + instant lane
+                                                      ├─ jobs: queue runner + turn kind
+                                                      │        (daemon work while idle)
                                                       ├─ models: router → Groq · Cerebras ·
                                                       │           NIM · Gemini · OpenRouter ·
                                                       │           LM Studio (free-first,
@@ -26,6 +28,31 @@ CLI (tools/cli) ────┘                                                �
                                                       │          native tools land with P2
                                                       └─ later: ACP bridge (P3), Gmail + ICS (P4)
 ```
+
+## Process lifecycle
+
+`bun run serve` is the only server mode; `bun run daemon start` spawns that
+same command detached (own session, stdio → `data/agni.log`), writes
+`data/agni.pid`, and only reports success once `/health` answers. `daemon stop`
+is SIGTERM (SIGKILL only if the process refuses to die), and `serve` handles
+both signals by stopping the job runner, flushing the frame log, and closing
+SQLite. bb-1 later runs the same command under systemd — the pid and log files
+are local convenience, not a second supervisor.
+
+## Background jobs
+
+The `jobs` table is the queue: `queued → running → done | failed`, claims are
+transactional, attempts are counted, and a job a dead process left `running`
+is requeued at boot. One runner per daemon executes kinds sequentially (three
+per poll by default) so background work cannot stampede a free-tier provider.
+
+The only kind at this stage is `turn`: run one prompt in a thread. That is how
+the daemon does things unprompted — reminders now, the precomputed 07:55 brief
+in P2 — and how it chats back: the turn streams through the normal frames to
+any connected client, and completion raises `notify`. A `turn` job with
+`everyMs` reschedules itself and keeps the thread it created, so recurring work
+stays one conversation. Failures retry with backoff, then park as `failed` with
+a notification — never silently.
 
 ## The one contract
 

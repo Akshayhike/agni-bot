@@ -1,7 +1,10 @@
 #!/usr/bin/env bun
 /**
- * agni — protocol test client.
+ * agni — protocol client for the daemon.
  *
+ *   agni chat [--thread thr_x]     interactive chat (streaming, approvals, resync)
+ *   agni threads [--n 20]          recent threads
+ *   agni history --thread thr_x    durable message history
  *   agni ping                      check the server + provider health
  *   agni ask "question"            one instant-lane turn, streamed
  *   agni bench [--n 10]            P0 gate: instant-lane p50 ≤ 1.5 s
@@ -9,12 +12,16 @@
  * Connection: --url or AGNI_URL (default ws://127.0.0.1:8787/ws);
  * token: --token or AGNI_TOKEN (from `bun run pair`).
  */
+import { historyCommand, listThreadsCommand, startChat } from "./chat";
 import { AgniSocket, healthURL, type AskStats } from "./client";
 
 const args = Bun.argv.slice(2);
 const [command = "help", ...rest] = args;
 
-if (command === "ping") await ping();
+if (command === "chat") await chat();
+else if (command === "threads") await threadsCommand();
+else if (command === "history") await history();
+else if (command === "ping") await ping();
 else if (command === "ask") await askCommand();
 else if (command === "bench") await bench();
 else usage(0);
@@ -86,9 +93,35 @@ async function ping(): Promise<void> {
     console.log(JSON.stringify(body, null, 2));
     if (!response.ok) process.exit(1);
   } catch {
-    console.error(`cannot reach ${target} — is the server running? (bun run dev)`);
+    console.error(`cannot reach ${target} — is the server running? (bun run daemon start)`);
     process.exit(1);
   }
+}
+
+async function chat(): Promise<void> {
+  await startChat({
+    url: serverURL(rest),
+    token: token(rest),
+    device: "cli-chat",
+    ...(option(rest, "--thread") ? { threadID: option(rest, "--thread") as string } : {}),
+    ...(option(rest, "--agent") ? { agentID: option(rest, "--agent") as string } : {}),
+  });
+}
+
+async function threadsCommand(): Promise<void> {
+  await listThreadsCommand(
+    { url: serverURL(rest), token: token(rest), device: "cli" },
+    numberOption(rest, "--n", 20),
+  );
+}
+
+async function history(): Promise<void> {
+  const threadID = option(rest, "--thread") ?? positional(rest)[0];
+  if (!threadID) {
+    console.error('usage: agni history --thread thr_x [--n 50]');
+    process.exit(1);
+  }
+  await historyCommand({ url: serverURL(rest), token: token(rest), device: "cli" }, threadID, numberOption(rest, "--n", 50));
 }
 
 async function askCommand(): Promise<void> {
@@ -198,12 +231,15 @@ function formatStats(stats: AskStats): string {
 }
 
 function usage(code: number): void {
-  console.log(`agni — protocol test client
+  console.log(`agni — protocol client for the daemon
 
-  ping                 check the server and provider health
-  ask "question"       one instant-lane turn, streamed
-  bench [options]      N turns; gates on p50 latency
+  chat [--thread thr_x] [--agent agni]   interactive chat (streams, approvals, resync)
+  threads [--n 20]                       list recent threads
+  history --thread thr_x [--n 50]        durable message history
+  ping                                   check the server and provider health
+  ask "question" [--thread thr_x]        one instant-lane turn, streamed
+  bench [options]                        N turns; gates on p50 latency
 
-options: --n 10 --q "…" --fresh --target-ms 1500 --url ws://… --token agni_…`);
+options: chat/history --thread, chat --agent; bench --n 10 --q "…" --fresh --target-ms 1500; --url ws://… --token agni_…`);
   process.exit(code);
 }

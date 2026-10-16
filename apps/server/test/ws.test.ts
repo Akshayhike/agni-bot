@@ -1,0 +1,200 @@
+import { afterEach, describe, expect, test } from "bun:test";
+import type { Database } from "bun:sqlite";
+import {
+  parseServerFrame,
+  type ClientFrame,
+  type ServerFrame,
+} from "@agni/protocol";
+import { mintToken } from "../src/auth/tokens";
+import type { Config } from "../src/config";
+import { openDatabase } from "../src/db";
+import { HealthTracker } from "../src/models/health";
+import type { ProviderConfig } from "../src/models/providers";
+import { Router } from "../src/models/router";
+import { startServer, type RunningServer } from "../src/ws/server";
+
+/**
+ * End-to-end over a real socket: hello, a streamed turn against a stub
+ * provider, the durable reads (`thread.list` / `thread.history`), and resync
+ * replay that skips transient replies.
+ */
+
+const provider: ProviderConfig = {
+  id: "test",
+  label: "Test",
+  baseUrl: "https://test.local/v1",
+  apiKey: "test-key",
+  model: "mock-model",
+  tiers: ["instant"],
+};
+
+const encoder = new TextEncoder();
+
+function sseResponse(...deltas: string[]): Response {
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const delta of deltas) {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ choices: [{ delta: { content: delta } }] })}\n\n`));
+      }
+      controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+      controller.close();
+    },
+  });
+  return new Response(stream, { status: 200 });
+}
+
+class TestClient {
+  private readonly frames: ServerFrame[] = [];
+  private readonly waiters: Array<{
+    type: string;
+    match?: (frame: ServerFrame) => boolean;
+    resolve: (frame: ServerFrame) => void;
+    timer: ReturnType<typeof setTimeout>;
+  }> = [];
+
+  private constructor(private readonly ws: WebSocket) {
+    ws.addEventListener("message", (event) => {
+      if (typeof event.data !== "string") return;
+      const parsed = parseServerFrame(JSON.parse(event.data));
+      if (!parsed.ok) return;
+      const frame = parsed.frame;
+      const waiterIndex = this.waiters.findIndex(
+        (waiter) => waiter.type === frame.type && (!waiter.match || waiter.match(frame)),
+      );
+      if (waiterIndex >= 0) {
+        const [waiter] = this.waiters.splice(waiterIndex, 1);
+        if (waiter) {
+          clearTimeout(waiter.timer);
+          waiter.resolve(frame);
+          return;
+        }
+      }
+      this.frames.push(frame);
+    });
+  }
+
+  static async connect(url: string, token: string, device = "test"): Promise<TestClient> {
+    const ws = new WebSocket(url);
+    await new Promise<void>((resolve, reject) => {
+      ws.addEventListener("open", () => resolve(), { once: true });
+      ws.addEventListener("error", () => reject(new Error(`cannot connect to ${url}`)), { once: true });
+    });
+    const client = new TestClient(ws);
+    client.send({ type: "hello", v: 1, token, device });
+    await client.next("hello.ok");
+    await client.next("agents.update");
+    return client;
+  }
+
+  send(frame: ClientFrame): void {
+    this.ws.send(JSON.stringify(frame));
+  }
+
+  next<T extends ServerFrame["type"]>(
+    type: T,
+    options: { timeoutMs?: number; match?: (frame: Extract<ServerFrame, { type: T }>) => boolean } = {},
+  ): Promise<Extract<ServerFrame, { type: T }>> {
+    const { timeoutMs = 3000, match } = options;
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error(`timed out waiting for ${type}`)), timeoutMs);
+      this.waiters.push({
+        type,
+        ...(match ? { match: match as (frame: ServerFrame) => boolean } : {}),
+        resolve: resolve as (frame: ServerFrame) => void,
+        timer,
+      });
+    });
+  }
+
+  /** Frames received so far that no waiter consumed. */
+  seen(): ServerFrame[] {
+    return [...this.frames];
+  }
+
+  /** Forget unconsumed frames (used to prove what a resync replayed). */
+  drain(): void {
+    this.frames.length = 0;
+  }
+
+  close(): void {
+    this.ws.close();
+  }
+}
+
+let client: TestClient | undefined;
+let server: RunningServer | undefined;
+let db: Database | undefined;
+
+afterEach(() => {
+  client?.close();
+  client = undefined;
+  server?.stop();
+  server = undefined;
+  db?.close();
+  db = undefined;
+});
+
+async function startTestServer(): Promise<void> {
+  db = openDatabase(":memory:");
+  const { token } = await mintToken(db, "test-device");
+  const router = new Router([provider], new HealthTracker(), (async () => sseResponse("hello ", "there")) as unknown as typeof fetch);
+  const config: Config = {
+    host: "127.0.0.1",
+    port: 0,
+    dbPath: ":memory:",
+    pidPath: "",
+    logPath: "",
+    providers: [provider],
+    firstTokenTimeoutMs: 1000,
+    turnTimeoutMs: 5000,
+    helloTimeoutMs: 2000,
+    frameLogCapacity: 100,
+    jobPollMs: 1000,
+  };
+  server = startServer(config, db, router);
+  client = await TestClient.connect(`ws://127.0.0.1:${server.port}/ws`, token);
+}
+
+describe("websocket end-to-end", () => {
+  test("streams a turn, then serves thread list and history", async () => {
+    await startTestServer();
+
+    client!.send({ type: "msg.send", threadID: "", text: "say hi" });
+    const started = await client!.next("turn.start");
+    const firstDelta = await client!.next("token");
+    const end = await client!.next("turn.end");
+    expect(end.stopReason).toBe("end");
+    expect(firstDelta.delta.length).toBeGreaterThan(0);
+    expect(end.threadID).toBe(started.threadID);
+
+    // Durable reads answer the requester.
+    client!.send({ type: "thread.list" });
+    const list = await client!.next("thread.list.ok");
+    expect(list.threads.map((thread) => thread.id)).toContain(started.threadID);
+    expect(list.threads[0]?.title).toBe("say hi");
+
+    client!.send({ type: "thread.history", threadID: started.threadID });
+    const history = await client!.next("thread.history.ok");
+    expect(history.messages.map((message) => message.role)).toEqual(["user", "assistant"]);
+    expect(history.messages[1]?.text).toBe("hello there");
+  });
+
+  test("resync replays shared frames but not transient replies", async () => {
+    await startTestServer();
+
+    client!.send({ type: "msg.send", threadID: "", text: "one" });
+    await client!.next("turn.end");
+    client!.send({ type: "thread.list" });
+    await client!.next("thread.list.ok");
+
+    // A subscriber starting from zero must see the turn, not the frames that
+    // were addressed to this connection's earlier requests.
+    client!.drain();
+    client!.send({ type: "resync", lastSeq: 0 });
+    await Bun.sleep(50);
+    const replayed = client!.seen();
+    expect(replayed.some((frame) => frame.type === "turn.start")).toBe(true);
+    expect(replayed.some((frame) => frame.type === "thread.list.ok")).toBe(false);
+    expect(replayed.some((frame) => frame.type === "hello.ok")).toBe(false);
+  });
+});

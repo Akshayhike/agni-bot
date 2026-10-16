@@ -9,15 +9,40 @@ import { PROTOCOL_VERSION, encodeFrame, type ServerFrame, type ServerFrameBody }
 import type { Config } from "../config";
 import { readMeta, writeMeta } from "../db";
 import { log } from "../log";
-import type { Router } from "../models/router";
-import { dayTotals } from "../stores/usage";
+import type { Router, ProviderStatus } from "../models/router";
+import { dayTotals, type DayTotals } from "../stores/usage";
 import { dispatch, newSession, type Session } from "./dispatch";
 import { FrameLog } from "./frame-log";
 
 export interface RunningServer {
   readonly port: number;
   readonly url: string;
+  /** Fan out a frame to every authed session (job results, notices). */
+  emit(body: ServerFrameBody): ServerFrame;
   stop(): void;
+}
+
+/** Shape of `GET /health` — also what `daemon status` shows. */
+export interface HealthReport {
+  ok: boolean;
+  v: number;
+  serverTime: string;
+  uptimeMs: number;
+  seq: number;
+  providers: ProviderStatus[];
+  usageToday: DayTotals;
+}
+
+export function healthReport(db: Database, router: Router, seq: number, startedAt: number): HealthReport {
+  return {
+    ok: true,
+    v: PROTOCOL_VERSION,
+    serverTime: new Date().toISOString(),
+    uptimeMs: Date.now() - startedAt,
+    seq,
+    providers: router.status(),
+    usageToday: dayTotals(db),
+  };
 }
 
 export function startServer(config: Config, db: Database, router: Router, startedAt = Date.now()): RunningServer {
@@ -40,15 +65,7 @@ export function startServer(config: Config, db: Database, router: Router, starte
     fetch(request, srv) {
       const url = new URL(request.url);
       if (url.pathname === "/health") {
-        return Response.json({
-          ok: true,
-          v: PROTOCOL_VERSION,
-          serverTime: new Date().toISOString(),
-          uptimeMs: Date.now() - startedAt,
-          seq: frameLog.seq,
-          providers: router.status(),
-          usageToday: dayTotals(db),
-        });
+        return Response.json(healthReport(db, router, frameLog.seq, startedAt));
       }
       if (url.pathname === "/ws") {
         if (srv.upgrade(request, { data: newSession() })) return undefined;
@@ -74,6 +91,11 @@ export function startServer(config: Config, db: Database, router: Router, starte
             router,
             frameLog,
             emit,
+            reply: (body) => {
+              const frame = frameLog.next(body, { replay: false });
+              socket.send(encodeFrame(frame));
+              return frame;
+            },
             send: (frame) => socket.send(encodeFrame(frame)),
             close: (code, reason) => socket.close(code, reason),
           },
@@ -95,6 +117,7 @@ export function startServer(config: Config, db: Database, router: Router, starte
   return {
     port: server.port ?? config.port,
     url: `ws://${config.host}:${server.port ?? config.port}/ws`,
+    emit,
     stop() {
       server.stop(true);
       frameLog.flush();

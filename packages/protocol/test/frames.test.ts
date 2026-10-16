@@ -47,6 +47,14 @@ describe("client frames", () => {
     const result = parseClientFrame({ type: "hello", v: PROTOCOL_VERSION, token: "agni_x", device: "cli" });
     expect(result.ok).toBe(true);
   });
+
+  test("accepts durable-state reads with and without limits", () => {
+    expect(parseClientFrame({ type: "thread.list" }).ok).toBe(true);
+    expect(parseClientFrame({ type: "thread.list", limit: 5 }).ok).toBe(true);
+    expect(parseClientFrame({ type: "thread.list", limit: 0 }).ok).toBe(false);
+    expect(parseClientFrame({ type: "thread.history", threadID: "thr_1" }).ok).toBe(true);
+    expect(parseClientFrame({ type: "thread.history", threadID: "" }).ok).toBe(false);
+  });
 });
 
 describe("server frames", () => {
@@ -87,6 +95,32 @@ describe("server frames", () => {
       stopReason: "exploded",
     });
     expect(result.ok).toBe(false);
+  });
+
+  test("accepts thread list and history replies", () => {
+    const list = parseServerFrame({
+      type: "thread.list.ok",
+      seq: 12,
+      threads: [{ id: "thr_1", agentID: "agni", title: "bench notes", updatedAt: "2026-10-16T12:00:00.000Z" }],
+    });
+    expect(list.ok).toBe(true);
+    if (list.ok && list.frame.type === "thread.list.ok") {
+      expect(list.frame.threads[0]?.title).toBe("bench notes");
+    }
+
+    const history = parseServerFrame({
+      type: "thread.history.ok",
+      seq: 13,
+      threadID: "thr_1",
+      messages: [
+        { id: "msg_1", role: "user", text: "hi", createdAt: "2026-10-16T12:00:00.000Z", turnID: "trn_1" },
+        { id: "msg_2", role: "assistant", text: "hello", createdAt: "2026-10-16T12:00:01.000Z" },
+      ],
+    });
+    expect(history.ok).toBe(true);
+    if (history.ok && history.frame.type === "thread.history.ok") {
+      expect(history.frame.messages.map((message) => message.role)).toEqual(["user", "assistant"]);
+    }
   });
 });
 
