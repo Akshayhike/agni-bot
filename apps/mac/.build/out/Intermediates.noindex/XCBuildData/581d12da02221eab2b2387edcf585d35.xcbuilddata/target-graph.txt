@@ -1,7 +1,0 @@
-Target dependency graph (3 targets)
-Target 'Agni-product' in project 'AgniMac'
-➜ Explicit dependency on target 'AgniProtocol' in project 'AgniMac'
-➜ Explicit dependency on target 'AgniKit' in project 'AgniMac'
-Target 'AgniKit' in project 'AgniMac'
-➜ Explicit dependency on target 'AgniProtocol' in project 'AgniMac'
-Target 'AgniProtocol' in project 'AgniMac' (no dependencies)

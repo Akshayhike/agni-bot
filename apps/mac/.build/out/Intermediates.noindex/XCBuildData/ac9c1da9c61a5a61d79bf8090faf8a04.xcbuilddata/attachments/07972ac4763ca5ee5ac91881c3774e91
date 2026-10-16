@@ -1,4 +1,0 @@
-module AgniProtocol {
-header "AgniProtocol-Swift.h"
-export *
-}
