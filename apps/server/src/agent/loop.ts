@@ -1,0 +1,137 @@
+/**
+ * The instant lane (S3): one model call, no tools, bounded prompt (S1).
+ * This is the only turn runner at P0 — task and deep lanes arrive with the
+ * queue in P2/P3.
+ */
+import type { Database } from "bun:sqlite";
+import type { ServerFrameBody, StopReason } from "@agni/protocol";
+import { log } from "../log";
+import { ProviderError } from "../models/client";
+import { MidStreamError, Router, RouterError } from "../models/router";
+import { appendMessage, createTurn, finishTurn, recentMessages, titleThreadFromFirstMessage, touchThread } from "../stores/threads";
+import { recordUsage } from "../stores/usage";
+import { newID } from "../util/ids";
+import type { Persona } from "./personas";
+
+/** S1: hard ceiling on history riding in the prompt — never the full thread. */
+export const HISTORY_MESSAGE_LIMIT = 16;
+
+export interface TurnSettings {
+  firstTokenTimeoutMs: number;
+  turnTimeoutMs: number;
+}
+
+export interface TurnRun {
+  threadID: string;
+  text: string;
+  persona: Persona;
+  emit: (frame: ServerFrameBody) => void;
+  signal: AbortSignal;
+}
+
+export async function runInstantTurn(
+  db: Database,
+  router: Router,
+  settings: TurnSettings,
+  run: TurnRun,
+): Promise<void> {
+  const { threadID, persona } = run;
+  const turnID = newID("trn");
+
+  createTurn(db, { id: turnID, threadID, agentID: persona.id });
+  appendMessage(db, { threadID, turnID, role: "user", text: run.text });
+  titleThreadFromFirstMessage(db, threadID, run.text);
+  run.emit({ type: "turn.start", turnID, threadID, agentID: persona.id });
+
+  // Prompt: stable system prefix + the last N messages. Nothing else — no
+  // memory dump, no summaries (S1/S2).
+  const history = recentMessages(db, threadID, HISTORY_MESSAGE_LIMIT)
+    .filter((message) => message.role === "user" || message.role === "assistant")
+    .map((message) => ({ role: message.role as "user" | "assistant", content: message.text }));
+  const messages = [{ role: "system" as const, content: persona.systemPrompt }, ...history];
+
+  // The turn timer and the caller's cancel both land on this controller.
+  const controller = new AbortController();
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, settings.turnTimeoutMs);
+  const abortFromCaller = (): void => controller.abort();
+  run.signal.addEventListener("abort", abortFromCaller, { once: true });
+
+  let text = "";
+  let stopReason: StopReason = "end";
+  let routed: { provider: string; model: string; latencyMs: number; inputTokens?: number; outputTokens?: number } | undefined;
+
+  try {
+    const result = await router.route({
+      tier: persona.tier,
+      messages,
+      signal: controller.signal,
+      firstTokenTimeoutMs: settings.firstTokenTimeoutMs,
+      onDelta: (delta) => {
+        text += delta;
+        run.emit({ type: "token", turnID, threadID, delta });
+      },
+    });
+    routed = result;
+    text = result.text;
+  } catch (error) {
+    if (timedOut) {
+      stopReason = "timeout";
+    } else if (run.signal.aborted || (error instanceof ProviderError && error.kind === "aborted")) {
+      stopReason = "cancelled";
+    } else {
+      stopReason = "error";
+      const code = error instanceof RouterError ? error.code : "provider_failed";
+      const message = error instanceof Error ? error.message : String(error);
+      run.emit({ type: "error", code, message });
+      if (error instanceof MidStreamError) log.warn(`mid-stream failure: ${error.message}`);
+    }
+  } finally {
+    clearTimeout(timer);
+    run.signal.removeEventListener("abort", abortFromCaller);
+  }
+
+  // Partial output is still output: save whatever streamed before a timeout
+  // or cancellation, and let stopReason carry the honest story.
+  if (text.length > 0) appendMessage(db, { threadID, turnID, role: "assistant", text });
+  finishTurn(db, {
+    id: turnID,
+    stopReason,
+    provider: routed?.provider,
+    model: routed?.model,
+    inputTokens: routed?.inputTokens,
+    outputTokens: routed?.outputTokens,
+    latencyMs: routed?.latencyMs,
+  });
+  touchThread(db, threadID);
+  if (routed) {
+    recordUsage(db, {
+      turnID,
+      provider: routed.provider,
+      model: routed.model,
+      inputTokens: routed.inputTokens,
+      outputTokens: routed.outputTokens,
+      latencyMs: routed.latencyMs,
+    });
+  }
+  run.emit({
+    type: "turn.end",
+    turnID,
+    threadID,
+    stopReason,
+    ...(routed
+      ? {
+          usage: {
+            provider: routed.provider,
+            model: routed.model,
+            inputTokens: routed.inputTokens,
+            outputTokens: routed.outputTokens,
+            latencyMs: routed.latencyMs,
+          },
+        }
+      : {}),
+  });
+}

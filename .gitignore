@@ -1,0 +1,21 @@
+node_modules/
+dist/
+target/
+
+# local state: SQLite database, WAL files, exports
+data/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+
+# secrets — never commit keys or tokens
+.env
+.env.*
+!.env.example
+
+# generated artifacts / evidence stay local (fleet convention)
+artifacts/
+.evidence/
+
+.DS_Store
+*.log

@@ -1,0 +1,19 @@
+{
+  "name": "@agni/server",
+  "private": true,
+  "type": "module",
+  "module": "src/index.ts",
+  "scripts": {
+    "dev": "bun --watch src/index.ts serve",
+    "start": "bun src/index.ts serve",
+    "pair": "bun src/index.ts pair",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@agni/protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5"
+  }
+}

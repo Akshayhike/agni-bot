@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agni · Own-Base Assistant — Blueprint v3 · our own harness, server, and apps</title>
+<meta name="description" content="Revised plan: a speed-first assistant harness we build ourselves — Bun server, WebSocket protocol over Tailscale, Tauri Mac + Android apps, Gmail as the agent's mailbox, free model tiers with failover, ACP for subscription subscriptions.">
+<style>
+:root{color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:#000;color:#fff;font:15px/1.55 ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;padding:0 16px 64px}
+main{max-width:1000px;margin:0 auto}
+h1{font-size:26px;line-height:1.2;margin:30px 0 6px;letter-spacing:-0.02em}
+h2{font-size:19px;margin:42px 0 10px;padding-top:18px;border-top:1px solid #1c1c1c}
+h3{font-size:16px;margin:24px 0 8px}
+p{margin:8px 0}
+a{color:#8ab4ff;text-decoration:none}
+a:hover{text-decoration:underline}
+code{background:#141414;border:1px solid #232323;border-radius:4px;padding:1px 5px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px}
+pre{background:#0a0a0a;border:1px solid #212121;border-radius:8px;padding:12px;overflow-x:auto;margin:10px 0}
+pre code{background:none;border:none;padding:0;font-size:12.5px;line-height:1.65}
+.sub{color:#9aa0a6;font-size:14px;margin:0 0 6px}
+.small{color:#8b9096;font-size:12.5px}
+ul{margin:8px 0;padding-left:20px}
+li{margin:4px 0}
+.chip{display:inline-block;border:1px solid #3a3a3a;border-radius:999px;padding:1px 9px;font-size:12px;color:#cfd3d8;margin:2px 6px 6px 0;white-space:nowrap}
+.chip.ok{border-color:#2c5f38;color:#7ee29a}
+.chip.warn{border-color:#6e2b2b;color:#ff8d8d}
+.chip.core{border-color:#8a5d10;color:#f0b95a}
+.card{border:1px solid #232323;border-radius:10px;padding:14px 16px;margin:14px 0;background:#050505}
+.card.good{border-left:3px solid #63d471}
+.card.blue{border-left:3px solid #6f7bff}
+.card.amber{border-left:3px solid #f0b95a}
+.card.red{border-left:3px solid #ff6b6b}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:12px 0}
+table{border-collapse:collapse;width:100%;font-size:13.5px;min-width:640px}
+th,td{border:1px solid #212121;padding:7px 9px;text-align:left;vertical-align:top}
+th{background:#0e0e0e;color:#cfd3d8;font-weight:600;white-space:nowrap}
+td b{color:#fff}
+blockquote{margin:10px 0;padding:8px 12px;border-left:3px solid #2e2e2e;background:#0a0a0a;color:#e6e8ea}
+blockquote cite{display:block;color:#8b9096;font-size:12px;margin-top:5px;font-style:normal}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin:12px 0}
+.kv{border:1px solid #222;border-radius:8px;padding:10px 12px;background:#070707}
+.kv b{display:block;font-size:11.5px;color:#9aa0a6;text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px}
+.evi{border:1px solid #26310f;background:#0a0d04;border-radius:8px;padding:10px 14px;margin:12px 0}
+.evi b{color:#c6e07a}
+.diagram{width:100%;height:auto;margin:14px 0;border:1px solid #1e1e1e;border-radius:10px;background:#050505}
+.flow{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;color:#c9cdd2;background:#0a0a0a;border:1px solid #212121;border-radius:8px;padding:10px 12px;overflow-x:auto;white-space:pre}
+footer{margin-top:52px;border-top:1px solid #1c1c1c;padding-top:14px;color:#8b9096;font-size:12.5px}
+</style>
+</head>
+<body>
+<main>
+
+<h1>Agni — Own-Base Assistant · Blueprint v3</h1>
+<p class="sub">Our own speed-first harness &middot; our own server on bb-1 &middot; our own Mac and Android apps over Tailscale &middot; free model tiers with failover &middot; ACP only for subscription lanes. Supersedes <a href="https://q425c8y3vjlx.postplan.dev" target="_blank" rel="noopener noreferrer">Blueprint v2 (OpenCode-as-engine)</a>.</p>
+<p class="small">2026-10-16 · prepared for Nachiketh · evidence: live API tests and official docs retrieved today. Sources in the footer.</p>
+
+<h2 id="verdict">0 · Verdict</h2>
+<div class="card good">
+<p><b>Agreed on all three calls — and one of them is now backed by hard evidence.</b> (1) OpenCode steps out of the engine seat: we build our own thin, speed-first harness. (2) No Resend, no custom-domain email — a Gmail account is the agent&rsquo;s mailbox, full stop. (3) We build our own clients: one codebase producing a clean black Mac app and an Android app, talking WebSockets to your server over Tailscale.</p>
+<p>The thing that made &ldquo;OpenCode as the engine&rdquo; attractive was its free models without an API key. I tested that directly today: the model <i>list</i> is public, but calls are refused —</p>
+<blockquote><code>{"error":{"type":"FreeTierError","message":"OpenCode's free tier can only be used from within OpenCode."}}</code>
+<cite>live HTTP 403, 2026-10-16, no-auth call to opencode.ai/inference with a free model</cite></blockquote>
+<p>So instead of depending on a free tier that is deliberately locked to another product, we source free capacity from providers that are meant to be called by API — and everything below stays $0.</p>
+</div>
+
+<div class="grid">
+<div class="kv"><b>We build</b>The harness (agent loop, tools, memory), the server (Bun + SQLite + WebSocket), and both apps (Tauri 2 shared codebase). Small on purpose.</div>
+<div class="kv"><b>We adopt</b>Model APIs (NIM, Groq, Cerebras, Gemini, OpenRouter free, local LM Studio), Gmail (app password over IMAP/SMTP) + Calendar (private ICS), Tailscale, ntfy for push, MCP for tool servers (REA), ACP for Codex and friends.</div>
+<div class="kv"><b>We refuse</b>Another general-purpose coding harness. No LSP, no repo indexing, no IDE features — coding jobs are delegated through ACP to Codex/Claude/Cursor where those habits already exist.</div>
+</div>
+
+<h2 id="changes">1 · What changed from v2</h2>
+<div class="scroll">
+<table>
+<tr><th>Your call</th><th>v2 said</th><th>v3 does</th></tr>
+<tr><td>&ldquo;OpenCode is slow; I don&rsquo;t want the full thing&rdquo;</td><td>Use OpenCode as the engine</td><td>Own harness, purpose-built. OpenCode&rsquo;s own docs show why general harnesses get heavy: sessions, skills, LSP, plugin hooks, trust layers — breadth we don&rsquo;t need for chat-speed answers. We take the lessons, not the stack.</td></tr>
+<tr><td>&ldquo;OpenCode mobile exists but I want our own app&rdquo;</td><td>Install a community OpenCode client</td><td>Own Mac + Android apps (Tauri 2), black theme, agents sidebar, connections page, approvals, streaming.</td></tr>
+<tr><td>&ldquo;No Resend&rdquo; + domain reality</td><td>Cloudflare routing + Resend</td><td><code>theynr.xyz</code> has no MX and its zone isn&rsquo;t in your Cloudflare account, so it&rsquo;s dropped from the path. A new Gmail account (<code>hey.agnibot@gmail.com</code>) is the agent&rsquo;s mailbox — reached over IMAP/SMTP with an app password (free; no Cloud project).</td></tr>
+<tr><td>&ldquo;Free models without a key&rdquo;</td><td>Via OpenCode credentials</td><td>Verified the guardrail (403 above). Free capacity now comes from NIM, Groq, Cerebras, Gemini free tier, OpenRouter <code>:free</code> models, and local LM Studio — all with keys, all free, none locked to an app.</td></tr>
+<tr><td>&ldquo;Everything free&rdquo;</td><td>—</td><td>Tailscale free (personal), Gmail free, all six model sources have free tiers, ntfy self-hosted on bb-1, apps built on open source. The only paid paths are opt-in fallbacks.</td></tr>
+</table>
+</div>
+
+<h2 id="speed">2 · The speed thesis — why ours will be fast</h2>
+<p>Your requirement is the specification: &ldquo;a quick question should answer quickly, not go search a pile of memory files first.&rdquo; Every mechanism below exists because a coding harness has the opposite priority — it optimizes for workspace depth, we optimize for conversation latency.</p>
+<div class="scroll">
+<table>
+<tr><th>Rule</th><th>What it prevents</th><th>How we implement it</th></tr>
+<tr><td><b>S1 · Constant prompt</b></td><td>Prompts growing with history and memory</td><td>System + persona + rolling summary + last ~8 turns. Hard token ceiling per turn; memory never rides in the prefix.</td></tr>
+<tr><td><b>S2 · Memory is a tool</b></td><td>Every question paying for everything ever saved</td><td>SQLite FTS5 behind <code>memory.search</code> / <code>links.search</code> / <code>tasks.list</code>; the model retrieves only when the question needs it.</td></tr>
+<tr><td><b>S3 · Lane isolation</b></td><td>Long jobs blocking quick questions</td><td>Instant lane (one call, no tools, ≤1.5&nbsp;s p50 target), task lane (tools, steps, approvals), deep lane (parallel subagents + search). Separate worker pools, priorities.</td></tr>
+<tr><td><b>S4 · Write-time work</b></td><td>Read-time scans and summarization</td><td>Summarize and index at ingest (link fetched, mail arrives, note written). Briefs are precomputed by cron at 07:55, not assembled on demand.</td></tr>
+<tr><td><b>S5 · Warm path</b></td><td>Cold first-token after idle</td><td>Keep-alive prefill pings on the active persona&rsquo;s provider (cheap/free models), stable system prefixes for prompt caching where the provider supports it, connection pooling.</td></tr>
+<tr><td><b>S6 · Perceived speed</b></td><td>Network round-trip feel</td><td>Local echo on send (&lt;30&nbsp;ms UI ack), token streaming into the bubble, tool activity strips, optimistic completion markers. Tailscale keeps the socket private and direct.</td></tr>
+<tr><td><b>S7 · Bounded everything</b></td><td>Runaway loops that make the assistant feel stuck</td><td>Per-turn step budget, tool timeouts, cancel button that actually interrupts, per-day cost/token caps with graceful fallback to a smaller model.</td></tr>
+</table>
+</div>
+<div class="card amber"><b>Honest stop rule:</b> if after P0 tuning the instant lane&rsquo;s p50 exceeds ~2.5&nbsp;s server-side on Groq/Cerebras-class models, we pause and re-measure before building further — the whole point is speed, and the plan should prove it early or change.</div>
+
+<h2 id="architecture">3 · Architecture</h2>
+<svg class="diagram" viewBox="0 0 940 700" role="img" aria-label="Architecture: Tauri apps over Tailscale WebSocket to the Bun server, which routes to free model providers, tools, and ACP harnesses">
+<defs><marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto"><path d="M0,0 L7,3.2 L0,6.4 z" fill="#6a6f75"/></marker></defs>
+<g font-family="ui-sans-serif,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif">
+<rect x="20" y="14" width="900" height="66" rx="10" fill="#0b0b0b" stroke="#2c2c2c"/>
+<text x="40" y="40" fill="#e8eaec" font-size="14" font-weight="600">Your devices — one Tauri 2 codebase, two apps</text>
+<text x="40" y="59" fill="#9aa0a6" font-size="12.5">Mac app (clean, black, inline rich blocks later) &nbsp;·&nbsp; Android app (same UI) &nbsp;·&nbsp; desktop notifications + ntfy push</text>
+<line x1="470" y1="80" x2="470" y2="112" stroke="#6a6f75" stroke-width="1.5" marker-end="url(#arr)"/>
+<text x="482" y="101" fill="#7ee29a" font-size="12">WebSocket · token auth · resumable (seq id) · over Tailscale WireGuard — free</text>
+<rect x="20" y="116" width="900" height="128" rx="10" fill="#0b0b0b" stroke="#33406b"/>
+<text x="40" y="142" fill="#e8eaec" font-size="14" font-weight="600">Server core — Bun + TypeScript, SQLite (WAL + FTS5), runs on this Mac now, bb-1 later</text>
+<text x="40" y="161" fill="#9aa0a6" font-size="12.5">agent loop (ours) · persona roster · model router (health, failover, budgets) · tool registry</text>
+<text x="40" y="178" fill="#9aa0a6" font-size="12.5">job queue + cron (morning brief) · approval broker · stores: memory · links · tasks · costs</text>
+<text x="40" y="195" fill="#9aa0a6" font-size="12.5">ACP client (subscription harnesses) · MCP client (REA &amp; friends) · Gmail IMAP/SMTP (app password) · calendar via ICS</text>
+<text x="40" y="219" fill="#7ee29a" font-size="12.5">S1 constant prompt · S2 memory-as-tool · S4 write-time index · S7 budgets &amp; kill switch</text>
+<line x1="150" y1="244" x2="150" y2="278" stroke="#6a6f75" stroke-width="1.5" marker-end="url(#arr)"/>
+<line x1="470" y1="244" x2="470" y2="278" stroke="#6a6f75" stroke-width="1.5" marker-end="url(#arr)"/>
+<line x1="790" y1="244" x2="790" y2="278" stroke="#6a6f75" stroke-width="1.5" marker-end="url(#arr)"/>
+<rect x="20" y="282" width="286" height="150" rx="10" fill="#0b0b0b" stroke="#4b56b8"/>
+<text x="36" y="306" fill="#b9c0ff" font-size="13.5" font-weight="600">Model layer (free first)</text>
+<text x="36" y="327" fill="#9aa0a6" font-size="12">NVIDIA NIM — your key, free credits</text>
+<text x="36" y="344" fill="#9aa0a6" font-size="12">Groq · Cerebras — free, very fast</text>
+<text x="36" y="361" fill="#9aa0a6" font-size="12">Gemini free tier · OpenRouter :free</text>
+<text x="36" y="378" fill="#9aa0a6" font-size="12">LM Studio local (offline)</text>
+<text x="36" y="395" fill="#9aa0a6" font-size="12">paid fallback: NIM PAYG (cents)</text>
+<text x="36" y="417" fill="#7ee29a" font-size="12">router fails over on 429 / timeout</text>
+<rect x="327" y="282" width="286" height="150" rx="10" fill="#0b0b0b" stroke="#8a6d1c"/>
+<text x="343" y="306" fill="#f0c66a" font-size="13.5" font-weight="600">Tools</text>
+<text x="343" y="327" fill="#9aa0a6" font-size="12">memory · links · tasks (native)</text>
+<text x="343" y="344" fill="#9aa0a6" font-size="12">web search + fetch (SearXNG on bb-1)</text>
+<text x="343" y="361" fill="#9aa0a6" font-size="12">shell + files (sandboxed, approvals)</text>
+<text x="343" y="378" fill="#9aa0a6" font-size="12">Gmail · Calendar · browser (later)</text>
+<text x="343" y="395" fill="#9aa0a6" font-size="12">subagent spawn · MCP servers (REA)</text>
+<text x="343" y="417" fill="#7ee29a" font-size="12">every tool: schema + timeout</text>
+<rect x="634" y="282" width="286" height="150" rx="10" fill="#0b0b0b" stroke="#6b5aa8"/>
+<text x="650" y="306" fill="#d6c9ff" font-size="13.5" font-weight="600">ACP bridge (subscriptions)</text>
+<text x="650" y="327" fill="#9aa0a6" font-size="12">codex-acp — first, you have it</text>
+<text x="650" y="344" fill="#9aa0a6" font-size="12">claude-agent-acp · cursor · grok later</text>
+<text x="650" y="361" fill="#9aa0a6" font-size="12">coding / heavy jobs route here</text>
+<text x="650" y="378" fill="#9aa0a6" font-size="12">each keeps its own login + quota</text>
+<text x="650" y="395" fill="#9aa0a6" font-size="12">same job/stream model as our loop</text>
+<text x="650" y="417" fill="#7ee29a" font-size="12">no new API keys stored</text>
+<line x1="150" y1="432" x2="150" y2="466" stroke="#6a6f75" stroke-width="1.5" marker-end="url(#arr)"/>
+<line x1="470" y1="432" x2="470" y2="466" stroke="#6a6f75" stroke-width="1.5" marker-end="url(#arr)"/>
+<line x1="790" y1="432" x2="790" y2="466" stroke="#6a6f75" stroke-width="1.5" marker-end="url(#arr)"/>
+<rect x="20" y="470" width="900" height="104" rx="10" fill="#0b0b0b" stroke="#2f5e3a"/>
+<text x="40" y="496" fill="#e8eaec" font-size="14" font-weight="600">Delivery &amp; capture</text>
+<text x="40" y="515" fill="#9aa0a6" font-size="12.5">notifications: ntfy (self-hosted on bb-1, free) · desktop notifications in-app · email digests optional</text>
+<text x="40" y="532" fill="#9aa0a6" font-size="12.5">capture: type anything in the app · paste links/tasks into chat · forward mail to the agent&rsquo;s Gmail</text>
+<text x="40" y="549" fill="#9aa0a6" font-size="12.5">routines: 07:55 morning brief precomputed · weekly link resurface · PR/check babysitting</text>
+<text x="40" y="568" fill="#7ee29a" font-size="12.5">jobs and approvals surface in the app; nothing important arrives only in a log file</text>
+<rect x="20" y="596" width="900" height="86" rx="10" fill="#0b0b0b" stroke="#3f5f6b"/>
+<text x="40" y="622" fill="#bfe4ef" font-size="14" font-weight="600">Home</text>
+<text x="40" y="641" fill="#9aa0a6" font-size="12.5">now: this Mac (dev) &nbsp;→&nbsp; then bb-1 (Ubuntu, your server): docker compose or systemd + Tailscale. Same image, same data (SQLite backup).</text>
+<text x="40" y="660" fill="#9aa0a6" font-size="12.5">Tailscale: free personal plan — Mac, phone and server join one private mesh; the WebSocket never touches the public internet.</text>
+</g>
+</svg>
+
+<h2 id="server">4 · Server core &amp; protocol</h2>
+<div class="grid">
+<div class="kv"><b>Stack</b>Bun + TypeScript (fast startup, built-in WebSocket, <code>bun:sqlite</code> with FTS5). One process: agents, router, tools, queue, cron. Container-friendly for bb-1.</div>
+<div class="kv"><b>State</b>SQLite (WAL) for threads, messages, memories, links, tasks, jobs, costs, approvals. Nightly <code>.backup</code> to a second file; no external database.</div>
+<div class="kv"><b>Auth</b>Per-device tokens minted by QR pairing in the app; server binds to the Tailscale interface only; everything else denied at the firewall.</div>
+</div>
+<p>Wire protocol (typed frames, versioned — this is the contract between server and both apps):</p>
+<div class="flow">client → server   hello {token, device}            resync {lastSeq}
+                  msg.send {threadID, text, files}  msg.cancel {turnID}
+                  approve.reply {requestID, once|always|reject}
+                  agent.select {agentID}            thread.open {threadID}
+
+server → client   hello.ok {serverTime, seq}        token {turnID, delta}
+                  turn.start | turn.end {stopReason, usage}
+                  tool.start | tool.update | tool.end {callID, name, preview}
+                  approval.request {requestID, action, preview, buttons}
+                  form.request {question, options}   notify {title, body, sound}
+                  agents.update | presence | error {code, retryAfter}</div>
+
+<h2 id="agents">5 · Agents, threads, connections</h2>
+<ul>
+<li><b>Agents are personas, not processes.</b> Each has a name, avatar color, one model (or model ladder), a short system prompt, a tool allowlist, and optional memory scope. Grok-Bot-style sidebar: your roster, one chat per thread, switch any time.</li>
+<li><b>Agent-to-agent work is explicit.</b> Any agent can spawn a subagent (task lane) or hand a coding job to an ACP harness (Codex first). Subagents render as nested activity strips inside the thread — you always see who did what.</li>
+<li><b>Connections page.</b> One screen listing Gmail, Calendar, MCP servers (REA is already wired), model providers (with live health), and ACP harnesses (login status, quota hints). Toggling a connection is a tap; broken connections show a fix action.</li>
+<li><b>Threads survive everything.</b> Server restarts, app restarts, phone switches: threads reattach via <code>resync</code> and continue mid-turn streams.</li>
+</ul>
+
+<h2 id="stores">6 · Memory, links, tasks — the three stores</h2>
+<div class="scroll">
+<table>
+<tr><th>Store</th><th>Capture (typed into the app or forwarded)</th><th>Retrieval &amp; rituals</th></tr>
+<tr><td><b>Memory</b></td><td>Facts you want kept: &ldquo;remember: my passport expires Mar 2029&rdquo;. Written raw + indexed immediately; long items get a one-line summary at write time.</td><td><code>memory.search</code> tool; agent checks it only when relevant (S2). Weekly: agent proposes 3 memories to merge or drop — you tap approve.</td></tr>
+<tr><td><b>Links</b></td><td>Paste any URL (chat or share-sheet later). Server fetches title, 2-line summary, tags — at write time.</td><td>&ldquo;find that article about Postgres pooling&rdquo; → <code>links.search</code> → link card with your original note. Weekly: 3 old links resurfaced with a why-now line.</td></tr>
+<tr><td><b>Tasks</b></td><td>&ldquo;add task: renew insurance by Nov 30&rdquo; — a tiny parse writes title/due/priority/status. No LLM loop needed for capture.</td><td>&ldquo;what&rsquo;s on today&rdquo; + the 07:55 brief (precomputed). Snooze/done as one-tap actions; overdue items escalate gently, not repeatedly.</td></tr>
+</table>
+</div>
+
+<h2 id="apps">7 · Apps (Mac + Android)</h2>
+<ul>
+<li><b>One codebase, two targets:</b> Tauri 2 (Rust shell + web UI) builds the macOS app and the Android app from the same source — the fastest honest path to &ldquo;clean, good, black&rdquo; on both without writing Swift and Kotlin separately.</li>
+<li><b>Chat surface:</b> streaming text, code blocks, tool activity strips, approval buttons, inline rich blocks — including HTML charts — as a fast-follow feature (the webview renders them natively, we sandbox each block).</li>
+<li><b>Design constraints:</b> true black theme by default, thumb-reachable primary actions on Android, keyboard-first on Mac (⌘K to switch agent, ⌘N new thread), no nested navigation mazes.</li>
+<li><b>Push:</b> desktop notifications natively on Mac; on Android, ntfy (self-hosted on bb-1, free, no account on public servers) delivers briefs and pings; the app itself shows in-thread activity.</li>
+<li><b>Pairing:</b> app shows a QR from the server (<code>bun run pair</code>); scanning installs the device token. Revoke from the server at any time.</li>
+</ul>
+
+<h2 id="models">8 · Models &amp; cost — everything free by default</h2>
+<div class="scroll">
+<table>
+<tr><th>Tier</th><th>Source</th><th>Used for</th><th>Cost</th></tr>
+<tr><td><b>Instant</b></td><td>Groq free tier · Cerebras free tier</td><td>reflex lane, capture parsing, summaries</td><td>$0 (rate-limited, very fast)</td></tr>
+<tr><td><b>Task</b></td><td>NVIDIA NIM free credits (your key exists on this machine)</td><td>tool use, moderate jobs, vision</td><td>$0 until credits run out</td></tr>
+<tr><td><b>Deep</b></td><td>Gemini free tier · OpenRouter <code>:free</code> models · NIM big models</td><td>research passes, long context</td><td>$0 (limits), then cents on NIM PAYG</td></tr>
+<tr><td><b>Coding / heavy</b></td><td>ACP: codex-acp first, then claude-agent-acp, cursor, grok</td><td>anything repo-shaped or long-running</td><td>covered by subscriptions you already pay for</td></tr>
+<tr><td><b>Offline</b></td><td>LM Studio on the Mac / bb-1 GPU (if any)</td><td>private or no-network moments</td><td>$0</td></tr>
+</table>
+</div>
+<p class="small">Router rules: health-check every provider before use; fail over on 429/timeout automatically; show which model answered in a tiny footer; per-day token caps per tier. Footnote for completeness: the only way to use OpenCode&rsquo;s free models is inside OpenCode itself — we deliberately don&rsquo;t depend on it. If you ever want it purely as a background model pipe, that&rsquo;s a reversible decision we can revisit, but it contradicts &ldquo;no OpenCode&rdquo; and its free tier is explicitly app-locked, so v3 doesn&rsquo;t count on it.</p>
+
+<h2 id="email">9 · Email &amp; calendar (Gmail-first, no Resend)</h2>
+<ul>
+<li><b>The agent&rsquo;s mailbox:</b> <code>hey.agnibot@gmail.com</code> — created 2026-10-16. Still to do on it (your side): 2-Step Verification, recovery email/phone, signed in on your phone. The server reaches it over IMAP/SMTP with a Gmail app password — verified today: app passwords are still supported, and this skips the OAuth trap for personal projects (apps left in &ldquo;Testing&rdquo; get refresh tokens that expire every 7 days; publishing with Gmail scopes means Google&rsquo;s verification review).</li>
+<li><b>Durability:</b> Google deletes accounts only after two years of zero use, and its policy counts reading or sending email as activity (checked today) — a working mailbox never trips it, and keeping it signed in on your phone is belt-and-suspenders. The server also files every message into your own SQLite, so the archive outlives Google policy changes.</li>
+<li><b>Read &amp; draft:</b> the agent watches its inbox (IMAP IDLE / 2-minute polling — free), summarizes what matters, and drafts replies. It signs up for services as <code>hey.agnibot+servicename@gmail.com</code> (plus-addressing: one inbox, filterable, leak-traceable); verification codes land in the thread; CAPTCHAs are your 10-second tap.</li>
+<li><b>Send discipline:</b> sending is always approval-gated for the first weeks; &ldquo;always allow this sender&rdquo; unlocks trusted flows later; volume stays personal-scale, far under Gmail&rsquo;s limits.</li>
+<li><b>Your mailbox:</b> optional second connection with its own app password, read + draft only. &ldquo;Reply to Sarah about Thursday&rdquo; produces a draft you approve — it sends from your account from the app. No raw forwarding (that just recreates inbox noise); Gmail&rsquo;s delegate access covers peeking any time.</li>
+<li><b>Calendar:</b> reads come from Google Calendar&rsquo;s private iCal link (free, no OAuth); writes arrive as one-tap &ldquo;add to calendar&rdquo; invites Agni emails you. The full Calendar API would mean Google verification — skipped on purpose. The brief still knows your real agenda.</li>
+<li><b>theynr.xyz (optional vanity):</b> registered through a free-domain program (the Gen.xyz family) — if you find that login, its DNS panel can point MX records at a free forwarder (ImprovMX free plan verified today: 1 domain, 25 aliases, 500 forwards/day) and <code>hey@theynr.xyz</code> lands in Agni&rsquo;s inbox. Receive-only — sending as a domain is paid-only on every free tier, so sends always come from the Gmail address. When the domain lapses (Sep 2027) only the nickname dies — never use it as a login or recovery address for anything important.</li>
+</ul>
+
+<h2 id="plan">10 · Build plan</h2>
+<div class="scroll">
+<table>
+<tr><th>Phase</th><th>Build</th><th>Proof</th></tr>
+<tr><td><b>P0 · tonight</b><br>Server + instant lane</td><td>Bun server: WS protocol v0, token auth, SQLite open; model router with Groq + NIM; one persona; CLI test client. No UI yet.</td><td>10 instant-lane questions over the socket: p50 ≤ 1.5 s server-side, streaming deltas observed, failover fires when one provider is artificially rate-limited.</td></tr>
+<tr><td><b>P1 · weekend</b><br>Mac app v0</td><td>Tauri app: pair by QR, agents sidebar, one thread, streaming bubbles, reconnect/resync. Store: costs per turn.</td><td>You type from the Mac app over Tailscale and watch tokens stream; kill and reopen the app mid-turn; the turn resumes.</td></tr>
+<tr><td><b>P2</b><br>Stores + rituals</td><td>memory/links/tasks tools with write-time indexing; capture flows; 07:55 brief via cron → ntfy; one-tap approve/snooze/done.</td><td>Paste a link → saved; ask for it by topic → returned; task due tomorrow appears in the brief; approval from a notification works.</td></tr>
+<tr><td><b>P3</b><br>ACP + MCP</td><td>ACP client; codex-acp as the first harness; coding lane routing; MCP client with REA as the first server.</td><td>A repo task runs through Codex from the app and streams into the same thread UI; an REA tool call works from our agent.</td></tr>
+<tr><td><b>P4</b><br>Email + calendar</td><td>Agni&rsquo;s Gmail via app password (no Cloud project): inbox watcher, read/draft/send; calendar reads via private ICS + one-tap invites; brief v2 merges mail + events + tasks.</td><td>Mail to the agent&rsquo;s Gmail surfaces in the app; an approved draft sends; the brief shows a real event you created from chat.</td></tr>
+<tr><td><b>P5</b><br>Android + bb-1 + polish</td><td>Android build of the same Tauri app; ntfy self-host; move server to bb-1 (systemd/compose + Tailscale); inline rich blocks (charts); backups.</td><td>Phone over Tailscale: chat, brief, approvals. Reboot bb-1; everything returns. A month of usage shows $0 and bounded jobs.</td></tr>
+</table>
+</div>
+<p class="small">Scope guard: P0–P2 is the &ldquo;assistant that is faster than Hermes and usable daily&rdquo; milestone — a weekend of focused work. P3–P5 add reach, not obligation. We do not build IDE features, ever; that is what the ACP harnesses are for.</p>
+
+<h2 id="guardrails">11 · Guardrails</h2>
+<ul>
+<li><b>Network:</b> server binds to the Tailscale interface only; per-device tokens; QR pairing; instant revoke. Nothing listens on the public internet.</li>
+<li><b>Approvals:</b> shell, file writes outside the scratch dir, email sends, and payments always ask; approval buttons carry a preview of exactly what will run or send.</li>
+<li><b>Untrusted input rule:</b> mail, web pages, and tool output are data, never instructions. The agent flags suspected prompt-injection instead of obeying it.</li>
+<li><b>Budgets:</b> per-day token caps per tier; free-first routing; spend ledger visible per thread; global kill switch.</li>
+<li><b>Secrets:</b> provider keys and mail credentials live server-side (keychain on Mac dev, mode-600 file on bb-1); never in the repo, never in the apps.</li>
+<li><b>Data:</b> SQLite + nightly backup; full export command; you own the bytes and the box.</li>
+</ul>
+
+<h2 id="lineage">12 · What we take from each product</h2>
+<div class="scroll">
+<table>
+<tr><th>Source</th><th>Keep</th><th>Drop</th></tr>
+<tr><td><b>Grok Bot</b></td><td>Persistent agent roster with a clean black app; scheduled routines; sessions that survive across devices.</td><td>The closed cloud; routine intervals as a product limit.</td></tr>
+<tr><td><b>Hermes</b></td><td>Gateway-to-many-surfaces instinct; allowlist/default-deny; delivery ledger; ACP ambitions (it is on the ACP registry itself).</td><td>File-based memory as context; single queue for all work; the exact seams that made it crawl.</td></tr>
+<tr><td><b>OpenClaw</b></td><td>Long-lived gateway; device nodes (camera/screen/location); WhatsApp/iMessage later as adapters.</td><td>Its node stack for v1; not our base.</td></tr>
+<tr><td><b>OpenCode</b></td><td>Proof that free-tier models and ACP are the right supply lines; lessons in compaction, warming, permissions, inbox/forms.</td><td>It as the engine, the app, or the session model — the speed trade we no longer accept.</td></tr>
+</table>
+</div>
+
+<h2 id="decisions">13 · Open items (small)</h2>
+<ol>
+<li><b>Push pipe:</b> default plan is ntfy self-hosted on bb-1 — no account, no cost. Telegram stays as an optional adapter if you ever want it. Say the word if you&rsquo;d rather have email-only notifications.</li>
+<li><b>Agent name &amp; mailbox:</b> name locked: <b>Agni</b>; mailbox live: <code>hey.agnibot@gmail.com</code> (created 2026-10-16). Open on your side: 2-Step Verification + recovery email/phone; keep it signed in on your phone. App password comes at P4.</li>
+<li><b>bb-1 specs:</b> tell me RAM/disk/OS version when convenient — it only matters for local model hosting, not for the core.</li>
+</ol>
+
+<footer>
+Blueprint v3 · 2026-10-16 · Nachiketh &middot; supersedes <a href="https://q425c8y3vjlx.postplan.dev" target="_blank" rel="noopener noreferrer">v2 (OpenCode-as-engine)</a> and <a href="https://7tmcni811c8e.postplan.dev" target="_blank" rel="noopener noreferrer">v1 (product evidence)</a>.<br>
+Evidence today: no-auth <code>GET opencode.ai/inference/v1/models</code> succeeds, but <code>POST &hellip;/chat/completions</code> with a free model returns HTTP 403 <code>FreeTierError</code> — free tier is app-locked (live test, 2026-10-16) · Console inference docs: free chat models documented at <code>/inference</code> endpoints (opencode.ai/v2/docs/console/api) · API surface counts and ACP/tooling details carried from <a href="https://q425c8y3vjlx.postplan.dev" target="_blank" rel="noopener noreferrer">Blueprint v2</a> · ACP registry (agentclientprotocol.com) · Gmail app-password support, the two-year inactivity policy (&ldquo;reading or sending an email&rdquo; counts as activity), OAuth testing-mode 7-day refresh-token expiry, and ImprovMX free-plan limits — all verified from primary docs on 2026-10-16; Tailscale free-plan details not re-checked today · Agent mailbox created: <code>hey.agnibot@gmail.com</code> (2026-10-16).
+</footer>
+
+</main>
+</body>
+</html>

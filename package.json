@@ -1,0 +1,28 @@
+{
+  "name": "agni",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "tools/*"
+  ],
+  "scripts": {
+    "dev": "bun --watch apps/server/src/index.ts serve",
+    "serve": "bun apps/server/src/index.ts serve",
+    "migrate": "bun apps/server/src/index.ts migrate",
+    "pair": "bun apps/server/src/index.ts pair",
+    "devices": "bun apps/server/src/index.ts devices",
+    "revoke": "bun apps/server/src/index.ts revoke",
+    "ask": "bun tools/cli/src/index.ts ask",
+    "bench": "bun tools/cli/src/index.ts bench",
+    "ping": "bun tools/cli/src/index.ts ping",
+    "mock": "bun tools/mock-provider/src/index.ts",
+    "test": "bun test",
+    "typecheck": "bun run --filter '@agni/*' typecheck"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5"
+  }
+}
