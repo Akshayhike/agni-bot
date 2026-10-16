@@ -195,10 +195,12 @@ public final class AgniConnection {
       }
 
       let frame: ServerFrame
+      let resumeAfterSeq = settings.lastSeq
       do {
         frame = try ServerFrame.from(jsonText: text)
       } catch {
-        onEvent?(.malformed("\(error)"))
+        let type = (try? JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any])?["type"] as? String
+        onEvent?(.malformed("\(type ?? "frame"): \(error)"))
         continue
       }
 
@@ -211,7 +213,7 @@ public final class AgniConnection {
           watchdog.cancel()
           state = .ready(lastSeq: hello.lastSeq)
           // Re-enter the stream where this device left off.
-          try? await socket.send(try ClientFrame.resync(lastSeq: settings.lastSeq).jsonString())
+          try? await socket.send(try ClientFrame.resync(lastSeq: resumeAfterSeq).jsonString())
         case .error(let error):
           // The server rejects before hello.ok: unauthorized, version_mismatch.
           throw TransportError.closed(code: error.code == "version_mismatch" ? 4002 : 4003, reason: error.message)

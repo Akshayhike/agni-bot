@@ -53,7 +53,7 @@ struct FixtureConformance {
     let clientTypes = Set(fixtures.client.compactMap { $0["type"] as? String })
     for expected in [
       "hello", "resync", "msg.send", "msg.cancel", "approve.reply",
-      "agent.select", "thread.open", "thread.list", "thread.history", "job.list", "job.set",
+      "agent.select", "thread.open", "thread.list", "thread.history", "job.list", "job.set", "task.list", "task.update",
     ] {
       #expect(clientTypes.contains(expected), "no client fixture for \(expected) — run: bun run fixtures")
     }
@@ -62,7 +62,7 @@ struct FixtureConformance {
     for expected in [
       "hello.ok", "token", "turn.start", "turn.end", "tool.start", "tool.update", "tool.end",
       "approval.request", "form.request", "notify", "agents.update", "thread.list.ok",
-      "thread.history.ok", "job.list.ok", "presence", "error",
+      "thread.history.ok", "job.list.ok", "task.list.ok", "task.update.ok", "presence", "error",
     ] {
       #expect(serverTypes.contains(expected), "no server fixture for \(expected) — run: bun run fixtures")
     }

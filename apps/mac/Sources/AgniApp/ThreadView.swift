@@ -7,6 +7,11 @@ import SwiftUI
 import AgniKit
 import AgniProtocol
 
+private struct TranscriptScrollState: Equatable {
+  var offsetY: CGFloat
+  var isAtBottom: Bool
+}
+
 struct ThreadView: View {
   var model: AppModel
   var composerFocused = FocusState<Bool>()
@@ -46,29 +51,49 @@ struct ThreadView: View {
         .padding(.horizontal, Metrics.gutter + 6)
         .padding(.top, 18)
         .padding(.bottom, 22)
-        .frame(maxWidth: 1040, alignment: .leading)
-        .frame(maxWidth: .infinity, alignment: .center)
+        .frame(maxWidth: .infinity, alignment: .leading)
       }
-      .defaultScrollAnchor(.top)
-      .onScrollGeometryChange(for: Bool.self) { geometry in
-        geometry.contentOffset.y + geometry.containerSize.height >= geometry.contentSize.height - 48
-      } action: { _, nearBottom in
-        pinnedToBottom.wrappedValue = nearBottom
+      .defaultScrollAnchor(.bottom)
+      .onScrollGeometryChange(for: TranscriptScrollState.self) { geometry in
+        TranscriptScrollState(
+          offsetY: geometry.contentOffset.y,
+          isAtBottom: geometry.contentOffset.y + geometry.containerSize.height >= geometry.contentSize.height - 48
+        )
+      } action: { previous, current in
+        // Content growth changes contentSize without meaning the user scrolled
+        // away. Only update the pin when the scroll offset itself moves.
+        if abs(current.offsetY - previous.offsetY) > 1 {
+          pinnedToBottom.wrappedValue = current.isAtBottom
+        }
+      }
+      .onAppear {
+        pinnedToBottom.wrappedValue = true
+        Task { @MainActor in
+          await Task.yield()
+          proxy.scrollTo(bottomAnchor, anchor: .bottom)
+        }
       }
       .onChange(of: streamingText) { _, _ in
         guard pinnedToBottom.wrappedValue else { return }
-        withAnimation(.linear(duration: 0.12)) { proxy.scrollTo(bottomAnchor, anchor: .bottom) }
+        Task { @MainActor in
+          await Task.yield()
+          proxy.scrollTo(bottomAnchor, anchor: .bottom)
+        }
       }
       .onChange(of: model.conversation.messages.count) { _, _ in
+        if model.conversation.messages.last?.role == .user {
+          pinnedToBottom.wrappedValue = true
+        }
         guard pinnedToBottom.wrappedValue else { return }
-        proxy.scrollTo(bottomAnchor, anchor: .bottom)
+        Task { @MainActor in
+          await Task.yield()
+          proxy.scrollTo(bottomAnchor, anchor: .bottom)
+        }
       }
       .onChange(of: model.conversation.threadID) { _, _ in
-        if model.conversation.messages.count <= 2 {
-          pinnedToBottom.wrappedValue = false
-          proxy.scrollTo(topAnchor, anchor: .top)
-        } else {
-          pinnedToBottom.wrappedValue = true
+        pinnedToBottom.wrappedValue = true
+        Task { @MainActor in
+          await Task.yield()
           proxy.scrollTo(bottomAnchor, anchor: .bottom)
         }
       }

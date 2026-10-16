@@ -33,6 +33,12 @@ const CLIENT_FRAMES: ClientFrame[] = [
   { type: "thread.history", threadID: "thr_01hq", limit: 50 },
   { type: "job.list", limit: 50 },
   { type: "job.set", jobID: "job_01hq", action: "pause" },
+  { type: "task.list", status: "open", limit: 50 },
+  { type: "task.update", taskID: "tsk_01hq", action: "snooze", until: "2026-10-17T01:00:00.000Z" },
+  { type: "job.delete", jobID: "job_01hr" },
+  { type: "provider.add", providerID: "groq", apiKey: "fixture-key", model: "llama-3.1-8b-instant" },
+  { type: "provider.model.set", providerID: "groq", model: "llama-3.1-8b-instant" },
+  { type: "provider.models.list", providerID: "groq" },
 ];
 
 const SERVER_FRAMES: ServerFrame[] = [
@@ -66,7 +72,7 @@ const SERVER_FRAMES: ServerFrame[] = [
     question: "Which inbox should the brief watch while you're away?",
     options: ["agent", "personal", "both"],
   },
-  { type: "notify", seq: 52, title: "Agni · standup in 10", body: "You asked to be nudged before the 09:30 standup.", sound: true },
+  { type: "notify", seq: 52, title: "Agni · standup in 10", body: "You asked to be nudged before the 09:30 standup.", sound: true, threadID: "thr_01hq" },
   {
     type: "agents.update",
     seq: 53,
@@ -126,6 +132,10 @@ const SERVER_FRAMES: ServerFrame[] = [
       },
     ],
   },
+  { type: "task.list.ok", seq: 59, tasks: [{ id: "tsk_01hq", title: "Renew insurance", dueAt: "2026-10-17T01:00:00.000Z", priority: "high", status: "open", snoozedUntil: null, createdAt: "2026-10-16T12:00:00.000Z", updatedAt: "2026-10-16T12:00:00.000Z" }] },
+  { type: "task.update.ok", seq: 60, task: { id: "tsk_01hq", title: "Renew insurance", dueAt: "2026-10-17T01:00:00.000Z", priority: "high", status: "snoozed", snoozedUntil: "2026-10-17T01:00:00.000Z", createdAt: "2026-10-16T12:00:00.000Z", updatedAt: "2026-10-16T12:01:00.000Z" } },
+  { type: "provider.add.ok", seq: 61, providers: [{ id: "groq", label: "Groq", model: "llama-3.1-8b-instant", tiers: ["instant"], available: true, cooldownRemainingMs: 0 }] },
+  { type: "provider.models.ok", seq: 62, providerID: "groq", models: ["llama-3.1-8b-instant"] },
   { type: "presence", seq: 57, state: "offline" },
   { type: "error", seq: 58, code: "no_provider", message: "no provider in tier instant", retryAfter: 2 },
 ];

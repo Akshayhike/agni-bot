@@ -150,6 +150,7 @@ async function startTestServer(): Promise<void> {
     helloTimeoutMs: 2000,
     frameLogCapacity: 100,
     jobPollMs: 1000,
+    maxConcurrentTurns: 4,
   };
   server = startServer(config, db, router);
   client = await TestClient.connect(`ws://127.0.0.1:${server.port}/ws`, token);
@@ -196,5 +197,26 @@ describe("websocket end-to-end", () => {
     expect(replayed.some((frame) => frame.type === "turn.start")).toBe(true);
     expect(replayed.some((frame) => frame.type === "thread.list.ok")).toBe(false);
     expect(replayed.some((frame) => frame.type === "hello.ok")).toBe(false);
+  });
+
+  test("captures memory and task records without calling a model and persists task actions", async () => {
+    await startTestServer();
+    client!.send({ type: "msg.send", threadID: "", text: "remember: the workshop key is in the blue drawer" });
+    const capture = await client!.next("turn.start");
+    await client!.next("turn.end", { match: (frame) => frame.threadID === capture.threadID });
+    expect(db!.query<{ count: number }, []>("SELECT count(*) AS count FROM memories WHERE text LIKE '%blue drawer%'").get()?.count).toBe(1);
+
+    client!.send({ type: "msg.send", threadID: capture.threadID, text: "add task: renew insurance by 2027-01-02 priority: high" });
+    await client!.next("turn.start");
+    await client!.next("turn.end", { match: (frame) => frame.threadID === capture.threadID });
+    client!.send({ type: "task.list", status: "open" });
+    const tasks = await client!.next("task.list.ok");
+    const task = tasks.tasks[0];
+    expect(task?.title).toBe("renew insurance");
+    expect(task?.priority).toBe("high");
+    client!.send({ type: "task.update", taskID: task!.id, action: "snooze", until: "2099-01-01T12:00:00.000Z" });
+    expect((await client!.next("task.update.ok")).task.status).toBe("snoozed");
+    client!.send({ type: "task.update", taskID: task!.id, action: "done" });
+    expect((await client!.next("task.update.ok")).task.status).toBe("done");
   });
 });

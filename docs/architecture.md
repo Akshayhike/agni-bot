@@ -25,7 +25,7 @@ CLI (tools/cli) ────┘                                                �
                                                       │           usage_ledger, approvals,
                                                       │           memories, links, tasks, jobs
                                                       ├─ tools: registry (schema + timeout);
-                                                      │          native tools land with P2
+                                                      │          deterministic P2 capture + retrieval
                                                       └─ later: ACP bridge (P3), Gmail + ICS (P4)
 ```
 
@@ -53,6 +53,14 @@ any connected client, and completion raises `notify`. A `turn` job with
 `everyMs` reschedules itself and keeps the thread it created, so recurring work
 stays one conversation. Failures retry with backoff, then park as `failed` with
 a notification — never silently.
+
+Live and background turns share a process-wide model stream limit
+(`AGNI_MAX_CONCURRENT_TURNS`, default 4). This keeps provider usage and local
+memory bounded; chat turns that arrive at capacity receive a `server_busy`
+error and can be retried. `/health` reports active and configured capacity.
+The queue and WebSocket replay state are process-local, and SQLite is the
+single-writer store, so this deployment scales vertically within one daemon;
+horizontal replicas require shared coordination and a multi-writer database.
 
 ## The one contract
 
@@ -102,3 +110,11 @@ numbered migrations in `apps/server/src/db/migrations.ts`: `devices`,
 This Mac now; bb-1 later (systemd/compose + Tailscale, same image, SQLite
 backup). The server binds to `AGNI_HOST` only — loopback in dev, the Tailscale
 interface on bb-1. Nothing ever listens on the public internet.
+
+P2 store writes keep memory/link FTS rows in the same SQLite transaction as
+their base records. Chat capture recognizes `remember:`, `add task:`, and
+pasted HTTP(S) URLs; explicit `search memory:`, `search links:`, and `list
+tasks` requests use bounded store queries without changing the instant prompt.
+The daemon also schedules a date-keyed 07:55 local morning brief in the durable
+job queue and exposes authenticated task list/update frames to the Mac task
+card.

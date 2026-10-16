@@ -40,6 +40,8 @@ if the two disagree, the code wins, then fix this doc.
 | `job.list` | `{limit?}` | Tasks and routines, newest/next due first. |
 | `job.set` | `{jobID, action}` | `action`: `pause \| resume \| run`. |
 | `job.delete` | `{jobID}` | Deletes a task unless it is running; replies with a refreshed `job.list.ok`. |
+| `task.list` | `{status?, limit?}` | Lists durable tasks; status is `open \| done \| snoozed \| all`. |
+| `task.update` | `{taskID, action, until?}` | Completes, reopens, or snoozes a task until an ISO timestamp. |
 | `provider.add` | `{providerID, apiKey, model?}` | Adds a supported API provider over the authenticated socket. The daemon stores the key and optional model ID in its mode-600 `.env` and updates the live router; the key is never returned. |
 | `provider.model.set` | `{providerID, model}` | Changes a configured provider's model ID on the daemon and updates the live router. |
 
@@ -56,11 +58,13 @@ if the two disagree, the code wins, then fix this doc.
 | `tool.end` | `{callID, ok, preview?}` | |
 | `approval.request` | `{requestID, action, preview, buttons}` | `buttons`: subset of `once \| always \| reject`. |
 | `form.request` | `{requestID, question, options?}` | Ad-hoc question to the user. |
-| `notify` | `{title, body, sound?}` | Push-worthy event (ntfy mirrors this on Android). |
+| `notify` | `{title, body, sound?, threadID?}` | Push-worthy event; Mac opens the referenced thread when clicked. |
 | `agents.update` | `{agents: [{id, name, color?, model?, tools?}]}` | Roster snapshot. |
 | `thread.list.ok` | `{threads: [{id, agentID, title?, updatedAt}]}` | Answer to `thread.list`; addressed to the requester. |
 | `thread.history.ok` | `{threadID, title?, messages: [{id, role, text, createdAt, turnID?}]}` | Answer to `thread.history`; addressed to the requester. |
 | `job.list.ok` | `{jobs: [...]}` | Answer to `job.list`, `job.set`, or `job.delete`; addressed to the requester. |
+| `task.list.ok` | `{tasks: [...]}` | Task snapshots, including due date, priority, status, and snooze time. |
+| `task.update.ok` | `{task: {...}}` | Updated task snapshot after a persisted state change. |
 | `provider.add.ok` | `{providers: [...]}` | Provider metadata after adding a key; contains no credentials. |
 | `presence` | `{state}` | `online \| offline`. |
 | `error` | `{code, message, retryAfter?}` | See codes below. |
@@ -68,7 +72,8 @@ if the two disagree, the code wins, then fix this doc.
 ## Error codes (v1)
 
 `bad_frame`, `unauthorized`, `version_mismatch`, `unknown_thread`,
-`unknown_agent`, `unknown_request`, `unknown_job`, `job_running`, `no_provider`, `provider_failed`,
+`unknown_agent`, `unknown_request`, `unknown_job`, `unknown_task`,
+`bad_task_action`, `capture_failed`, `job_running`, `no_provider`, `provider_failed`,
 `unknown_provider`, `invalid_key`, `provider_exists`, `provider_storage`,
 `resync_gap`, `internal`.
 

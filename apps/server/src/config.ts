@@ -19,6 +19,8 @@ export interface Config {
   frameLogCapacity: number;
   /** How often the job runner looks for due work. */
   jobPollMs: number;
+  /** Maximum simultaneous model streams across chat and background turns. */
+  maxConcurrentTurns: number;
 }
 
 function int(env: Record<string, string | undefined>, key: string, fallback: number): number {
@@ -41,5 +43,6 @@ export function loadConfig(env: Record<string, string | undefined> = Bun.env): C
     helloTimeoutMs: int(env, "AGNI_HELLO_TIMEOUT_MS", 5000),
     frameLogCapacity: int(env, "AGNI_FRAME_LOG_CAPACITY", 1000),
     jobPollMs: int(env, "AGNI_JOB_POLL_MS", 3000),
+    maxConcurrentTurns: int(env, "AGNI_MAX_CONCURRENT_TURNS", 4),
   };
 }

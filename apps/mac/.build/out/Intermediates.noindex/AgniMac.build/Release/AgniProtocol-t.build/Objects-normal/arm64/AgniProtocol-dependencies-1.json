@@ -2,322 +2,322 @@
   {
     "isFramework" : true,
     "moduleName" : "Combine",
-    "modulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/Combine-2WPXCDZF2E496.swiftmodule"
+    "modulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/Combine-1PL86N4ZK0BYK.swiftmodule"
   },
   {
     "isFramework" : false,
     "moduleName" : "CoreFoundation",
-    "modulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/CoreFoundation-2WYIZQ2H9GOWP.swiftmodule"
+    "modulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/CoreFoundation-2QNLJX9X098W6.swiftmodule"
   },
   {
     "isFramework" : false,
     "moduleName" : "Darwin",
-    "modulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/Darwin-2X17QUTNOQP5H.swiftmodule"
+    "modulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/Darwin-1WTP2IQOTMXOG.swiftmodule"
   },
   {
     "isFramework" : false,
     "moduleName" : "Dispatch",
-    "modulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/Dispatch-3JH3DLFGN962Z.swiftmodule"
+    "modulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/Dispatch-7KWYIJVGFFLT.swiftmodule"
   },
   {
     "isFramework" : true,
     "moduleName" : "Foundation",
-    "modulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/Foundation-CGQP45LCTREQ.swiftmodule"
+    "modulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/Foundation-42WUF5O5XBQJ.swiftmodule"
   },
   {
     "isFramework" : false,
     "moduleName" : "IOKit",
-    "modulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/IOKit-163J9UP8PKII6.swiftmodule"
+    "modulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/IOKit-2AT67V6Y0XZ49.swiftmodule"
   },
   {
     "isFramework" : false,
     "moduleName" : "ObjectiveC",
-    "modulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/ObjectiveC-D4PMVP78HE33.swiftmodule"
+    "modulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/ObjectiveC-1O7XST5M7R6DY.swiftmodule"
   },
   {
     "isFramework" : false,
     "moduleName" : "Observation",
-    "modulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/Observation-11OM4SD0CI6MJ.swiftmodule"
+    "modulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/Observation-3G3G2AXHVFI8Q.swiftmodule"
   },
   {
     "isFramework" : false,
     "moduleName" : "Swift",
-    "modulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/Swift-2TV383BGV0ZLU.swiftmodule"
+    "modulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/Swift-2P79PDARZPIO7.swiftmodule"
   },
   {
     "isFramework" : false,
     "moduleName" : "System",
-    "modulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/System-DICIF4XRNNB.swiftmodule"
+    "modulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/System-5BGGGIKY4G8A.swiftmodule"
   },
   {
     "isFramework" : false,
     "moduleName" : "XPC",
-    "modulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/XPC-1LMYVLRGFUGAG.swiftmodule"
+    "modulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/XPC-KY9N5Q1XDBEU.swiftmodule"
   },
   {
     "isFramework" : false,
     "moduleName" : "_Builtin_float",
-    "modulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/_Builtin_float-9KH9F9V47Y3L.swiftmodule"
+    "modulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/_Builtin_float-2Q33CZOX1CQCR.swiftmodule"
   },
   {
     "isFramework" : false,
     "moduleName" : "_Concurrency",
-    "modulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/_Concurrency-15EEVMYVOQWF3.swiftmodule"
+    "modulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/_Concurrency-ERIZUBIDXUDA.swiftmodule"
   },
   {
     "isFramework" : false,
     "moduleName" : "_DarwinFoundation1",
-    "modulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/_DarwinFoundation1-8SK4EJD0ZLGL.swiftmodule"
+    "modulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/_DarwinFoundation1-2QHZDYEWEPPUD.swiftmodule"
   },
   {
     "isFramework" : false,
     "moduleName" : "_DarwinFoundation2",
-    "modulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/_DarwinFoundation2-Y24FNLUL2BUY.swiftmodule"
+    "modulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/_DarwinFoundation2-3JA2IYY42SJMY.swiftmodule"
   },
   {
     "isFramework" : false,
     "moduleName" : "_DarwinFoundation3",
-    "modulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/_DarwinFoundation3-1V8D7V37XCZT7.swiftmodule"
+    "modulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/_DarwinFoundation3-1U4A25RS3YK35.swiftmodule"
   },
   {
     "isFramework" : false,
     "moduleName" : "_StringProcessing",
-    "modulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/_StringProcessing-2ZJWALCKEIMQV.swiftmodule"
+    "modulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/_StringProcessing-1B196T7OE8ZDJ.swiftmodule"
   },
   {
     "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/System\/Library\/Frameworks\/CFNetwork.framework\/Modules\/module.modulemap",
-    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/CFNetwork-9632GD5XXAVG52HAA2B6N9K8R.pcm",
+    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/CFNetwork-72DEM5X0UVN5LP640KXB0DAU1.pcm",
     "isBridgingHeaderDependency" : false,
     "isFramework" : false,
     "moduleName" : "CFNetwork"
   },
   {
     "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/System\/Library\/Frameworks\/CoreFoundation.framework\/Modules\/module.modulemap",
-    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/CoreFoundation-7ICXC68U70XCQFC8P3T73RFBU.pcm",
+    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/CoreFoundation-6EJ7V89AJGITIYFDSXC6X75NE.pcm",
     "isBridgingHeaderDependency" : false,
     "isFramework" : false,
     "moduleName" : "CoreFoundation"
   },
   {
     "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/System\/Library\/Frameworks\/CoreServices.framework\/Modules\/module.modulemap",
-    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/CoreServices-70D96V27RYB820GVFV8L3YY2.pcm",
+    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/CoreServices-6TUV4UJWS4V0RMJ9RN84FXN7T.pcm",
     "isBridgingHeaderDependency" : false,
     "isFramework" : false,
     "moduleName" : "CoreServices"
   },
   {
     "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/usr\/include\/Darwin.modulemap",
-    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/Darwin-3F6VIQCW4PNDPTWT5G2V6XYNP.pcm",
+    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/Darwin-28QL8GC51RXFPWG5H8DZS40E8.pcm",
     "isBridgingHeaderDependency" : false,
     "isFramework" : false,
     "moduleName" : "Darwin"
   },
   {
     "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/System\/Library\/Frameworks\/DiskArbitration.framework\/Modules\/module.modulemap",
-    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/DiskArbitration-C8K67CG7Y0CLLFTB3BA9ONH2A.pcm",
+    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/DiskArbitration-93K5EI4SW6DDAIEWG8QSOTH0E.pcm",
     "isBridgingHeaderDependency" : false,
     "isFramework" : false,
     "moduleName" : "DiskArbitration"
   },
   {
     "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/usr\/include\/dispatch.modulemap",
-    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/Dispatch-3G62U6I56BOD49S2O3G9V2ZU4.pcm",
+    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/Dispatch-5UB9X0HDX080KD4RQ89JNP73Z.pcm",
     "isBridgingHeaderDependency" : false,
     "isFramework" : false,
     "moduleName" : "Dispatch"
   },
   {
     "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/System\/Library\/Frameworks\/Foundation.framework\/Modules\/module.modulemap",
-    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/Foundation-421ZF2NGUDZUP6VIHXN0T8VUW.pcm",
+    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/Foundation-4CPKNFYTH4STFDNS624LUKYO1.pcm",
     "isBridgingHeaderDependency" : false,
     "isFramework" : false,
     "moduleName" : "Foundation"
   },
   {
     "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/System\/Library\/Frameworks\/IOKit.framework\/Modules\/module.modulemap",
-    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/IOKit-AH5FJBQ790KH1NEC1QV7W0FV6.pcm",
+    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/IOKit-EQNSQQQK7XHRDQKPI270TS04N.pcm",
     "isBridgingHeaderDependency" : false,
     "isFramework" : false,
     "moduleName" : "IOKit"
   },
   {
     "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/usr\/include\/DarwinBasic.modulemap",
-    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/MachO-A10PVSFAHH18M6DDKFY9GAI06.pcm",
+    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/MachO-1F02MZBQGVONH0BTPTX348NKX.pcm",
     "isBridgingHeaderDependency" : false,
     "isFramework" : false,
     "moduleName" : "MachO"
   },
   {
     "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/usr\/include\/ObjectiveC.modulemap",
-    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/ObjectiveC-EFOT2HHMDK7WR6DY6X5RXQ5IW.pcm",
+    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/ObjectiveC-AMHIZY9M86JXZRFRPBEK5D4BR.pcm",
     "isBridgingHeaderDependency" : false,
     "isFramework" : false,
     "moduleName" : "ObjectiveC"
   },
   {
     "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/System\/Library\/Frameworks\/Security.framework\/Modules\/module.modulemap",
-    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/Security-DH64JMUIIP3C5FN8WBJL7YQUP.pcm",
+    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/Security-31878JB1TZ82DT528VL267605.pcm",
     "isBridgingHeaderDependency" : false,
     "isFramework" : false,
     "moduleName" : "Security"
   },
   {
     "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/usr\/lib\/swift\/shims\/module.modulemap",
-    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/SwiftShims-9CCNX8B1NKPG0UEWRK859Y82F.pcm",
+    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/SwiftShims-C3N6WI13GIBYI70S3DCB2V881.pcm",
     "isBridgingHeaderDependency" : false,
     "isFramework" : false,
     "moduleName" : "SwiftShims"
   },
   {
     "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/usr\/include\/xpc.modulemap",
-    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/XPC-73U67YJLRSOPYZE0LEJKAIP7Z.pcm",
+    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/XPC-5XVYJXPNACQ63G8TZQF1J9N2M.pcm",
     "isBridgingHeaderDependency" : false,
     "isFramework" : false,
     "moduleName" : "XPC"
   },
   {
     "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/usr\/include\/DarwinFoundation1.modulemap",
-    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/_AvailabilityInternal-3UCBAMDGPAFU08MUN5THDX1W2.pcm",
+    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/_AvailabilityInternal-5CMF2A6XCRQCDBHCRP2EULG3C.pcm",
     "isBridgingHeaderDependency" : false,
     "isFramework" : false,
     "moduleName" : "_AvailabilityInternal"
   },
   {
     "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/usr\/lib\/clang\/21\/include\/module.modulemap",
-    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/_Builtin_float-EL9GRHEL2CH2K0M98UAUWQ7PU.pcm",
+    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/_Builtin_float-F3BR9BPSEO1WKXK8GRKS4G2N8.pcm",
     "isBridgingHeaderDependency" : false,
     "isFramework" : false,
     "moduleName" : "_Builtin_float"
   },
   {
     "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/usr\/lib\/clang\/21\/include\/module.modulemap",
-    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/_Builtin_inttypes-DMR5I2QFHHO0E4CGYRXEGEI7Q.pcm",
+    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/_Builtin_inttypes-3JD8NX9JSJK79UV3G5Y8RLOKJ.pcm",
     "isBridgingHeaderDependency" : false,
     "isFramework" : false,
     "moduleName" : "_Builtin_inttypes"
   },
   {
     "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/usr\/lib\/clang\/21\/include\/module.modulemap",
-    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/_Builtin_limits-3009RD2013VPOE75AHV9SDW25.pcm",
+    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/_Builtin_limits-BDXQ2GFKRFBPPUPAX0FU2EWTP.pcm",
     "isBridgingHeaderDependency" : false,
     "isFramework" : false,
     "moduleName" : "_Builtin_limits"
   },
   {
     "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/usr\/lib\/clang\/21\/include\/module.modulemap",
-    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/_Builtin_stdarg-4YSW57DWWP39CQZW9G4GELFR3.pcm",
+    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/_Builtin_stdarg-E26GOCUXEUZZWI1ZASPQ8BTZ8.pcm",
     "isBridgingHeaderDependency" : false,
     "isFramework" : false,
     "moduleName" : "_Builtin_stdarg"
   },
   {
     "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/usr\/lib\/clang\/21\/include\/module.modulemap",
-    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/_Builtin_stdbool-F5D73EUJY4XZ7U9PWOMXRYJ79.pcm",
+    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/_Builtin_stdbool-C9UCOS04N2WK2XLNEZIXXN4V8.pcm",
     "isBridgingHeaderDependency" : false,
     "isFramework" : false,
     "moduleName" : "_Builtin_stdbool"
   },
   {
     "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/usr\/lib\/clang\/21\/include\/module.modulemap",
-    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/_Builtin_stddef-EX2GNQDEU9Z17H9IHG5PIHN0F.pcm",
+    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/_Builtin_stddef-8QH0XP7P2J8L3QJ7L3I1IMTX2.pcm",
     "isBridgingHeaderDependency" : false,
     "isFramework" : false,
     "moduleName" : "_Builtin_stddef"
   },
   {
     "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/usr\/lib\/clang\/21\/include\/module.modulemap",
-    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/_Builtin_stdint-54WN5I5H7B6FDPABAIWJRM131.pcm",
+    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/_Builtin_stdint-3N60DXJYA839F62TK8Z2S1M3L.pcm",
     "isBridgingHeaderDependency" : false,
     "isFramework" : false,
     "moduleName" : "_Builtin_stdint"
   },
   {
     "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/usr\/include\/DarwinFoundation1.modulemap",
-    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/_DarwinFoundation1-CZPD3P13QPEBA5W89M7O4N7I2.pcm",
+    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/_DarwinFoundation1-DTUBXJ3KFMQARJB8BM5W1ME6D.pcm",
     "isBridgingHeaderDependency" : false,
     "isFramework" : false,
     "moduleName" : "_DarwinFoundation1"
   },
   {
     "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/usr\/include\/DarwinFoundation2.modulemap",
-    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/_DarwinFoundation2-4X9MHMODO8J5GMT8KL6UZ90PB.pcm",
+    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/_DarwinFoundation2-C711V5FF0VH47GM0J1KW4E3YL.pcm",
     "isBridgingHeaderDependency" : false,
     "isFramework" : false,
     "moduleName" : "_DarwinFoundation2"
   },
   {
     "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/usr\/include\/DarwinFoundation3.modulemap",
-    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/_DarwinFoundation3-8086NZKBK4Z7CB8M7FZDCOV6O.pcm",
+    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/_DarwinFoundation3-5BSH5DMRUAW03F5RD5J3BQGCJ.pcm",
     "isBridgingHeaderDependency" : false,
     "isFramework" : false,
     "moduleName" : "_DarwinFoundation3"
   },
   {
     "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/usr\/lib\/swift\/shims\/module.modulemap",
-    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/_SwiftConcurrencyShims-1DSXRH1TXAJX88H1DYTN5JHIG.pcm",
+    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/_SwiftConcurrencyShims-D9H9V2NFAIDL7J7W7DYVZUW3E.pcm",
     "isBridgingHeaderDependency" : false,
     "isFramework" : false,
     "moduleName" : "_SwiftConcurrencyShims"
   },
   {
     "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/usr\/include\/launch.modulemap",
-    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/launch-AF8X36P56W3JC9TXF0BQELVR4.pcm",
+    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/launch-5VNO8VT57HKLN04X26GEWIK0H.pcm",
     "isBridgingHeaderDependency" : false,
     "isFramework" : false,
     "moduleName" : "launch"
   },
   {
     "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/usr\/include\/libDER\/module.modulemap",
-    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/libDER-BYC9T5OC8QPITOKN0QO1VXV56.pcm",
+    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/libDER-5WYLBD6I56JSGZT7J9BC2K4TZ.pcm",
     "isBridgingHeaderDependency" : false,
     "isFramework" : false,
     "moduleName" : "libDER"
   },
   {
     "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/usr\/include\/libkern.modulemap",
-    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/libkern-9UGL0HZZJVXGL3N09ID1APPJG.pcm",
+    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/libkern-C9URJLU1YD14ZFDPGOEWCSV1.pcm",
     "isBridgingHeaderDependency" : false,
     "isFramework" : false,
     "moduleName" : "libkern"
   },
   {
     "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/usr\/include\/os.modulemap",
-    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/os_object-2G4EK23TVPK9Q8TK4G8RU1MXK.pcm",
+    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/os_object-9WODPLKSKM5NF7NER8O50EN37.pcm",
     "isBridgingHeaderDependency" : false,
     "isFramework" : false,
     "moduleName" : "os_object"
   },
   {
     "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/usr\/include\/os.modulemap",
-    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/os_workgroup-AXA0H8I1RQZ9ZZ49FMLBHMRK8.pcm",
+    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/os_workgroup-249K6WEGI16XKMFIH4KBFLX6W.pcm",
     "isBridgingHeaderDependency" : false,
     "isFramework" : false,
     "moduleName" : "os_workgroup"
   },
   {
     "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/usr\/lib\/clang\/21\/include\/module.modulemap",
-    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/ptrauth-CSV3XKKMDFVRXG6W49UXHWQNC.pcm",
+    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/ptrauth-8HC5X7ACJ4NG0RIXH6GM1DQZ5.pcm",
     "isBridgingHeaderDependency" : false,
     "isFramework" : false,
     "moduleName" : "ptrauth"
   },
   {
     "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/usr\/lib\/clang\/21\/include\/module.modulemap",
-    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/ptrcheck-B8FFHETU1P9RK18IXLH6D6MCO.pcm",
+    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/ptrcheck-A1HRSG9NDXJXUSO0XBF13Y5TG.pcm",
     "isBridgingHeaderDependency" : false,
     "isFramework" : false,
     "moduleName" : "ptrcheck"
   },
   {
     "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/usr\/include\/c_standard_library.modulemap",
-    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/string_h-DUC0QYPK0YL3OCUK7Z0F97MCG.pcm",
+    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/string_h-1YEC845ZZ3LZGOQZZA8OYYFIK.pcm",
     "isBridgingHeaderDependency" : false,
     "isFramework" : false,
     "moduleName" : "string_h"
   },
   {
     "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/usr\/include\/DarwinFoundation2.modulemap",
-    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/sys_types-D7TF2IO40CVJFNBE4DVKACPHQ.pcm",
+    "clangModulePath" : "\/Users\/ynr\/Developer\/Agni-Bot\/apps\/mac\/.build\/out\/SDKExplicitPrecompiledModules\/sys_types-4F05W718G0G2DE899K0LWIPDU.pcm",
     "isBridgingHeaderDependency" : false,
     "isFramework" : false,
     "moduleName" : "sys_types"

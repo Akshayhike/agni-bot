@@ -91,6 +91,14 @@ export const JobInfoSchema = z.object({
 });
 export type JobInfo = z.infer<typeof JobInfoSchema>;
 
+export const TaskStatusSchema = z.enum(["open", "done", "snoozed"]);
+export const TaskInfoSchema = z.object({
+  id: z.string().min(1), title: z.string(), dueAt: z.string().nullable(),
+  priority: z.enum(["low", "normal", "high"]), status: TaskStatusSchema,
+  snoozedUntil: z.string().nullable(), createdAt: z.string(), updatedAt: z.string(),
+});
+export type TaskInfo = z.infer<typeof TaskInfoSchema>;
+
 // ---------------------------------------------------------------------------
 // client → server
 // ---------------------------------------------------------------------------
@@ -133,6 +141,8 @@ export const ClientFrameSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("job.set"), jobID: z.string().min(1), action: JobActionSchema }),
   /** Delete a task unless it is currently running. */
   z.object({ type: z.literal("job.delete"), jobID: z.string().min(1) }),
+  z.object({ type: z.literal("task.list"), status: z.enum(["open", "done", "snoozed", "all"]).optional(), limit: z.number().int().positive().max(200).optional() }),
+  z.object({ type: z.literal("task.update"), taskID: z.string().min(1), action: z.enum(["done", "reopen", "snooze"]), until: z.string().datetime().optional() }),
   /** Configure a built-in API provider. The key is accepted only by the daemon. */
   z.object({
     type: z.literal("provider.add"),
@@ -201,7 +211,7 @@ export const ServerFrameSchema = z.discriminatedUnion("type", [
     question: z.string(),
     options: z.array(z.string()).optional(),
   }),
-  z.object({ type: z.literal("notify"), seq, title: z.string(), body: z.string(), sound: z.boolean().optional() }),
+  z.object({ type: z.literal("notify"), seq, title: z.string(), body: z.string(), sound: z.boolean().optional(), threadID: z.string().optional() }),
   z.object({ type: z.literal("agents.update"), seq, agents: z.array(AgentInfoSchema) }),
   z.object({ type: z.literal("thread.list.ok"), seq, threads: z.array(ThreadInfoSchema) }),
   z.object({
@@ -212,6 +222,8 @@ export const ServerFrameSchema = z.discriminatedUnion("type", [
     messages: z.array(MessageInfoSchema),
   }),
   z.object({ type: z.literal("job.list.ok"), seq, jobs: z.array(JobInfoSchema) }),
+  z.object({ type: z.literal("task.list.ok"), seq, tasks: z.array(TaskInfoSchema) }),
+  z.object({ type: z.literal("task.update.ok"), seq, task: TaskInfoSchema }),
   z.object({ type: z.literal("provider.add.ok"), seq, providers: z.array(z.object({
     id: z.string(),
     label: z.string(),

@@ -31,19 +31,21 @@ enum WindowChrome {
 @MainActor
 final class NotificationBridge: NSObject, UNUserNotificationCenterDelegate {
   static let shared = NotificationBridge()
+  var onOpenThread: ((String) -> Void)?
 
   func start() {
     guard Bundle.main.bundleIdentifier != nil else { return }
     UNUserNotificationCenter.current().delegate = self
   }
 
-  func post(title: String, body: String, sound: Bool) {
+  func post(title: String, body: String, sound: Bool, threadID: String? = nil) {
     guard Bundle.main.bundleIdentifier != nil else { return }
     UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, _ in
       guard granted else { return }
       let content = UNMutableNotificationContent()
       content.title = title
       content.body = body
+      if let threadID { content.userInfo["threadID"] = threadID }
       if sound { content.sound = .default }
       UNUserNotificationCenter.current().add(
         UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
@@ -56,5 +58,13 @@ final class NotificationBridge: NSObject, UNUserNotificationCenterDelegate {
     willPresent notification: UNNotification
   ) async -> UNNotificationPresentationOptions {
     [.banner, .sound]
+  }
+
+  nonisolated func userNotificationCenter(
+    _ center: UNUserNotificationCenter,
+    didReceive response: UNNotificationResponse
+  ) async {
+    guard let threadID = response.notification.request.content.userInfo["threadID"] as? String else { return }
+    await MainActor.run { self.onOpenThread?(threadID) }
   }
 }

@@ -40,6 +40,7 @@ final class AppModel {
   private(set) var healthError: String?
   private(set) var configuredProviders: [ProviderStatus] = []
   private(set) var jobs: [JobInfo] = []
+  private(set) var tasks: [TaskInfo] = []
   private(set) var isAddingProvider = false
   private(set) var providerAddError: String?
   private(set) var providerAddSuccess: String?
@@ -70,6 +71,7 @@ final class AppModel {
   init() {
     AppModel.active = self
     NotificationBridge.shared.start()
+    NotificationBridge.shared.onOpenThread = { [weak self] threadID in self?.openThreadFromNotification(threadID) }
     if let stored = SecretStore.load() {
       token = stored.token
       secretKind = stored.kind
@@ -202,6 +204,11 @@ final class AppModel {
     }
   }
 
+  func openThreadFromNotification(_ threadID: String) {
+    if let thread = threads.first(where: { $0.id == threadID }) { open(thread: thread) }
+    else { watchThread(id: threadID, title: "Morning brief") }
+  }
+
   func refreshThreadList() {
     guard let connection, connectionState.isReady else { return }
     Task { try? await connection.send(.threadList(limit: 100)) }
@@ -228,6 +235,17 @@ final class AppModel {
   func refreshJobs() {
     guard let connection, connectionState.isReady else { return }
     Task { try? await connection.send(.jobList(limit: 50)) }
+  }
+
+  func refreshTasks() {
+    guard let connection, connectionState.isReady else { return }
+    Task { try? await connection.send(.taskList(status: "all", limit: 200)) }
+  }
+
+  func updateTask(_ task: TaskInfo, action: String, until: Date? = nil) {
+    guard let connection else { return }
+    let timestamp = until.map { ISO8601DateFormatter().string(from: $0) }
+    Task { try? await connection.send(.taskUpdate(taskID: task.id, action: action, until: timestamp)) }
   }
 
   func send(text: String) {
@@ -428,6 +446,7 @@ final class AppModel {
         }
         refreshThreadList()
         refreshJobs()
+        refreshTasks()
         startHealthPolling()
         if !wasReady { reopenCurrentThreadIfNeeded() }
       case .refused:
@@ -489,6 +508,13 @@ final class AppModel {
     case .jobListOK(let list):
       jobs = list.jobs
 
+    case .taskListOK(let list):
+      tasks = list.tasks
+
+    case .taskUpdateOK(let result):
+      if let index = tasks.firstIndex(where: { $0.id == result.task.id }) { tasks[index] = result.task }
+      else { tasks.append(result.task) }
+
     case .providerAddOK(let result):
       configuredProviders = result.providers.map { provider in
         ProviderStatus(
@@ -542,8 +568,8 @@ final class AppModel {
       case .reloadDurableState:
         refreshThreadList()
         reopenCurrentThreadIfNeeded()
-      case .notify(let title, let body, let sound):
-        notifyUser(title: title, body: body, sound: sound)
+      case .notify(let title, let body, let sound, let threadID):
+        notifyUser(title: title, body: body, sound: sound, threadID: threadID)
       case .focusComposer:
         focusComposer()
       case .unread(let threadID):
@@ -596,13 +622,14 @@ final class AppModel {
   func refreshSettingsData() async {
     await refreshHealth()
     refreshJobs()
+    refreshTasks()
   }
 
   // MARK: notifications
 
-  private func notifyUser(title: String, body: String, sound: Bool = false) {
+  private func notifyUser(title: String, body: String, sound: Bool = false, threadID: String? = nil) {
     showToast(NoticeRow(id: UUID().uuidString, kind: .info, title: title, body: body, createdAt: Date()))
-    NotificationBridge.shared.post(title: title, body: body, sound: sound)
+    NotificationBridge.shared.post(title: title, body: body, sound: sound, threadID: threadID)
   }
 
   private func showToast(_ notice: NoticeRow) {

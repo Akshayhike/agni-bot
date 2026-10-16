@@ -7,7 +7,7 @@ import type { Database } from "bun:sqlite";
 import type { ServerFrameBody, StopReason } from "@agni/protocol";
 import { log } from "../log";
 import { ProviderError } from "../models/client";
-import { MidStreamError, Router, RouterError } from "../models/router";
+import { MidStreamError, Router, RouterBusyError, RouterError } from "../models/router";
 import { appendMessage, createTurn, finishTurn, recentMessages, titleThreadFromFirstMessage, touchThread } from "../stores/threads";
 import { recordUsage } from "../stores/usage";
 import { newID } from "../util/ids";
@@ -91,7 +91,8 @@ export async function runInstantTurn(
       stopReason = "cancelled";
     } else {
       stopReason = "error";
-      const code = error instanceof RouterError ? error.code : "provider_failed";
+      const code =
+        error instanceof RouterBusyError ? "server_busy" : error instanceof RouterError ? error.code : "provider_failed";
       const message = error instanceof Error ? error.message : String(error);
       run.emit({ type: "error", code, message });
       if (error instanceof MidStreamError) log.warn(`mid-stream failure: ${error.message}`);

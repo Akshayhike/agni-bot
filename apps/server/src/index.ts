@@ -30,6 +30,7 @@ import {
 import { openDatabase } from "./db";
 import { JobRunner } from "./jobs/runner";
 import { registerTurnJob, type TurnJobPayload } from "./jobs/turn";
+import { registerBriefJob } from "./jobs/brief";
 import { log } from "./log";
 import { HealthTracker } from "./models/health";
 import { Router } from "./models/router";
@@ -53,7 +54,7 @@ else usage();
 async function serve(): Promise<void> {
   const config = loadConfig();
   const db = openDatabase(config.dbPath);
-  const router = new Router(config.providers, new HealthTracker());
+  const router = new Router(config.providers, new HealthTracker(), fetch, config.maxConcurrentTurns);
 
   const requeued = requeueStuckJobs(db);
   if (requeued > 0) log.warn(`job queue: requeued ${requeued} job(s) a previous process left running`);
@@ -72,6 +73,7 @@ async function serve(): Promise<void> {
   const settings = { firstTokenTimeoutMs: config.firstTokenTimeoutMs, turnTimeoutMs: config.turnTimeoutMs };
   const runner = new JobRunner(db, running.emit, { pollMs: config.jobPollMs });
   registerTurnJob(runner, { db, router, settings, emit: running.emit });
+  registerBriefJob(runner, { db, emit: running.emit });
   runner.start();
 
   log.info(`agni server v${PROTOCOL_VERSION} listening on ${running.url} (pid ${process.pid})`);
@@ -184,6 +186,7 @@ function printHealth(health: HealthReport | undefined, config: Config): void {
   const uptime = formatDuration(health.uptimeMs);
   const usage = health.usageToday;
   console.log(`  up ${uptime} · protocol v${health.v} · seq ${health.seq} · today ${usage.turns} turns (${usage.inputTokens} in / ${usage.outputTokens} out tokens)`);
+  console.log(`  model streams ${health.modelCapacity?.active ?? 0}/${health.modelCapacity?.capacity ?? 0}`);
   for (const provider of health.providers) {
     const state = provider.available
       ? "ok"

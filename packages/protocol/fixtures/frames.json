@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-16T05:47:48.912Z",
+  "generatedAt": "2026-10-16T09:17:42.908Z",
   "protocolVersion": 1,
   "client": [
     {
@@ -56,6 +56,36 @@
       "type": "job.set",
       "jobID": "job_01hq",
       "action": "pause"
+    },
+    {
+      "type": "task.list",
+      "status": "open",
+      "limit": 50
+    },
+    {
+      "type": "task.update",
+      "taskID": "tsk_01hq",
+      "action": "snooze",
+      "until": "2026-10-17T01:00:00.000Z"
+    },
+    {
+      "type": "job.delete",
+      "jobID": "job_01hr"
+    },
+    {
+      "type": "provider.add",
+      "providerID": "groq",
+      "apiKey": "fixture-key",
+      "model": "llama-3.1-8b-instant"
+    },
+    {
+      "type": "provider.model.set",
+      "providerID": "groq",
+      "model": "llama-3.1-8b-instant"
+    },
+    {
+      "type": "provider.models.list",
+      "providerID": "groq"
     }
   ],
   "server": [
@@ -149,7 +179,8 @@
       "seq": 52,
       "title": "Agni · standup in 10",
       "body": "You asked to be nudged before the 09:30 standup.",
-      "sound": true
+      "sound": true,
+      "threadID": "thr_01hq"
     },
     {
       "type": "agents.update",
@@ -236,6 +267,60 @@
           "attempts": 0,
           "title": "remind me to call the plumber"
         }
+      ]
+    },
+    {
+      "type": "task.list.ok",
+      "seq": 59,
+      "tasks": [
+        {
+          "id": "tsk_01hq",
+          "title": "Renew insurance",
+          "dueAt": "2026-10-17T01:00:00.000Z",
+          "priority": "high",
+          "status": "open",
+          "snoozedUntil": null,
+          "createdAt": "2026-10-16T12:00:00.000Z",
+          "updatedAt": "2026-10-16T12:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "type": "task.update.ok",
+      "seq": 60,
+      "task": {
+        "id": "tsk_01hq",
+        "title": "Renew insurance",
+        "dueAt": "2026-10-17T01:00:00.000Z",
+        "priority": "high",
+        "status": "snoozed",
+        "snoozedUntil": "2026-10-17T01:00:00.000Z",
+        "createdAt": "2026-10-16T12:00:00.000Z",
+        "updatedAt": "2026-10-16T12:01:00.000Z"
+      }
+    },
+    {
+      "type": "provider.add.ok",
+      "seq": 61,
+      "providers": [
+        {
+          "id": "groq",
+          "label": "Groq",
+          "model": "llama-3.1-8b-instant",
+          "tiers": [
+            "instant"
+          ],
+          "available": true,
+          "cooldownRemainingMs": 0
+        }
+      ]
+    },
+    {
+      "type": "provider.models.ok",
+      "seq": 62,
+      "providerID": "groq",
+      "models": [
+        "llama-3.1-8b-instant"
       ]
     },
     {

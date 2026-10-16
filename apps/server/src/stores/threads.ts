@@ -18,6 +18,10 @@ export interface MessageRow {
   created_at: string;
 }
 
+export interface ThreadListRow extends ThreadRow {
+  preview: string | null;
+}
+
 export function createThread(db: Database, agentID: string, title?: string): ThreadRow {
   const row: ThreadRow = {
     id: newID("thr"),
@@ -52,6 +56,19 @@ export function listThreads(db: Database, limit = 20): ThreadRow[] {
        FROM threads ORDER BY updated_at DESC LIMIT ?`,
     )
     .all(limit);
+}
+
+/** Thread list and latest message in one indexed query (avoids per-thread reads). */
+export function listThreadsWithPreview(db: Database, limit = 20): ThreadListRow[] {
+  const rows = db
+    .query<ThreadRow & { preview_text: string | null }, [number]>(
+      `SELECT t.id, t.agent_id, t.title, t.created_at, t.updated_at,
+              (SELECT m.text FROM messages m WHERE m.thread_id = t.id
+               ORDER BY m.created_at DESC, m.rowid DESC LIMIT 1) AS preview_text
+       FROM threads t ORDER BY t.updated_at DESC LIMIT ?`,
+    )
+    .all(limit);
+  return rows.map((row) => ({ ...row, preview: messagePreview(row.preview_text) }));
 }
 
 export function touchThread(db: Database, id: string): void {
@@ -150,8 +167,12 @@ export function lastMessagePreview(db: Database, threadID: string): string | nul
        ORDER BY created_at DESC, rowid DESC LIMIT 1`,
     )
     .get(threadID);
-  if (!row) return null;
-  const line = row.text.replace(/\s+/g, " ").trim();
+  return messagePreview(row?.text ?? null);
+}
+
+function messagePreview(text: string | null): string | null {
+  if (text === null) return null;
+  const line = text.replace(/\s+/g, " ").trim();
   if (line.length === 0) return null;
   return line.length > 140 ? `${line.slice(0, 140)}…` : line;
 }

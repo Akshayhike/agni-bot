@@ -168,7 +168,7 @@ struct TranscriptTests {
     var conversation = Conversation(agentID: "agni", threadID: "thr_1")
     let effects = conversation.apply(try frame("notify"))
     #expect(conversation.notices.count == 1)
-    #expect(effects.contains(.notify(title: "Agni · standup in 10", body: "You asked to be nudged before the 09:30 standup.", sound: true)))
+    #expect(effects.contains(.notify(title: "Agni · standup in 10", body: "You asked to be nudged before the 09:30 standup.", sound: true, threadID: "thr_01hq")))
 
     let gap = try ServerFrame(wire: ["type": "error", "seq": 200, "code": "resync_gap", "message": "cannot replay from 1"])
     let gapEffects = conversation.apply(gap)

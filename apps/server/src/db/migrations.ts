@@ -153,4 +153,38 @@ export const MIGRATIONS: Migration[] = [
       ALTER TABLE jobs ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1;
     `,
   },
+  {
+    id: 4,
+    name: "scale_query_indexes",
+    sql: `
+      CREATE INDEX idx_threads_updated ON threads(updated_at DESC);
+      CREATE INDEX idx_jobs_claim ON jobs(state, enabled, run_at);
+    `,
+  },
+  {
+    id: 5,
+    name: "p2_store_fields_and_indexes",
+    sql: `
+      ALTER TABLE tasks ADD COLUMN snoozed_until TEXT;
+      ALTER TABLE tasks ADD COLUMN owner_device_id TEXT;
+      ALTER TABLE memories ADD COLUMN owner_device_id TEXT;
+      ALTER TABLE links ADD COLUMN owner_device_id TEXT;
+      DROP TABLE memories_fts;
+      CREATE VIRTUAL TABLE memories_fts USING fts5(id UNINDEXED, text, summary, tags);
+      INSERT INTO memories_fts(id, text, summary, tags)
+        SELECT id, text, coalesce(summary, ''), coalesce(tags, '') FROM memories;
+      DROP TABLE links_fts;
+      CREATE VIRTUAL TABLE links_fts USING fts5(id UNINDEXED, title, summary, note, tags);
+      INSERT INTO links_fts(id, title, summary, note, tags)
+        SELECT id, coalesce(title, ''), coalesce(summary, ''), coalesce(note, ''), coalesce(tags, '') FROM links;
+      CREATE INDEX idx_links_url ON links(url);
+      CREATE INDEX idx_tasks_status_due ON tasks(status, due_at, snoozed_until);
+      CREATE TABLE brief_runs (
+        local_date TEXT PRIMARY KEY,
+        thread_id TEXT NOT NULL,
+        notification_sent INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL
+      );
+    `,
+  },
 ];

@@ -15,6 +15,7 @@ struct InspectorView: View {
     ScrollView {
       VStack(alignment: .leading, spacing: 20) {
         agentCard
+        tasksSection
         routines
         connections
         today
@@ -52,6 +53,50 @@ struct InspectorView: View {
       row("Tools", (model.agent?.tools?.isEmpty == false) ? model.agent!.tools!.joined(separator: ", ") : "none in this lane")
       if let threadID = model.conversation.threadID {
         row("Thread", threadID)
+      }
+    }
+  }
+
+  // MARK: routines
+
+  private var tasksSection: some View {
+    VStack(alignment: .leading, spacing: 10) {
+      HStack {
+        sectionTitle("Tasks")
+        Spacer()
+        Button("Refresh") { model.refreshTasks() }
+          .buttonStyle(.link)
+          .font(Typography.caption)
+      }
+      if model.tasks.allSatisfy({ $0.status == "done" }) {
+        empty("No open tasks", "Capture one in chat with “add task: …”.")
+      }
+      ForEach(model.tasks.filter { $0.status != "done" }) { task in
+        HStack(alignment: .top, spacing: 10) {
+          VStack(alignment: .leading, spacing: 3) {
+            Text(task.title).font(Typography.rowTitle).lineLimit(2)
+            Text([task.dueAt.map { "Due \(AgniFormat.stamp(AgniFormat.parseISO($0) ?? Date()))" }, task.priority.capitalized, task.status.capitalized].compactMap { $0 }.joined(separator: " · "))
+              .font(Typography.caption).foregroundStyle(Palette.inkSecondary)
+          }
+          Spacer(minLength: 4)
+          Menu("Snooze") {
+            Button("1 hour") { model.updateTask(task, action: "snooze", until: Calendar.current.date(byAdding: .hour, value: 1, to: Date())) }
+            Button("Tomorrow") { model.updateTask(task, action: "snooze", until: Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date())) }
+          }.menuStyle(.borderlessButton)
+          Button("Done") { model.updateTask(task, action: "done") }.buttonStyle(.borderedProminent)
+        }
+        .padding(.vertical, 5)
+      }
+      let completed = Array(model.tasks.filter { $0.status == "done" }.prefix(5))
+      if !completed.isEmpty {
+        sectionTitle("Completed recently").padding(.top, 4)
+        ForEach(completed) { task in
+          HStack {
+            Text(task.title).font(Typography.caption).foregroundStyle(Palette.inkSecondary).lineLimit(1)
+            Spacer()
+            Button("Reopen") { model.updateTask(task, action: "reopen") }.buttonStyle(.link).font(Typography.caption)
+          }
+        }
       }
     }
   }

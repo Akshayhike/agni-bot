@@ -146,6 +146,17 @@ public struct JobInfo: Sendable, Equatable, Decodable, Identifiable {
   public var lastResult: String?
 }
 
+public struct TaskInfo: Sendable, Equatable, Decodable, Identifiable {
+  public var id: String
+  public var title: String
+  public var dueAt: String?
+  public var priority: String
+  public var status: String
+  public var snoozedUntil: String?
+  public var createdAt: String
+  public var updatedAt: String
+}
+
 public struct ProviderInfo: Sendable, Equatable, Decodable, Identifiable {
   public var id: String
   public var label: String
@@ -172,6 +183,8 @@ public enum ClientFrame: Sendable, Equatable {
   case jobList(limit: Int?)
   case jobSet(jobID: String, action: String)
   case jobDelete(jobID: String)
+  case taskList(status: String?, limit: Int?)
+  case taskUpdate(taskID: String, action: String, until: String?)
   case providerAdd(providerID: String, apiKey: String, model: String?)
   case providerModelSet(providerID: String, model: String)
   case providerModelsList(providerID: String)
@@ -190,6 +203,8 @@ public enum ClientFrame: Sendable, Equatable {
     case .jobList: "job.list"
     case .jobSet: "job.set"
     case .jobDelete: "job.delete"
+    case .taskList: "task.list"
+    case .taskUpdate: "task.update"
     case .providerAdd: "provider.add"
     case .providerModelSet: "provider.model.set"
     case .providerModelsList: "provider.models.list"
@@ -231,6 +246,13 @@ public enum ClientFrame: Sendable, Equatable {
       object["action"] = action
     case .jobDelete(let jobID):
       object["jobID"] = jobID
+    case .taskList(let status, let limit):
+      if let status { object["status"] = status }
+      if let limit { object["limit"] = limit }
+    case .taskUpdate(let taskID, let action, let until):
+      object["taskID"] = taskID
+      object["action"] = action
+      if let until { object["until"] = until }
     case .providerAdd(let providerID, let apiKey, let model):
       object["providerID"] = providerID
       object["apiKey"] = apiKey
@@ -292,6 +314,10 @@ public enum ClientFrame: Sendable, Equatable {
       self = .jobSet(jobID: try Require.string(object, "jobID"), action: try Require.string(object, "action"))
     case "job.delete":
       self = .jobDelete(jobID: try Require.string(object, "jobID"))
+    case "task.list":
+      self = .taskList(status: object["status"] as? String, limit: object["limit"] as? Int)
+    case "task.update":
+      self = .taskUpdate(taskID: try Require.string(object, "taskID"), action: try Require.string(object, "action"), until: object["until"] as? String)
     case "provider.add":
       self = .providerAdd(
         providerID: try Require.string(object, "providerID"),
@@ -326,6 +352,8 @@ public enum ServerFrame: Sendable, Equatable {
   case threadListOK(ThreadListOK)
   case threadHistoryOK(ThreadHistoryOK)
   case jobListOK(JobListOK)
+  case taskListOK(TaskListOK)
+  case taskUpdateOK(TaskUpdateOK)
   case providerAddOK(ProviderAddOK)
   case providerModelsOK(ProviderModelsOK)
   case presence(Presence)
@@ -349,6 +377,8 @@ public enum ServerFrame: Sendable, Equatable {
     case .threadListOK(let f): f.seq
     case .threadHistoryOK(let f): f.seq
     case .jobListOK(let f): f.seq
+    case .taskListOK(let f): f.seq
+    case .taskUpdateOK(let f): f.seq
     case .providerAddOK(let f): f.seq
     case .providerModelsOK(let f): f.seq
     case .presence(let f): f.seq
@@ -373,6 +403,8 @@ public enum ServerFrame: Sendable, Equatable {
     case .threadListOK: "thread.list.ok"
     case .threadHistoryOK: "thread.history.ok"
     case .jobListOK: "job.list.ok"
+    case .taskListOK: "task.list.ok"
+    case .taskUpdateOK: "task.update.ok"
     case .providerAddOK: "provider.add.ok"
     case .providerModelsOK: "provider.models.ok"
     case .presence: "presence"
@@ -458,6 +490,7 @@ public enum ServerFrame: Sendable, Equatable {
     public var title: String
     public var body: String
     public var sound: Bool?
+    public var threadID: String?
   }
 
   public struct AgentsUpdate: Sendable, Equatable, Decodable {
@@ -480,6 +513,16 @@ public enum ServerFrame: Sendable, Equatable {
   public struct JobListOK: Sendable, Equatable, Decodable {
     public var seq: Int
     public var jobs: [JobInfo]
+  }
+
+  public struct TaskListOK: Sendable, Equatable, Decodable {
+    public var seq: Int
+    public var tasks: [TaskInfo]
+  }
+
+  public struct TaskUpdateOK: Sendable, Equatable, Decodable {
+    public var seq: Int
+    public var task: TaskInfo
   }
 
   public struct ProviderAddOK: Sendable, Equatable, Decodable {
@@ -526,6 +569,8 @@ public enum ServerFrame: Sendable, Equatable {
     case "thread.list.ok": self = .threadListOK(try Decode.frame(ThreadListOK.self, object))
     case "thread.history.ok": self = .threadHistoryOK(try Decode.frame(ThreadHistoryOK.self, object))
     case "job.list.ok": self = .jobListOK(try Decode.frame(JobListOK.self, object))
+    case "task.list.ok": self = .taskListOK(try Decode.frame(TaskListOK.self, object))
+    case "task.update.ok": self = .taskUpdateOK(try Decode.frame(TaskUpdateOK.self, object))
     case "provider.add.ok": self = .providerAddOK(try Decode.frame(ProviderAddOK.self, object))
     case "provider.models.ok": self = .providerModelsOK(try Decode.frame(ProviderModelsOK.self, object))
     case "presence": self = .presence(try Decode.frame(Presence.self, object))

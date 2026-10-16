@@ -18,6 +18,14 @@ export class RouterError extends Error {
   }
 }
 
+/** Raised when this process is already using its configured model capacity. */
+export class RouterBusyError extends Error {
+  constructor(readonly capacity: number) {
+    super(`server is at model capacity (${capacity} concurrent turns); retry shortly`);
+    this.name = "RouterBusyError";
+  }
+}
+
 /** A provider failed after tokens were already emitted to the client. */
 export class MidStreamError extends Error {
   readonly provider: string;
@@ -60,11 +68,19 @@ export interface ProviderStatus {
 }
 
 export class Router {
+  private activeRoutes = 0;
+
   constructor(
     private providers: ProviderConfig[],
     private readonly health: HealthTracker,
     private readonly fetchFn: typeof fetch = fetch,
+    readonly maxConcurrentRoutes = 4,
   ) {}
+
+  /** Current in-flight model streams and the process-wide configured cap. */
+  load(): { active: number; capacity: number } {
+    return { active: this.activeRoutes, capacity: this.maxConcurrentRoutes };
+  }
 
   /** Apply an authenticated provider configuration change without a restart. */
   replaceProviders(providers: ProviderConfig[]): void {
@@ -100,6 +116,16 @@ export class Router {
   }
 
   async route(options: RouteOptions): Promise<RouteResult> {
+    if (this.activeRoutes >= this.maxConcurrentRoutes) throw new RouterBusyError(this.maxConcurrentRoutes);
+    this.activeRoutes += 1;
+    try {
+      return await this.routeWithSlot(options);
+    } finally {
+      this.activeRoutes -= 1;
+    }
+  }
+
+  private async routeWithSlot(options: RouteOptions): Promise<RouteResult> {
     const candidates = this.candidates(options.tier);
     if (candidates.length === 0) {
       throw new RouterError(

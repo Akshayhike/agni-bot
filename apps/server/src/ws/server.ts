@@ -31,6 +31,7 @@ export interface HealthReport {
   seq: number;
   providers: ProviderStatus[];
   usageToday: DayTotals;
+  modelCapacity: { active: number; capacity: number };
 }
 
 export function healthReport(db: Database, router: Router, seq: number, startedAt: number): HealthReport {
@@ -42,6 +43,7 @@ export function healthReport(db: Database, router: Router, seq: number, startedA
     seq,
     providers: router.status(),
     usageToday: dayTotals(db),
+    modelCapacity: router.load(),
   };
 }
 

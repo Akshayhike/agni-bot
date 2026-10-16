@@ -149,7 +149,7 @@ public struct NoticeRow: Identifiable, Sendable, Equatable {
 public enum ConversationEffect: Sendable, Equatable {
   case refreshThreadList
   case reloadDurableState
-  case notify(title: String, body: String, sound: Bool)
+  case notify(title: String, body: String, sound: Bool, threadID: String? = nil)
   case focusComposer
   case unread(threadID: String)
   case agentsChanged([AgentInfo])
@@ -250,7 +250,9 @@ public struct Conversation: Sendable, Equatable {
     }
 
     // Anything still streaming or echoed lives only in this process: keep it.
-    let streaming = messages.filter { $0.isStreaming }
+    // Keep a partial answer that has content, but discard an empty streaming
+    // placeholder when durable history arrives before the first token.
+    let streaming = messages.filter { $0.isStreaming && !$0.text.isEmpty }
     let echoes = messages.filter { $0.isLocalEcho && $0.state != .failed("") }
     rebuilt.append(contentsOf: streaming)
     for echo in echoes where !rebuilt.contains(where: { $0.role == .user && $0.text == echo.text }) {
@@ -263,7 +265,8 @@ public struct Conversation: Sendable, Equatable {
 
   public mutating func apply(_ frame: ServerFrame) -> [ConversationEffect] {
     switch frame {
-    case .helloOK, .threadListOK, .threadHistoryOK, .jobListOK, .providerAddOK, .providerModelsOK, .unknown:
+    case .helloOK, .threadListOK, .threadHistoryOK, .jobListOK, .taskListOK, .taskUpdateOK,
+      .providerAddOK, .providerModelsOK, .unknown:
       return []
 
     case .presence(let presence):
@@ -362,7 +365,7 @@ public struct Conversation: Sendable, Equatable {
           createdAt: Date()
         )
       )
-      return [.notify(title: reminder.title, body: reminder.body, sound: reminder.sound ?? false)]
+      return [.notify(title: reminder.title, body: reminder.body, sound: reminder.sound ?? false, threadID: reminder.threadID)]
 
     case .error(let error):
       note(

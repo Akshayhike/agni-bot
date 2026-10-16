@@ -34,9 +34,13 @@ import {
   wakeJob,
   type JobRow,
 } from "../stores/jobs";
-import { createThread, getThread, lastMessagePreview, listThreads, recentMessages } from "../stores/threads";
+import { appendMessage, createThread, createTurn, finishTurn, getThread, listThreadsWithPreview, recentMessages, titleThreadFromFirstMessage, touchThread } from "../stores/threads";
 import type { TurnJobPayload } from "../jobs/turn";
 import { newID, nowISO } from "../util/ids";
+import { createMemory, searchMemories } from "../stores/memories";
+import { canonicalURL, saveLink, searchLinks } from "../stores/links";
+import { createTask, getTask, listTasks, setTaskStatus, snoozeTask } from "../stores/tasks";
+import { fetchPage } from "../tools/fetch-url";
 import type { FrameLog } from "./frame-log";
 
 export interface Session {
@@ -106,6 +110,10 @@ export async function dispatch(deps: DispatchDeps, session: Session, raw: string
       return handleJobSet(deps, session, frame);
     case "job.delete":
       return handleJobDelete(deps, session, frame);
+    case "task.list":
+      return handleTaskList(deps, session, frame);
+    case "task.update":
+      return handleTaskUpdate(deps, session, frame);
     case "provider.add":
       return await handleProviderAdd(deps, session, frame);
     case "provider.model.set":
@@ -173,6 +181,10 @@ function handleMsgSend(deps: DispatchDeps, session: Session, frame: Extract<Clie
   }
 
   const persona = getPersona(thread.agent_id) ?? defaultPersona();
+  if (isCapture(frame.text) || isStoreQuery(frame.text)) {
+    void captureMessage(deps, session, thread.id, persona.id, frame.text);
+    return;
+  }
   const turnID = newID("trn");
   const controller = new AbortController();
   session.aborts.set(turnID, controller);
@@ -198,6 +210,115 @@ function handleMsgSend(deps: DispatchDeps, session: Session, frame: Extract<Clie
     .finally(() => {
       session.aborts.delete(turnID);
     });
+}
+
+function isCapture(text: string): boolean {
+  return /^\s*(remember\s*:|add task\s*:)/i.test(text) || /https?:\/\/\S+/i.test(text);
+}
+
+function isStoreQuery(text: string): boolean {
+  return /^\s*(search memory|search memories|search links|find saved links|what do you remember|list tasks|what tasks)\s*:?/i.test(text);
+}
+
+async function captureMessage(deps: DispatchDeps, session: Session, threadID: string, agentID: string, text: string): Promise<void> {
+  const turnID = newID("trn");
+  try {
+    createTurn(deps.db, { id: turnID, threadID, agentID });
+    appendMessage(deps.db, { threadID, turnID, role: "user", text });
+    titleThreadFromFirstMessage(deps.db, threadID, text);
+    deps.emit({ type: "turn.start", turnID, threadID, agentID });
+    let confirmation: string;
+    const memory = text.match(/^\s*remember\s*:\s*([\s\S]+)$/i);
+    const task = text.match(/^\s*add task\s*:\s*([\s\S]+)$/i);
+    if (isStoreQuery(text)) {
+      const query = text.replace(/^\s*(?:search memories?|search links|find saved links|what do you remember|list tasks|what tasks)\s*:?\s*/i, "").trim();
+      if (/^(list tasks|what tasks)/i.test(text)) {
+        const rows = listTasks(deps.db, { status: "open", limit: 10, includeSnoozed: true });
+        confirmation = rows.length ? `Open tasks:\n${rows.map((row) => `• ${row.title}${row.due_at ? ` — due ${row.due_at.slice(0,10)}` : ""} · ${row.priority} · ${row.status}`).join("\n")}` : "You have no open tasks.";
+      } else {
+        const linksQuery = /^\s*(search links|find saved links)/i.test(text);
+        if (linksQuery) {
+          const rows = searchLinks(deps.db, query, 8);
+          confirmation = rows.length ? `Saved links:\n${rows.map((row) => `• ${row.title ?? row.url} — ${row.url}${row.note ? ` · ${row.note}` : ""} [${row.id}]`).join("\n")}` : `No saved links matched${query ? ` “${query}”` : ""}.`;
+        } else {
+          const rows = searchMemories(deps.db, query, 8);
+          confirmation = rows.length ? `Saved memories:\n${rows.map((row) => `• ${row.summary ?? row.text} [${row.id}]`).join("\n")}` : `No saved memories matched${query ? ` “${query}”` : ""}.`;
+        }
+      }
+    } else if (memory) {
+      const body = memory[1]!.trim();
+      const parsed = body.match(/^(.*?)(?:\s+#tags?\s+(.+))?$/i);
+      const record = createMemory(deps.db, { text: parsed?.[1]?.trim() || body, ...(parsed?.[2] ? { tags: parsed[2].split(/[ ,]+/) } : {}), ownerDeviceID: session.device?.id });
+      confirmation = `Saved memory ${record.id}: ${record.text}`;
+    } else if (task) {
+      const parsed = parseTaskCapture(task[1]!);
+      const record = createTask(deps.db, { ...parsed, ownerDeviceID: session.device?.id });
+      confirmation = `Added task ${record.id}: ${record.title}${record.due_at ? ` · due ${record.due_at}` : ""} · ${record.priority} priority`;
+    } else {
+      const urlMatch = text.match(/https?:\/\/[^\s<>]+/i);
+      if (!urlMatch) throw new Error("no supported capture found");
+      const rawURL = urlMatch[0].replace(/[),.;!?]+$/, "");
+      const url = canonicalURL(rawURL);
+      const note = text.replace(urlMatch[0], "").trim() || null;
+      let page: { title: string|null; summary: string|null } = { title: null, summary: null };
+      let fetchError: string | undefined;
+      try { page = await fetchPage(url); } catch (error) { fetchError = error instanceof Error ? error.message : String(error); }
+      const record = saveLink(deps.db, { url, ...page, note, ownerDeviceID: session.device?.id });
+      confirmation = `Saved link ${record.id}: ${record.title ?? record.url}${record.note ? ` · note: ${record.note}` : ""}${fetchError ? ` · page details unavailable (${fetchError}); URL and note were saved` : ""}`;
+    }
+    appendMessage(deps.db, { threadID, turnID, role: "assistant", text: confirmation });
+    finishTurn(deps.db, { id: turnID, stopReason: "end" });
+    touchThread(deps.db, threadID);
+    deps.emit({ type: "token", turnID, threadID, delta: confirmation });
+    deps.emit({ type: "turn.end", turnID, threadID, stopReason: "end" });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    try { finishTurn(deps.db, { id: turnID, stopReason: "error" }); } catch { /* turn may not have been created */ }
+    deps.emit({ type: "error", code: "capture_failed", message });
+    deps.emit({ type: "turn.end", turnID, threadID, stopReason: "error" });
+  }
+}
+
+function parseTaskCapture(value: string): { title: string; dueAt?: string; priority?: "low"|"normal"|"high" } {
+  let title = value.trim(), dueAt: string | undefined, priority: "low"|"normal"|"high" = "normal";
+  const p = title.match(/\s+priority\s*:\s*(low|normal|high)\s*$/i);
+  if (p) { priority = p[1]!.toLowerCase() as typeof priority; title = title.slice(0,p.index).trim(); }
+  const due = title.match(/\s+by\s+(\d{4}-\d{2}-\d{2})(?:\s+(\d{2}:\d{2}))?\s*$/i);
+  if (due) {
+    const date = due[1]!;
+    const parsed = new Date(`${date}T${due[2] ?? "23:59"}:00`);
+    const [year, month, day] = date.split("-").map(Number);
+    if (!Number.isFinite(parsed.getTime()) || parsed.getFullYear() !== year || parsed.getMonth() + 1 !== month || parsed.getDate() !== day) throw new Error("that due date is invalid; use YYYY-MM-DD");
+    dueAt = parsed.toISOString();
+    title = title.slice(0,due.index).trim();
+  } else if (/\bby\s+\S+/i.test(title)) {
+    throw new Error("the due date is ambiguous; use `by YYYY-MM-DD` so it is saved accurately");
+  }
+  if (!title) throw new Error("task title is required");
+  return { title, ...(dueAt ? { dueAt } : {}), priority };
+}
+
+function handleTaskList(deps: DispatchDeps, session: Session, frame: Extract<ClientFrame,{type:"task.list"}>): void {
+  if (!requireAuth(deps,session)) return;
+  const status = frame.status ?? "open";
+  deps.reply({ type:"task.list.ok", tasks:listTasks(deps.db,{status,limit:frame.limit,includeSnoozed:status==="open"}).map(taskSnapshot) });
+}
+
+function handleTaskUpdate(deps: DispatchDeps, session: Session, frame: Extract<ClientFrame,{type:"task.update"}>): void {
+  if (!requireAuth(deps,session)) return;
+  const old=getTask(deps.db,frame.taskID);
+  if(!old)return sendError(deps,session,"unknown_task",`no task ${frame.taskID}`);
+  try {
+    const updated=frame.action==="done"?setTaskStatus(deps.db,old.id,"done"):
+      frame.action==="reopen"?setTaskStatus(deps.db,old.id,"open"):
+      frame.until?snoozeTask(deps.db,old.id,frame.until):null;
+    if(!updated)return sendError(deps,session,"bad_task_action","snooze requires an ISO timestamp in the future");
+    deps.reply({type:"task.update.ok",task:taskSnapshot(updated)});
+  } catch(error) { sendError(deps,session,"bad_task_action",error instanceof Error?error.message:String(error)); }
+}
+
+function taskSnapshot(task: ReturnType<typeof listTasks>[number]) {
+  return { id:task.id,title:task.title,dueAt:task.due_at,priority:task.priority,status:task.status,snoozedUntil:task.snoozed_until,createdAt:task.created_at,updatedAt:task.updated_at };
 }
 
 function handleMsgCancel(deps: DispatchDeps, session: Session, frame: Extract<ClientFrame, { type: "msg.cancel" }>): void {
@@ -255,14 +376,13 @@ function handleThreadList(
   frame: Extract<ClientFrame, { type: "thread.list" }>,
 ): void {
   if (!requireAuth(deps, session)) return;
-  const threads = listThreads(deps.db, frame.limit ?? 20).map((thread) => {
-    const preview = lastMessagePreview(deps.db, thread.id);
+  const threads = listThreadsWithPreview(deps.db, frame.limit ?? 20).map((thread) => {
     return {
       id: thread.id,
       agentID: thread.agent_id,
       ...(thread.title ? { title: thread.title } : {}),
       updatedAt: thread.updated_at,
-      ...(preview ? { preview } : {}),
+      ...(thread.preview ? { preview: thread.preview } : {}),
     };
   });
   deps.reply({ type: "thread.list.ok", threads });

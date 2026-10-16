@@ -3,8 +3,9 @@
  * registered; the instant lane never calls tools (S3) — the task lane (P2+)
  * executes them through this registry only.
  *
- * No tools are registered at P0. Native tools (memory, links, tasks) arrive
- * with their stores in P2; shell/files/Gmail arrive with their approvals.
+ * The current task and retrieval captures use validated deterministic paths;
+ * model-invoked tools are not enabled until the separate task runner lands.
+ * Shell/files/Gmail arrive later with their approval flows.
  */
 
 export interface ToolContext {
