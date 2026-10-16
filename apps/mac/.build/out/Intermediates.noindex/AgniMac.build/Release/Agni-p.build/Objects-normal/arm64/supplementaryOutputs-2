@@ -1,0 +1,11 @@
+{
+  "/Users/ynr/Developer/Agni-Bot/apps/mac/Sources/AgniApp/AgniApp.swift" : {
+    "abi-baseline-json" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Release/Agni-p.build/Objects-normal/arm64/AgniApp.abi.json",
+    "const-values" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Release/Agni-p.build/Objects-normal/arm64/Agni-primary.swiftconstvalues",
+    "dependencies" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Release/Agni-p.build/Objects-normal/arm64/Agni-primary.d",
+    "diagnostics" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Release/Agni-p.build/Objects-normal/arm64/Agni-primary.dia",
+    "swiftdoc" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Release/Agni-p.build/Objects-normal/arm64/AgniApp.swiftdoc",
+    "swiftmodule" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Release/Agni-p.build/Objects-normal/arm64/AgniApp.swiftmodule",
+    "swiftsourceinfo" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Release/Agni-p.build/Objects-normal/arm64/AgniApp.swiftsourceinfo"
+  }
+}

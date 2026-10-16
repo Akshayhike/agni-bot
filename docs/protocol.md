@@ -37,6 +37,11 @@ if the two disagree, the code wins, then fix this doc.
 | `thread.open` | `{threadID}` | Pins the session's active thread. Silent; history comes via `resync`. |
 | `thread.list` | `{limit?}` | Recent threads, newest first (default 20, max 200). |
 | `thread.history` | `{threadID, limit?}` | Durable messages, last N chronological (default 50, max 500). |
+| `job.list` | `{limit?}` | Tasks and routines, newest/next due first. |
+| `job.set` | `{jobID, action}` | `action`: `pause \| resume \| run`. |
+| `job.delete` | `{jobID}` | Deletes a task unless it is running; replies with a refreshed `job.list.ok`. |
+| `provider.add` | `{providerID, apiKey, model?}` | Adds a supported API provider over the authenticated socket. The daemon stores the key and optional model ID in its mode-600 `.env` and updates the live router; the key is never returned. |
+| `provider.model.set` | `{providerID, model}` | Changes a configured provider's model ID on the daemon and updates the live router. |
 
 ## server → client
 
@@ -55,13 +60,16 @@ if the two disagree, the code wins, then fix this doc.
 | `agents.update` | `{agents: [{id, name, color?, model?, tools?}]}` | Roster snapshot. |
 | `thread.list.ok` | `{threads: [{id, agentID, title?, updatedAt}]}` | Answer to `thread.list`; addressed to the requester. |
 | `thread.history.ok` | `{threadID, title?, messages: [{id, role, text, createdAt, turnID?}]}` | Answer to `thread.history`; addressed to the requester. |
+| `job.list.ok` | `{jobs: [...]}` | Answer to `job.list`, `job.set`, or `job.delete`; addressed to the requester. |
+| `provider.add.ok` | `{providers: [...]}` | Provider metadata after adding a key; contains no credentials. |
 | `presence` | `{state}` | `online \| offline`. |
 | `error` | `{code, message, retryAfter?}` | See codes below. |
 
 ## Error codes (v1)
 
 `bad_frame`, `unauthorized`, `version_mismatch`, `unknown_thread`,
-`unknown_agent`, `unknown_request`, `no_provider`, `provider_failed`,
+`unknown_agent`, `unknown_request`, `unknown_job`, `job_running`, `no_provider`, `provider_failed`,
+`unknown_provider`, `invalid_key`, `provider_exists`, `provider_storage`,
 `resync_gap`, `internal`.
 
 ## Versioning

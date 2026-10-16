@@ -12,6 +12,8 @@ import {
   isSupportedVersion,
   parseClientFrame,
   type ClientFrame,
+  type JobInfo,
+  type JobState,
   type ServerFrame,
   type ServerFrameBody,
 } from "@agni/protocol";
@@ -21,7 +23,19 @@ import { verifyToken } from "../auth/tokens";
 import type { Config } from "../config";
 import { log } from "../log";
 import type { Router } from "../models/router";
-import { createThread, getThread, listThreads, recentMessages } from "../stores/threads";
+import { addProviderCredential, setProviderModel } from "../models/provider-settings";
+import {
+  getJobByPrefix,
+  listFinishedJobs,
+  listJobs,
+  parseJobPayload,
+  deleteJob,
+  setJobEnabled,
+  wakeJob,
+  type JobRow,
+} from "../stores/jobs";
+import { createThread, getThread, lastMessagePreview, listThreads, recentMessages } from "../stores/threads";
+import type { TurnJobPayload } from "../jobs/turn";
 import { newID, nowISO } from "../util/ids";
 import type { FrameLog } from "./frame-log";
 
@@ -86,6 +100,18 @@ export async function dispatch(deps: DispatchDeps, session: Session, raw: string
       return handleThreadList(deps, session, frame);
     case "thread.history":
       return handleThreadHistory(deps, session, frame);
+    case "job.list":
+      return handleJobList(deps, session, frame);
+    case "job.set":
+      return handleJobSet(deps, session, frame);
+    case "job.delete":
+      return handleJobDelete(deps, session, frame);
+    case "provider.add":
+      return await handleProviderAdd(deps, session, frame);
+    case "provider.model.set":
+      return await handleProviderModelSet(deps, session, frame);
+    case "provider.models.list":
+      return await handleProviderModelsList(deps, session, frame);
   }
 }
 
@@ -229,12 +255,16 @@ function handleThreadList(
   frame: Extract<ClientFrame, { type: "thread.list" }>,
 ): void {
   if (!requireAuth(deps, session)) return;
-  const threads = listThreads(deps.db, frame.limit ?? 20).map((thread) => ({
-    id: thread.id,
-    agentID: thread.agent_id,
-    ...(thread.title ? { title: thread.title } : {}),
-    updatedAt: thread.updated_at,
-  }));
+  const threads = listThreads(deps.db, frame.limit ?? 20).map((thread) => {
+    const preview = lastMessagePreview(deps.db, thread.id);
+    return {
+      id: thread.id,
+      agentID: thread.agent_id,
+      ...(thread.title ? { title: thread.title } : {}),
+      updatedAt: thread.updated_at,
+      ...(preview ? { preview } : {}),
+    };
+  });
   deps.reply({ type: "thread.list.ok", threads });
 }
 
@@ -259,6 +289,144 @@ function handleThreadHistory(
     ...(thread.title ? { title: thread.title } : {}),
     messages,
   });
+}
+
+/**
+ * The routine list the Mac app's inspector shows: everything queued or
+ * running, then the last handful of finished jobs so "what did it last do"
+ * has an answer. A paused routine is listed too — pausing hides nothing.
+ */
+function handleJobList(
+  deps: DispatchDeps,
+  session: Session,
+  frame: Extract<ClientFrame, { type: "job.list" }>,
+): void {
+  if (!requireAuth(deps, session)) return;
+  deps.reply({ type: "job.list.ok", jobs: jobSnapshot(deps.db, frame.limit ?? 50) });
+}
+
+function handleJobSet(
+  deps: DispatchDeps,
+  session: Session,
+  frame: Extract<ClientFrame, { type: "job.set" }>,
+): void {
+  if (!requireAuth(deps, session)) return;
+  const job = getJobByPrefix(deps.db, frame.jobID);
+  if (!job) return sendError(deps, session, "unknown_job", `no job ${frame.jobID}`);
+
+  switch (frame.action) {
+    case "pause":
+      setJobEnabled(deps.db, job.id, false);
+      break;
+    case "resume":
+      setJobEnabled(deps.db, job.id, true);
+      break;
+    case "run":
+      // "Run now" resumes a paused job: a claim would skip it otherwise.
+      wakeJob(deps.db, job.id);
+      break;
+  }
+  // The write answers with the fresh list, so toggles never drift from truth.
+  deps.reply({ type: "job.list.ok", jobs: jobSnapshot(deps.db, 50) });
+}
+
+function handleJobDelete(
+  deps: DispatchDeps,
+  session: Session,
+  frame: Extract<ClientFrame, { type: "job.delete" }>,
+): void {
+  if (!requireAuth(deps, session)) return;
+  const job = getJobByPrefix(deps.db, frame.jobID);
+  if (!job) return sendError(deps, session, "unknown_job", `no job ${frame.jobID}`);
+  if (!deleteJob(deps.db, job.id)) {
+    return sendError(deps, session, "job_running", `task ${job.id} is running and cannot be deleted yet`);
+  }
+  deps.reply({ type: "job.list.ok", jobs: jobSnapshot(deps.db, 50) });
+}
+
+async function handleProviderAdd(
+  deps: DispatchDeps,
+  session: Session,
+  frame: Extract<ClientFrame, { type: "provider.add" }>,
+): Promise<void> {
+  if (!requireAuth(deps, session)) return;
+  const result = await addProviderCredential(deps.router, frame.providerID, frame.apiKey, frame.model);
+  if (!result.ok) {
+    sendError(deps, session, result.code, result.message);
+    return;
+  }
+  deps.reply({ type: "provider.add.ok", providers: result.providers });
+}
+
+async function handleProviderModelSet(
+  deps: DispatchDeps,
+  session: Session,
+  frame: Extract<ClientFrame, { type: "provider.model.set" }>,
+): Promise<void> {
+  if (!requireAuth(deps, session)) return;
+  const result = await setProviderModel(deps.router, frame.providerID, frame.model);
+  if (!result.ok) {
+    sendError(deps, session, result.code, result.message);
+    return;
+  }
+  deps.reply({ type: "provider.add.ok", providers: result.providers });
+}
+
+async function handleProviderModelsList(
+  deps: DispatchDeps,
+  session: Session,
+  frame: Extract<ClientFrame, { type: "provider.models.list" }>,
+): Promise<void> {
+  if (!requireAuth(deps, session)) return;
+  try {
+    const models = await deps.router.listModels(frame.providerID);
+    deps.reply({ type: "provider.models.ok", providerID: frame.providerID, models });
+  } catch (error) {
+    sendError(deps, session, "provider_models", error instanceof Error ? error.message : "Could not load provider models.");
+  }
+}
+
+function jobSnapshot(db: Database, limit: number): JobInfo[] {
+  const seen = new Set<string>();
+  const jobs: JobInfo[] = [];
+  for (const row of [...listJobs(db, { limit }), ...listFinishedJobs(db, 10)]) {
+    if (seen.has(row.id)) continue;
+    seen.add(row.id);
+    jobs.push(jobInfo(row));
+  }
+  return jobs;
+}
+
+function jobInfo(row: JobRow): JobInfo {
+  const payload = turnPayload(row);
+  return {
+    id: row.id,
+    kind: row.kind,
+    // Rows only ever hold the four schema states; the cast is the narrowing.
+    state: row.state as JobState,
+    runAt: row.run_at,
+    enabled: row.enabled === 1,
+    attempts: row.attempts,
+    ...(payload.everyMs ? { everyMs: payload.everyMs } : {}),
+    ...(payload.text ? { title: clip(payload.text, 120) } : {}),
+    ...(payload.threadID ? { threadID: payload.threadID } : {}),
+    ...(row.result ? { lastResult: row.result } : {}),
+  };
+}
+
+/** A non-turn job (or a damaged payload) simply has nothing to say. */
+function turnPayload(row: JobRow): Partial<TurnJobPayload> {
+  if (row.kind !== "turn") return {};
+  try {
+    return parseJobPayload<Partial<TurnJobPayload>>(row);
+  } catch {
+    return {};
+  }
+}
+
+function clip(text: string, max: number): string {
+  const cleaned = text.replace(/\s+/g, " ").trim();
+  return cleaned.length > max ? `${cleaned.slice(0, max)}…` : cleaned;
 }
 
 // ---------------------------------------------------------------------------

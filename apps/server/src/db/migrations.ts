@@ -145,4 +145,12 @@ export const MIGRATIONS: Migration[] = [
       ALTER TABLE jobs ADD COLUMN result TEXT;
     `,
   },
+  {
+    id: 3,
+    name: "jobs_enabled",
+    sql: `
+      -- Routines can be paused from the client without deleting them.
+      ALTER TABLE jobs ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1;
+    `,
+  },
 ];

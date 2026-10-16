@@ -1,0 +1,139 @@
+{
+  "" : {
+    "diagnostics" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/Agni-primary.dia",
+    "emit-module-dependencies" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/Agni-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/Agni-primary-emit-module.dia",
+    "pch" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/Agni-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/Agni-primary.swiftdeps"
+  },
+  "/Users/ynr/Developer/Agni-Bot/apps/mac/Sources/AgniApp/AgniApp.swift" : {
+    "const-values" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/AgniApp.swiftconstvalues",
+    "dependencies" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/AgniApp.d",
+    "diagnostics" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/AgniApp.dia",
+    "index-unit-output-path" : "/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/AgniApp.o",
+    "llvm-bc" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/AgniApp.bc",
+    "object" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/AgniApp.o",
+    "swift-dependencies" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/AgniApp.swiftdeps",
+    "swiftmodule" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/AgniApp~partial.swiftmodule"
+  },
+  "/Users/ynr/Developer/Agni-Bot/apps/mac/Sources/AgniApp/AppModel.swift" : {
+    "const-values" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/AppModel.swiftconstvalues",
+    "dependencies" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/AppModel.d",
+    "diagnostics" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/AppModel.dia",
+    "index-unit-output-path" : "/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/AppModel.o",
+    "llvm-bc" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/AppModel.bc",
+    "object" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/AppModel.o",
+    "swift-dependencies" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/AppModel.swiftdeps",
+    "swiftmodule" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/AppModel~partial.swiftmodule"
+  },
+  "/Users/ynr/Developer/Agni-Bot/apps/mac/Sources/AgniApp/ComposerView.swift" : {
+    "const-values" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/ComposerView.swiftconstvalues",
+    "dependencies" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/ComposerView.d",
+    "diagnostics" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/ComposerView.dia",
+    "index-unit-output-path" : "/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/ComposerView.o",
+    "llvm-bc" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/ComposerView.bc",
+    "object" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/ComposerView.o",
+    "swift-dependencies" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/ComposerView.swiftdeps",
+    "swiftmodule" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/ComposerView~partial.swiftmodule"
+  },
+  "/Users/ynr/Developer/Agni-Bot/apps/mac/Sources/AgniApp/InspectorView.swift" : {
+    "const-values" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/InspectorView.swiftconstvalues",
+    "dependencies" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/InspectorView.d",
+    "diagnostics" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/InspectorView.dia",
+    "index-unit-output-path" : "/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/InspectorView.o",
+    "llvm-bc" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/InspectorView.bc",
+    "object" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/InspectorView.o",
+    "swift-dependencies" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/InspectorView.swiftdeps",
+    "swiftmodule" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/InspectorView~partial.swiftmodule"
+  },
+  "/Users/ynr/Developer/Agni-Bot/apps/mac/Sources/AgniApp/MessageRowView.swift" : {
+    "const-values" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/MessageRowView.swiftconstvalues",
+    "dependencies" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/MessageRowView.d",
+    "diagnostics" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/MessageRowView.dia",
+    "index-unit-output-path" : "/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/MessageRowView.o",
+    "llvm-bc" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/MessageRowView.bc",
+    "object" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/MessageRowView.o",
+    "swift-dependencies" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/MessageRowView.swiftdeps",
+    "swiftmodule" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/MessageRowView~partial.swiftmodule"
+  },
+  "/Users/ynr/Developer/Agni-Bot/apps/mac/Sources/AgniApp/PairingView.swift" : {
+    "const-values" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/PairingView.swiftconstvalues",
+    "dependencies" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/PairingView.d",
+    "diagnostics" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/PairingView.dia",
+    "index-unit-output-path" : "/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/PairingView.o",
+    "llvm-bc" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/PairingView.bc",
+    "object" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/PairingView.o",
+    "swift-dependencies" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/PairingView.swiftdeps",
+    "swiftmodule" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/PairingView~partial.swiftmodule"
+  },
+  "/Users/ynr/Developer/Agni-Bot/apps/mac/Sources/AgniApp/RootView.swift" : {
+    "const-values" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/RootView.swiftconstvalues",
+    "dependencies" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/RootView.d",
+    "diagnostics" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/RootView.dia",
+    "index-unit-output-path" : "/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/RootView.o",
+    "llvm-bc" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/RootView.bc",
+    "object" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/RootView.o",
+    "swift-dependencies" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/RootView.swiftdeps",
+    "swiftmodule" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/RootView~partial.swiftmodule"
+  },
+  "/Users/ynr/Developer/Agni-Bot/apps/mac/Sources/AgniApp/SettingsView.swift" : {
+    "const-values" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/SettingsView.swiftconstvalues",
+    "dependencies" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/SettingsView.d",
+    "diagnostics" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/SettingsView.dia",
+    "index-unit-output-path" : "/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/SettingsView.o",
+    "llvm-bc" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/SettingsView.bc",
+    "object" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/SettingsView.o",
+    "swift-dependencies" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/SettingsView.swiftdeps",
+    "swiftmodule" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/SettingsView~partial.swiftmodule"
+  },
+  "/Users/ynr/Developer/Agni-Bot/apps/mac/Sources/AgniApp/SidebarView.swift" : {
+    "const-values" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/SidebarView.swiftconstvalues",
+    "dependencies" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/SidebarView.d",
+    "diagnostics" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/SidebarView.dia",
+    "index-unit-output-path" : "/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/SidebarView.o",
+    "llvm-bc" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/SidebarView.bc",
+    "object" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/SidebarView.o",
+    "swift-dependencies" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/SidebarView.swiftdeps",
+    "swiftmodule" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/SidebarView~partial.swiftmodule"
+  },
+  "/Users/ynr/Developer/Agni-Bot/apps/mac/Sources/AgniApp/Theme.swift" : {
+    "const-values" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/Theme.swiftconstvalues",
+    "dependencies" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/Theme.d",
+    "diagnostics" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/Theme.dia",
+    "index-unit-output-path" : "/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/Theme.o",
+    "llvm-bc" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/Theme.bc",
+    "object" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/Theme.o",
+    "swift-dependencies" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/Theme.swiftdeps",
+    "swiftmodule" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/Theme~partial.swiftmodule"
+  },
+  "/Users/ynr/Developer/Agni-Bot/apps/mac/Sources/AgniApp/ThreadHeader.swift" : {
+    "const-values" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/ThreadHeader.swiftconstvalues",
+    "dependencies" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/ThreadHeader.d",
+    "diagnostics" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/ThreadHeader.dia",
+    "index-unit-output-path" : "/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/ThreadHeader.o",
+    "llvm-bc" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/ThreadHeader.bc",
+    "object" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/ThreadHeader.o",
+    "swift-dependencies" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/ThreadHeader.swiftdeps",
+    "swiftmodule" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/ThreadHeader~partial.swiftmodule"
+  },
+  "/Users/ynr/Developer/Agni-Bot/apps/mac/Sources/AgniApp/ThreadView.swift" : {
+    "const-values" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/ThreadView.swiftconstvalues",
+    "dependencies" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/ThreadView.d",
+    "diagnostics" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/ThreadView.dia",
+    "index-unit-output-path" : "/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/ThreadView.o",
+    "llvm-bc" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/ThreadView.bc",
+    "object" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/ThreadView.o",
+    "swift-dependencies" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/ThreadView.swiftdeps",
+    "swiftmodule" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/ThreadView~partial.swiftmodule"
+  },
+  "/Users/ynr/Developer/Agni-Bot/apps/mac/Sources/AgniApp/WindowChrome.swift" : {
+    "const-values" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/WindowChrome.swiftconstvalues",
+    "dependencies" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/WindowChrome.d",
+    "diagnostics" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/WindowChrome.dia",
+    "index-unit-output-path" : "/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/WindowChrome.o",
+    "llvm-bc" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/WindowChrome.bc",
+    "object" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/WindowChrome.o",
+    "swift-dependencies" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/WindowChrome.swiftdeps",
+    "swiftmodule" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/Agni-p.build/Objects-normal/arm64/WindowChrome~partial.swiftmodule"
+  }
+}

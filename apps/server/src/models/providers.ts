@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
 /**
  * Provider catalog — every source is OpenAI-compatible `chat/completions`,
  * enabled by the presence of its API key (except LM Studio, which is local).
@@ -96,6 +99,18 @@ const SPECS: ProviderSpec[] = [
   },
 ];
 
+/** Public metadata for the providers the authenticated app can configure. */
+export function providerCredentialTarget(id: string): { id: string; label: string; envKey: string; envModel: string } | null {
+  const spec = SPECS.find((candidate) => candidate.id === id);
+  if (!spec || !spec.envKey) return null;
+  return { id: spec.id, label: spec.label, envKey: spec.envKey, envModel: spec.envModel };
+}
+
+export function providerModelTarget(id: string): { id: string; envModel: string } | null {
+  const spec = SPECS.find((candidate) => candidate.id === id && candidate.envKey !== null);
+  return spec ? { id: spec.id, envModel: spec.envModel } : null;
+}
+
 /** Failover preference per lane. Unknown/unlisted providers fall to the end. */
 export const TIER_ORDER: Record<Tier, string[]> = {
   instant: ["groq", "cerebras", "nim", "lmstudio"],
@@ -104,11 +119,23 @@ export const TIER_ORDER: Record<Tier, string[]> = {
 };
 
 export function loadProviders(env: Record<string, string | undefined>): ProviderConfig[] {
+  const modelConfigPath = resolve(env.AGNI_PROVIDER_CONFIG_PATH?.trim() || "data/providers.json");
+  let configuredModels: Record<string, string> = {};
+  try {
+    const value = JSON.parse(readFileSync(modelConfigPath, "utf8")) as { version?: unknown; models?: unknown };
+    if (value.version === 1 && value.models && typeof value.models === "object" && !Array.isArray(value.models)) {
+      configuredModels = Object.fromEntries(
+        Object.entries(value.models).filter((entry): entry is [string, string] => typeof entry[1] === "string"),
+      );
+    }
+  } catch {
+    // Missing or invalid optional config falls back to environment defaults.
+  }
   const providers: ProviderConfig[] = [];
   for (const spec of SPECS) {
     if (spec.envKey === null) {
       // Local provider: enabled by explicitly naming a model to serve.
-      const model = env[spec.envModel]?.trim();
+      const model = (configuredModels[spec.id] || env[spec.envModel])?.trim();
       if (!model) continue;
       providers.push({
         id: spec.id,
@@ -127,9 +154,10 @@ export function loadProviders(env: Record<string, string | undefined>): Provider
       label: spec.label,
       baseUrl: (spec.envBaseUrl && env[spec.envBaseUrl]?.trim()) || spec.baseUrl,
       apiKey,
-      model: env[spec.envModel]?.trim() || spec.model,
+      model: (configuredModels[spec.id] || env[spec.envModel])?.trim() || spec.model,
       tiers: spec.tiers,
     });
   }
   return providers;
 }
+

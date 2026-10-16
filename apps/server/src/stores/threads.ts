@@ -141,3 +141,17 @@ export function recentMessages(db: Database, threadID: string, limit: number): M
     .all(threadID, limit);
   return rows.reverse();
 }
+
+/** One line of the newest message, for the client's thread list. */
+export function lastMessagePreview(db: Database, threadID: string): string | null {
+  const row = db
+    .query<{ text: string }, [string]>(
+      `SELECT text FROM messages WHERE thread_id = ?
+       ORDER BY created_at DESC, rowid DESC LIMIT 1`,
+    )
+    .get(threadID);
+  if (!row) return null;
+  const line = row.text.replace(/\s+/g, " ").trim();
+  if (line.length === 0) return null;
+  return line.length > 140 ? `${line.slice(0, 140)}…` : line;
+}

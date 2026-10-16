@@ -1,0 +1,5 @@
+---
+triple:          'arm64-apple-darwin'
+binary-path:     '/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Products/Release/Agni'
+relocations:     []
+...

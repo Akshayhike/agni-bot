@@ -21,6 +21,9 @@
     "bench": "bun tools/cli/src/index.ts bench",
     "ping": "bun tools/cli/src/index.ts ping",
     "mock": "bun tools/mock-provider/src/index.ts",
+    "fixtures": "bun run --filter @agni/protocol fixtures",
+    "mac": "swift build --package-path apps/mac",
+    "mac-app": "apps/mac/scripts/bundle.sh",
     "test": "bun test",
     "typecheck": "bun run --filter '@agni/*' typecheck"
   },

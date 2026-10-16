@@ -49,6 +49,8 @@ export const ThreadInfoSchema = z.object({
   agentID: z.string().min(1),
   title: z.string().optional(),
   updatedAt: z.string(),
+  /** Last message, one line, for the thread list. */
+  preview: z.string().optional(),
 });
 export type ThreadInfo = z.infer<typeof ThreadInfoSchema>;
 
@@ -61,6 +63,33 @@ export const MessageInfoSchema = z.object({
   turnID: z.string().optional(),
 });
 export type MessageInfo = z.infer<typeof MessageInfoSchema>;
+
+/** Job lifecycle states; `done` and `failed` are terminal unless recurring. */
+export const JOB_STATES = ["queued", "running", "done", "failed"] as const;
+export const JobStateSchema = z.enum(JOB_STATES);
+export type JobState = z.infer<typeof JobStateSchema>;
+
+/** Actions `job.set` accepts on one job. */
+export const JOB_ACTIONS = ["pause", "resume", "run"] as const;
+export const JobActionSchema = z.enum(JOB_ACTIONS);
+export type JobAction = z.infer<typeof JobActionSchema>;
+
+/** One job, as listed by `job.list` (the Routines panel reads these). */
+export const JobInfoSchema = z.object({
+  id: z.string().min(1),
+  kind: z.string().min(1),
+  state: JobStateSchema,
+  runAt: z.string(),
+  enabled: z.boolean(),
+  attempts: z.number().int().nonnegative(),
+  /** Recurrence in milliseconds; absent for one-shot work. */
+  everyMs: z.number().int().positive().optional(),
+  /** The prompt this job runs, trimmed for display. */
+  title: z.string().optional(),
+  threadID: z.string().optional(),
+  lastResult: z.string().optional(),
+});
+export type JobInfo = z.infer<typeof JobInfoSchema>;
 
 // ---------------------------------------------------------------------------
 // client → server
@@ -98,6 +127,27 @@ export const ClientFrameSchema = z.discriminatedUnion("type", [
     type: z.literal("thread.history"),
     threadID: z.string().min(1),
     limit: z.number().int().positive().max(500).optional(),
+  }),
+  /** Read the routine list, or act on one routine (pause, resume, run now). */
+  z.object({ type: z.literal("job.list"), limit: z.number().int().positive().max(200).optional() }),
+  z.object({ type: z.literal("job.set"), jobID: z.string().min(1), action: JobActionSchema }),
+  /** Delete a task unless it is currently running. */
+  z.object({ type: z.literal("job.delete"), jobID: z.string().min(1) }),
+  /** Configure a built-in API provider. The key is accepted only by the daemon. */
+  z.object({
+    type: z.literal("provider.add"),
+    providerID: z.enum(["groq", "cerebras", "nim", "gemini", "openrouter"]),
+    apiKey: z.string().min(1).max(4096),
+    model: z.string().trim().min(1).max(200).optional(),
+  }),
+  z.object({
+    type: z.literal("provider.model.set"),
+    providerID: z.enum(["groq", "cerebras", "nim", "gemini", "openrouter"]),
+    model: z.string().trim().min(1).max(200),
+  }),
+  z.object({
+    type: z.literal("provider.models.list"),
+    providerID: z.enum(["groq", "cerebras", "nim", "gemini", "openrouter"]),
   }),
 ]);
 export type ClientFrame = z.infer<typeof ClientFrameSchema>;
@@ -161,6 +211,18 @@ export const ServerFrameSchema = z.discriminatedUnion("type", [
     title: z.string().optional(),
     messages: z.array(MessageInfoSchema),
   }),
+  z.object({ type: z.literal("job.list.ok"), seq, jobs: z.array(JobInfoSchema) }),
+  z.object({ type: z.literal("provider.add.ok"), seq, providers: z.array(z.object({
+    id: z.string(),
+    label: z.string(),
+    model: z.string(),
+    tiers: z.array(z.enum(["instant", "task", "deep"])),
+    available: z.boolean(),
+    cooldownRemainingMs: z.number(),
+    lastError: z.string().optional(),
+    lastSuccessAt: z.number().optional(),
+  })) }),
+  z.object({ type: z.literal("provider.models.ok"), seq, providerID: z.string(), models: z.array(z.string()) }),
   z.object({ type: z.literal("presence"), seq, state: z.enum(["online", "offline"]) }),
   z.object({ type: z.literal("error"), seq, code: z.string(), message: z.string(), retryAfter: z.number().optional() }),
 ]);

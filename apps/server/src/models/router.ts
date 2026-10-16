@@ -61,10 +61,29 @@ export interface ProviderStatus {
 
 export class Router {
   constructor(
-    private readonly providers: ProviderConfig[],
+    private providers: ProviderConfig[],
     private readonly health: HealthTracker,
     private readonly fetchFn: typeof fetch = fetch,
   ) {}
+
+  /** Apply an authenticated provider configuration change without a restart. */
+  replaceProviders(providers: ProviderConfig[]): void {
+    this.providers = providers;
+  }
+
+  async listModels(providerID: string): Promise<string[]> {
+    const provider = this.providers.find((candidate) => candidate.id === providerID);
+    if (!provider) throw new Error("Provider is not configured on the daemon.");
+    const response = await this.fetchFn(`${provider.baseUrl.replace(/\/$/, "")}/models`, {
+      headers: { Authorization: `Bearer ${provider.apiKey}` },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!response.ok) throw new Error(`Provider model list returned HTTP ${response.status}.`);
+    const payload = await response.json() as { data?: Array<{ id?: unknown }> };
+    const models = (payload.data ?? []).map((entry) => entry.id).filter((id): id is string => typeof id === "string");
+    if (models.length === 0) throw new Error("The provider did not return any selectable models.");
+    return models.sort((a, b) => a.localeCompare(b));
+  }
 
   /** Configured providers for a tier, healthiest first, cooling ones last. */
   candidates(tier: Tier): ProviderConfig[] {

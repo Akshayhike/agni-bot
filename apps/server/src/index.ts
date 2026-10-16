@@ -33,7 +33,7 @@ import { registerTurnJob, type TurnJobPayload } from "./jobs/turn";
 import { log } from "./log";
 import { HealthTracker } from "./models/health";
 import { Router } from "./models/router";
-import { deleteJob, enqueueJob, getJobByPrefix, listJobs, requeueStuckJobs, wakeJob } from "./stores/jobs";
+import { deleteJob, enqueueJob, getJobByPrefix, listJobs, requeueStuckJobs, setJobEnabled, wakeJob } from "./stores/jobs";
 import { formatDuration, parseDurationMs, parseWhen } from "./util/time";
 import { startServer, type HealthReport, type RunningServer } from "./ws/server";
 
@@ -207,6 +207,8 @@ async function jobCommand(args: string[]): Promise<void> {
     if (sub === "list") return jobList(db, rest);
     if (sub === "rm") return jobRemove(db, rest);
     if (sub === "run") return jobRun(db, rest);
+    if (sub === "pause") return jobToggle(db, rest, false);
+    if (sub === "resume") return jobToggle(db, rest, true);
     console.error(`unknown job command "${sub}"`);
     usage(1);
   } finally {
@@ -274,10 +276,31 @@ function jobList(db: ReturnType<typeof openDatabase>, args: string[]): void {
     const payload = safePayload(job.payload);
     const when = job.state === "queued" ? `at ${job.run_at}` : job.state;
     const note = job.result ? `  → ${truncate(job.result, 60)}` : "";
+    const paused = job.enabled === 1 ? "" : "  (paused)";
     console.log(
-      `${job.state.padEnd(7)} ${job.id}  ${job.kind.padEnd(5)}  ${when}  runs ${job.attempts}  "${truncate(payload, 60)}"${note}`,
+      `${job.state.padEnd(7)} ${job.id}  ${job.kind.padEnd(5)}  ${when}  runs ${job.attempts}  "${truncate(payload, 60)}"${note}${paused}`,
     );
   }
+}
+
+/** Pause or resume without deleting: the routine stays visible in the client. */
+function jobToggle(db: ReturnType<typeof openDatabase>, args: string[], enabled: boolean): void {
+  const word = enabled ? "resume" : "pause";
+  const target = positional(args)[0];
+  if (!target) {
+    console.error(`usage: bun run job ${word} <job-id-or-prefix>`);
+    process.exit(1);
+  }
+  const job = getJobByPrefix(db, target);
+  if (!job) {
+    console.error(`no unique job matching "${target}"`);
+    process.exit(1);
+  }
+  if (!setJobEnabled(db, job.id, enabled)) {
+    console.error(`no job ${job.id}`);
+    process.exit(1);
+  }
+  console.log(`${job.id} ${enabled ? "resumed — it runs at its next due time" : "paused — it stays queued but never runs"}`);
 }
 
 function jobRemove(db: ReturnType<typeof openDatabase>, args: string[]): void {

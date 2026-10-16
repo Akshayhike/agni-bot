@@ -18,11 +18,13 @@ export interface JobRow {
   run_at: string;
   attempts: number;
   result: string | null;
+  /** 0 pauses the job: it stays visible, but never claims. */
+  enabled: number;
   created_at: string;
   updated_at: string;
 }
 
-const COLUMNS = "id, kind, payload, state, run_at, attempts, result, created_at, updated_at";
+const COLUMNS = "id, kind, payload, state, run_at, attempts, result, enabled, created_at, updated_at";
 
 export function enqueueJob(
   db: Database,
@@ -36,24 +38,36 @@ export function enqueueJob(
     run_at: params.runAt ?? nowISO(),
     attempts: 0,
     result: null,
+    enabled: 1,
     created_at: nowISO(),
     updated_at: nowISO(),
   };
   db.run(
-    `INSERT INTO jobs (id, kind, payload, state, run_at, attempts, result, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [row.id, row.kind, row.payload, row.state, row.run_at, row.attempts, row.result, row.created_at, row.updated_at],
+    `INSERT INTO jobs (id, kind, payload, state, run_at, attempts, result, enabled, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      row.id,
+      row.kind,
+      row.payload,
+      row.state,
+      row.run_at,
+      row.attempts,
+      row.result,
+      row.enabled,
+      row.created_at,
+      row.updated_at,
+    ],
   );
   return row;
 }
 
-/** Atomically pick the oldest due job and mark it running. */
+/** Atomically pick the oldest due job and mark it running. Paused jobs wait. */
 export function claimDueJob(db: Database, now = nowISO()): JobRow | null {
   return db.transaction((): JobRow | null => {
     const row = db
       .query<JobRow, [string]>(
         `SELECT ${COLUMNS} FROM jobs
-         WHERE state = 'queued' AND run_at <= ?
+         WHERE state = 'queued' AND enabled = 1 AND run_at <= ?
          ORDER BY run_at ASC, rowid ASC
          LIMIT 1`,
       )
@@ -82,10 +96,14 @@ export function requeueJob(db: Database, id: string, runAt: string): void {
   db.run("UPDATE jobs SET state = 'queued', run_at = ?, updated_at = ? WHERE id = ?", [runAt, nowISO(), id]);
 }
 
-/** Make a job (any state) due now — the manual "run it" escape hatch. */
+/**
+ * Make a job (any state) due now — the manual "run it" escape hatch. Running
+ * it implies you want it: a paused job is resumed, since a claim would skip it
+ * otherwise.
+ */
 export function wakeJob(db: Database, id: string): boolean {
   const result = db.run(
-    "UPDATE jobs SET state = 'queued', run_at = ?, attempts = 0, result = NULL, updated_at = ? WHERE id = ?",
+    "UPDATE jobs SET state = 'queued', enabled = 1, run_at = ?, attempts = 0, result = NULL, updated_at = ? WHERE id = ?",
     [nowISO(), nowISO(), id],
   );
   return result.changes > 0;
@@ -112,6 +130,28 @@ export function listJobs(db: Database, options: { limit?: number; includeFinishe
       `SELECT ${COLUMNS} FROM jobs ${where} ORDER BY run_at ASC, rowid ASC LIMIT ?`,
     )
     .all(limit);
+}
+
+/** Recently finished jobs, newest first — the "what did it last do" list. */
+export function listFinishedJobs(db: Database, limit = 10): JobRow[] {
+  return db
+    .query<JobRow, [number]>(
+      `SELECT ${COLUMNS} FROM jobs
+       WHERE state IN ('done', 'failed')
+       ORDER BY updated_at DESC, rowid DESC
+       LIMIT ?`,
+    )
+    .all(limit);
+}
+
+/** Pause or resume a job. A running job finishes; paused work stays visible. */
+export function setJobEnabled(db: Database, id: string, enabled: boolean): boolean {
+  const result = db.run("UPDATE jobs SET enabled = ?, updated_at = ? WHERE id = ?", [
+    enabled ? 1 : 0,
+    nowISO(),
+    id,
+  ]);
+  return result.changes > 0;
 }
 
 /** Delete a job that is not currently being executed. */

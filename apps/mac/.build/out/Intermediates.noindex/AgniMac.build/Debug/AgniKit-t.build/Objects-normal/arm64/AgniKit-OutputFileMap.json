@@ -1,0 +1,69 @@
+{
+  "" : {
+    "diagnostics" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/AgniKit-t.build/Objects-normal/arm64/AgniKit-primary.dia",
+    "emit-module-dependencies" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/AgniKit-t.build/Objects-normal/arm64/AgniKit-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/AgniKit-t.build/Objects-normal/arm64/AgniKit-primary-emit-module.dia",
+    "pch" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/AgniKit-t.build/Objects-normal/arm64/AgniKit-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/AgniKit-t.build/Objects-normal/arm64/AgniKit-primary.swiftdeps"
+  },
+  "/Users/ynr/Developer/Agni-Bot/apps/mac/Sources/AgniKit/AgniConnection.swift" : {
+    "const-values" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/AgniKit-t.build/Objects-normal/arm64/AgniConnection.swiftconstvalues",
+    "dependencies" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/AgniKit-t.build/Objects-normal/arm64/AgniConnection.d",
+    "diagnostics" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/AgniKit-t.build/Objects-normal/arm64/AgniConnection.dia",
+    "index-unit-output-path" : "/AgniMac.build/Debug/AgniKit-t.build/Objects-normal/arm64/AgniConnection.o",
+    "llvm-bc" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/AgniKit-t.build/Objects-normal/arm64/AgniConnection.bc",
+    "object" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/AgniKit-t.build/Objects-normal/arm64/AgniConnection.o",
+    "swift-dependencies" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/AgniKit-t.build/Objects-normal/arm64/AgniConnection.swiftdeps",
+    "swiftmodule" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/AgniKit-t.build/Objects-normal/arm64/AgniConnection~partial.swiftmodule"
+  },
+  "/Users/ynr/Developer/Agni-Bot/apps/mac/Sources/AgniKit/Conversation.swift" : {
+    "const-values" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/AgniKit-t.build/Objects-normal/arm64/Conversation.swiftconstvalues",
+    "dependencies" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/AgniKit-t.build/Objects-normal/arm64/Conversation.d",
+    "diagnostics" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/AgniKit-t.build/Objects-normal/arm64/Conversation.dia",
+    "index-unit-output-path" : "/AgniMac.build/Debug/AgniKit-t.build/Objects-normal/arm64/Conversation.o",
+    "llvm-bc" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/AgniKit-t.build/Objects-normal/arm64/Conversation.bc",
+    "object" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/AgniKit-t.build/Objects-normal/arm64/Conversation.o",
+    "swift-dependencies" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/AgniKit-t.build/Objects-normal/arm64/Conversation.swiftdeps",
+    "swiftmodule" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/AgniKit-t.build/Objects-normal/arm64/Conversation~partial.swiftmodule"
+  },
+  "/Users/ynr/Developer/Agni-Bot/apps/mac/Sources/AgniKit/Credentials.swift" : {
+    "const-values" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/AgniKit-t.build/Objects-normal/arm64/Credentials.swiftconstvalues",
+    "dependencies" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/AgniKit-t.build/Objects-normal/arm64/Credentials.d",
+    "diagnostics" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/AgniKit-t.build/Objects-normal/arm64/Credentials.dia",
+    "index-unit-output-path" : "/AgniMac.build/Debug/AgniKit-t.build/Objects-normal/arm64/Credentials.o",
+    "llvm-bc" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/AgniKit-t.build/Objects-normal/arm64/Credentials.bc",
+    "object" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/AgniKit-t.build/Objects-normal/arm64/Credentials.o",
+    "swift-dependencies" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/AgniKit-t.build/Objects-normal/arm64/Credentials.swiftdeps",
+    "swiftmodule" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/AgniKit-t.build/Objects-normal/arm64/Credentials~partial.swiftmodule"
+  },
+  "/Users/ynr/Developer/Agni-Bot/apps/mac/Sources/AgniKit/Format.swift" : {
+    "const-values" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/AgniKit-t.build/Objects-normal/arm64/Format.swiftconstvalues",
+    "dependencies" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/AgniKit-t.build/Objects-normal/arm64/Format.d",
+    "diagnostics" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/AgniKit-t.build/Objects-normal/arm64/Format.dia",
+    "index-unit-output-path" : "/AgniMac.build/Debug/AgniKit-t.build/Objects-normal/arm64/Format.o",
+    "llvm-bc" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/AgniKit-t.build/Objects-normal/arm64/Format.bc",
+    "object" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/AgniKit-t.build/Objects-normal/arm64/Format.o",
+    "swift-dependencies" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/AgniKit-t.build/Objects-normal/arm64/Format.swiftdeps",
+    "swiftmodule" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/AgniKit-t.build/Objects-normal/arm64/Format~partial.swiftmodule"
+  },
+  "/Users/ynr/Developer/Agni-Bot/apps/mac/Sources/AgniKit/Health.swift" : {
+    "const-values" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/AgniKit-t.build/Objects-normal/arm64/Health.swiftconstvalues",
+    "dependencies" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/AgniKit-t.build/Objects-normal/arm64/Health.d",
+    "diagnostics" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/AgniKit-t.build/Objects-normal/arm64/Health.dia",
+    "index-unit-output-path" : "/AgniMac.build/Debug/AgniKit-t.build/Objects-normal/arm64/Health.o",
+    "llvm-bc" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/AgniKit-t.build/Objects-normal/arm64/Health.bc",
+    "object" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/AgniKit-t.build/Objects-normal/arm64/Health.o",
+    "swift-dependencies" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/AgniKit-t.build/Objects-normal/arm64/Health.swiftdeps",
+    "swiftmodule" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/AgniKit-t.build/Objects-normal/arm64/Health~partial.swiftmodule"
+  },
+  "/Users/ynr/Developer/Agni-Bot/apps/mac/Sources/AgniKit/Transport.swift" : {
+    "const-values" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/AgniKit-t.build/Objects-normal/arm64/Transport.swiftconstvalues",
+    "dependencies" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/AgniKit-t.build/Objects-normal/arm64/Transport.d",
+    "diagnostics" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/AgniKit-t.build/Objects-normal/arm64/Transport.dia",
+    "index-unit-output-path" : "/AgniMac.build/Debug/AgniKit-t.build/Objects-normal/arm64/Transport.o",
+    "llvm-bc" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/AgniKit-t.build/Objects-normal/arm64/Transport.bc",
+    "object" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/AgniKit-t.build/Objects-normal/arm64/Transport.o",
+    "swift-dependencies" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/AgniKit-t.build/Objects-normal/arm64/Transport.swiftdeps",
+    "swiftmodule" : "/Users/ynr/Developer/Agni-Bot/apps/mac/.build/out/Intermediates.noindex/AgniMac.build/Debug/AgniKit-t.build/Objects-normal/arm64/Transport~partial.swiftmodule"
+  }
+}

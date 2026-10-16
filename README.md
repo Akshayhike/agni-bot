@@ -69,6 +69,10 @@ it is gitignored). See [`.env.example`](.env.example) for the full list —
 providers are enabled by the presence of their key, everything else has a
 working default.
 
+Model choices changed in the Mac app are stored on the daemon in
+`data/providers.json` (mode 600). Provider API keys remain in the daemon's
+mode-600 `.env`; the JSON file contains model IDs only.
+
 ## Phases
 
 | Phase | Scope | Proof |
