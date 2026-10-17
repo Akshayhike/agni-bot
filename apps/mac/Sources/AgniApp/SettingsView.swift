@@ -175,7 +175,7 @@ struct SettingsView: View {
 
   private func pluginRow(_ plugin: PluginInfo) -> some View {
     HStack(spacing: 12) {
-      Image(systemName: plugin.authKind == "oauth" ? "link" : "puzzlepiece.extension")
+      Image(systemName: plugin.authKind == "oauth" ? "link" : plugin.authKind == "api-key" ? "key" : "puzzlepiece.extension")
         .font(.system(size: 14))
         .foregroundStyle(Palette.inkSecondary)
         .frame(width: 24)

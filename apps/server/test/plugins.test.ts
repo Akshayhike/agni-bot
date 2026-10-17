@@ -34,6 +34,8 @@ function fakeConfig(overrides: Partial<Config> = {}): Config {
     gmailAppPassword: "test-app-password",
     gmailOwnerUser: "",
     gmailOwnerAppPassword: "",
+    firecrawlURL: "",
+    firecrawlAPIKey: "",
     ...overrides,
   };
 }

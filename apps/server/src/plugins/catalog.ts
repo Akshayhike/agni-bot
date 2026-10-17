@@ -27,7 +27,7 @@ export interface PluginManifest {
   name: string;
   category: "google" | "mcp";
   description: string;
-  authKind: "oauth" | "mcp" | "app-password";
+  authKind: "oauth" | "mcp" | "app-password" | "api-key";
   /** Tool names this plugin contributes once connected (PS3+). */
   toolNames: string[];
   roles: PluginRole[];
@@ -128,6 +128,21 @@ export const CATALOG: PluginManifest[] = [
     description: "Meeting notes, transcripts and action items via the official Granola MCP server. Read-only by design: the doing happens through the other plugins.",
     authKind: "mcp",
     toolNames: ["granola.search", "granola.read"],
+    roles: [
+      {
+        account: "owner",
+        scopes: [],
+        capabilities: capabilities({ read: "free" }),
+      },
+    ],
+  },
+  {
+    id: "firecrawl",
+    name: "Firecrawl",
+    category: "mcp",
+    description: "Web scraping and search. Cloud (free tier 500 credits/mo) or self-hosted (unlimited, runs locally).",
+    authKind: "api-key",
+    toolNames: ["web_search", "web_fetch", "deep_research"],
     roles: [
       {
         account: "owner",

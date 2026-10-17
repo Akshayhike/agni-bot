@@ -114,6 +114,34 @@ export class PluginService {
       }
     }
 
+    // API-key plugins (Firecrawl): key or URL from .env.
+    if (manifest.authKind === "api-key") {
+      const url = this.deps.config.firecrawlURL;
+      const key = this.deps.config.firecrawlAPIKey;
+      if (!url && !key) {
+        return {
+          error: {
+            code: "plugin_not_configured",
+            message: `Set AGNI_FIRECRAWL_URL (self-hosted) or AGNI_FIRECRAWL_API_KEY (cloud) in .env and restart the daemon.`,
+          },
+        };
+      }
+      try {
+        const label = url ? `self-hosted (${url})` : "cloud";
+        const pending = startPending(this.deps.db, {
+          pluginID,
+          account,
+          scopes: [],
+          capabilities: role.capabilities,
+        });
+        completeConnect(this.deps.db, pending.id, { access_token: key || "self-hosted" }, label);
+        this.emitState();
+        return {};
+      } catch (error) {
+        return { error: { code: "plugin_connect_failed", message: error instanceof Error ? error.message : String(error) } };
+      }
+    }
+
     if (manifest.authKind !== "oauth") {
       return {
         error: {
@@ -194,13 +222,20 @@ export class PluginService {
     return token;
   }
 
-  /** Auto-connect app-password plugins from .env on daemon start. */
+  /** Auto-connect app-password and api-key plugins from .env on daemon start. */
   autoConnect(): void {
     for (const manifest of CATALOG) {
-      if (manifest.authKind !== "app-password") continue;
+      if (manifest.authKind !== "app-password" && manifest.authKind !== "api-key") continue;
       for (const role of manifest.roles) {
-        const user = this.appPasswordUser(manifest.id, role.account);
-        const pass = this.appPassword(manifest.id, role.account);
+        let user = "";
+        let pass = "";
+        if (manifest.authKind === "app-password") {
+          user = this.appPasswordUser(manifest.id, role.account);
+          pass = this.appPassword(manifest.id, role.account);
+        } else if (manifest.authKind === "api-key") {
+          user = this.deps.config.firecrawlURL || "cloud";
+          pass = this.deps.config.firecrawlAPIKey || "self-hosted";
+        }
         if (!user || !pass) continue;
         const existing = getConnectionFor(this.deps.db, manifest.id, role.account);
         if (existing?.status === "connected") continue;
@@ -256,7 +291,7 @@ function toInfo(manifest: PluginManifest, account: PluginAccount, row?: PluginCo
     scopes: role.scopes,
     capabilities: role.capabilities,
     // OAuth kinds are reachable once the daemon has Google creds configured.
-    available: manifest.authKind === "oauth" || manifest.authKind === "app-password",
+    available: manifest.authKind === "oauth" || manifest.authKind === "app-password" || manifest.authKind === "api-key",
     ...(row?.id ? { connectionID: row.id } : {}),
     ...(row?.status ? { status: row.status as PluginStatus } : {}),
     ...(row?.account_label ? { accountLabel: row.account_label } : {}),

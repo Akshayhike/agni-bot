@@ -30,6 +30,10 @@ export interface Config {
   /** Optional second mailbox (the owner's) via app password. */
   gmailOwnerUser: string;
   gmailOwnerAppPassword: string;
+  /** Firecrawl self-hosted instance URL (open source, unlimited). */
+  firecrawlURL: string;
+  /** Firecrawl cloud API key (free tier: 500 credits/mo). */
+  firecrawlAPIKey: string;
 }
 
 function int(env: Record<string, string | undefined>, key: string, fallback: number): number {
@@ -59,5 +63,7 @@ export function loadConfig(env: Record<string, string | undefined> = Bun.env): C
     gmailAppPassword: env.GMAIL_APP_PASSWORD?.trim() || "",
     gmailOwnerUser: env.GMAIL_OWNER_USER?.trim() || "",
     gmailOwnerAppPassword: env.GMAIL_OWNER_APP_PASSWORD?.trim() || "",
+    firecrawlURL: env.AGNI_FIRECRAWL_URL?.trim() || "",
+    firecrawlAPIKey: env.AGNI_FIRECRAWL_API_KEY?.trim() || "",
   };
 }

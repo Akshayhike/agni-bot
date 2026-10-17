@@ -1,17 +1,14 @@
 /**
  * Web tools. web_search tries providers in order: Firecrawl (cloud or
- * self-hosted), Brave, Google CSE, SearXNG, then DuckDuckGo Instant Answer.
+ * self-hosted), SearXNG, then DuckDuckGo Instant Answer (zero-config).
  * web_fetch reuses fetchPage with SSRF protections; Firecrawl is used for
- * JS-rendered pages when configured (cloud key or self-hosted URL).
+ * JS-rendered pages when configured.
  */
 import { fetchPage } from "./fetch-url";
 
 const SEARXNG_URL = process.env.AGNI_SEARXNG_URL?.trim();
 const FIRECRAWL_KEY = process.env.AGNI_FIRECRAWL_API_KEY?.trim();
-const FIRECRAWL_URL = process.env.AGNI_FIRECRAWL_URL?.trim(); // self-hosted instance
-const BRAVE_KEY = process.env.AGNI_BRAVE_API_KEY?.trim();
-const GOOGLE_CSE_KEY = process.env.AGNI_GOOGLE_CSE_API_KEY?.trim();
-const GOOGLE_CSE_ID = process.env.AGNI_GOOGLE_CSE_ID?.trim();
+const FIRECRAWL_URL = process.env.AGNI_FIRECRAWL_URL?.trim();
 
 /** Base URL for Firecrawl API calls (cloud or self-hosted). */
 function firecrawlBase(): string | null {
@@ -53,52 +50,6 @@ async function searchFirecrawl(query: string, count: number): Promise<WebSearchR
     }));
     if (results.length === 0) return null;
     return { query, results, provider: FIRECRAWL_URL ? "firecrawl-selfhosted" : "firecrawl" };
-  } catch {
-    return null;
-  }
-}
-
-/** Brave Search API: free tier 2,000 queries/month, no credit card. */
-async function searchBrave(query: string, count: number): Promise<WebSearchResult | null> {
-  if (!BRAVE_KEY) return null;
-  try {
-    const url = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=${count}`;
-    const response = await fetch(url, {
-      signal: AbortSignal.timeout(10_000),
-      headers: {
-        "Accept": "application/json",
-        "X-Subscription-Token": BRAVE_KEY,
-      },
-    });
-    if (!response.ok) return null;
-    const payload = await response.json() as { web?: { results?: Array<{ title?: string; url?: string; description?: string }> } };
-    const results = (payload.web?.results ?? []).slice(0, count).map((entry) => ({
-      title: entry.title ?? "",
-      url: entry.url ?? "",
-      snippet: entry.description ?? "",
-    }));
-    if (results.length === 0) return null;
-    return { query, results, provider: "brave" };
-  } catch {
-    return null;
-  }
-}
-
-/** Google Custom Search: free tier 100 queries/day. */
-async function searchGoogleCSE(query: string, count: number): Promise<WebSearchResult | null> {
-  if (!GOOGLE_CSE_KEY || !GOOGLE_CSE_ID) return null;
-  try {
-    const url = `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_CSE_KEY}&cx=${GOOGLE_CSE_ID}&q=${encodeURIComponent(query)}&num=${Math.min(count, 10)}`;
-    const response = await fetch(url, { signal: AbortSignal.timeout(10_000) });
-    if (!response.ok) return null;
-    const payload = await response.json() as { items?: Array<{ title?: string; link?: string; snippet?: string }> };
-    const results = (payload.items ?? []).slice(0, count).map((entry) => ({
-      title: entry.title ?? "",
-      url: entry.link ?? "",
-      snippet: entry.snippet ?? "",
-    }));
-    if (results.length === 0) return null;
-    return { query, results, provider: "google-cse" };
   } catch {
     return null;
   }
@@ -168,15 +119,9 @@ async function searchDuckDuckGo(query: string, count: number): Promise<WebSearch
 export async function webSearch(args: WebSearchArgs): Promise<WebSearchResult> {
   const count = Math.max(1, Math.min(args.count ?? 8, 20));
 
-  // Try providers in order: Firecrawl → Brave → Google CSE → SearXNG → DuckDuckGo
+  // Try providers in order: Firecrawl → SearXNG → DuckDuckGo
   const firecrawl = await searchFirecrawl(args.query, count);
   if (firecrawl) return firecrawl;
-
-  const brave = await searchBrave(args.query, count);
-  if (brave) return brave;
-
-  const google = await searchGoogleCSE(args.query, count);
-  if (google) return google;
 
   const searxng = await searchSearXNG(args.query, count);
   if (searxng) return searxng;
@@ -184,7 +129,7 @@ export async function webSearch(args: WebSearchArgs): Promise<WebSearchResult> {
   const ddg = await searchDuckDuckGo(args.query, count);
   if (ddg) return ddg;
 
-  return { query: args.query, results: [], provider: "none (set AGNI_BRAVE_API_KEY or AGNI_FIRECRAWL_URL for free web search)" };
+  return { query: args.query, results: [], provider: "none (set AGNI_FIRECRAWL_URL for self-hosted Firecrawl)" };
 }
 
 export interface WebFetchArgs {

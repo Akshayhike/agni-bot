@@ -141,7 +141,7 @@ export const PluginInfoSchema = z.object({
   name: z.string().min(1),
   category: z.enum(["google", "mcp"]),
   description: z.string(),
-  authKind: z.enum(["oauth", "mcp", "app-password"]),
+  authKind: z.enum(["oauth", "mcp", "app-password", "api-key"]),
   account: PluginAccountSchema,
   /** What the catalog will ask Google for, at connect time. */
   scopes: z.array(z.string()),

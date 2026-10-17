@@ -157,6 +157,8 @@ async function startTestServer(): Promise<void> {
     gmailAppPassword: "",
     gmailOwnerUser: "",
     gmailOwnerAppPassword: "",
+    firecrawlURL: "",
+    firecrawlAPIKey: "",
   };
   server = startServer(config, db, router);
   client = await TestClient.connect(`ws://127.0.0.1:${server.port}/ws`, token);
