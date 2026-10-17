@@ -9,6 +9,10 @@
         "typescript": "^7",
       },
     },
+    "apps/landing": {
+      "name": "@agni/landing",
+      "version": "1.0.0",
+    },
     "apps/server": {
       "name": "@agni/server",
       "dependencies": {
@@ -52,6 +56,8 @@
   },
   "packages": {
     "@agni/cli": ["@agni/cli@workspace:tools/cli"],
+
+    "@agni/landing": ["@agni/landing@workspace:apps/landing"],
 
     "@agni/mock-provider": ["@agni/mock-provider@workspace:tools/mock-provider"],
 
