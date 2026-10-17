@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agni · Google setup (app password + OAuth, no verification)</title>
+<style>
+:root{color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:#000;color:#fff;font:15px/1.55 ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;padding:0 16px 64px}
+main{max-width:760px;margin:0 auto}
+h1{font-size:24px;line-height:1.2;margin:30px 0 6px;letter-spacing:-0.02em}
+h2{font-size:17px;margin:30px 0 8px;padding-top:14px;border-top:1px solid #1c1c1c}
+p{margin:8px 0}
+a{color:#8ab4ff;text-decoration:none}
+a:hover{text-decoration:underline}
+code{background:#141414;border:1px solid #232323;border-radius:4px;padding:1px 5px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px}
+pre{background:#0a0a0a;border:1px solid #212121;border-radius:8px;padding:12px;overflow-x:auto;margin:10px 0}
+pre code{background:none;border:none;padding:0;font-size:12.5px;line-height:1.65}
+.sub{color:#9aa0a6;font-size:14px;margin:0 0 6px}
+.small{color:#8b9096;font-size:12.5px}
+ul,ol{margin:8px 0;padding-left:20px}
+li{margin:6px 0}
+.step{border:1px solid #232323;border-radius:10px;padding:14px 16px;margin:14px 0;background:#050505}
+.step b{color:#fff}
+.step .n{display:inline-block;width:24px;height:24px;border-radius:50%;background:#1a1a1a;border:1px solid #333;color:#f0b95a;font-size:12px;font-weight:700;text-align:center;line-height:22px;margin-right:8px;vertical-align:2px}
+.card{border:1px solid #232323;border-radius:10px;padding:14px 16px;margin:14px 0;background:#050505}
+.card.good{border-left:3px solid #63d471}
+.card.amber{border-left:3px solid #f0b95a}
+.card.red{border-left:3px solid #ff6b6b}
+footer{margin-top:40px;border-top:1px solid #1c1c1c;padding-top:14px;color:#8b9096;font-size:12.5px}
+</style>
+</head>
+<body>
+<main>
+<h1>Google setup for Agni plugins</h1>
+<p class="sub">Two paths, no verification needed for either. Gmail uses an app password (requires 2FA on the account). Calendar and Drive use OAuth with sensitive scopes (scope justification only, no demo video, no weeks of review).</p>
+<p class="small">Why this exists: Google's only two doors are 2-Step Verification (app passwords) or an OAuth client in a Cloud project. We chose OAuth so the agent's mailbox needs no 2FA. The price is this one-time setup.</p>
+
+<div class="card amber">
+<p><b>Why two paths:</b> Gmail full access via OAuth requires Google verification (demo video, weeks of review). To skip that, Gmail uses an <b>app password</b> (needs 2FA on the account — Google's rule, satisfying "unless Google requires it"). Calendar and Drive use OAuth with <b>sensitive scopes only</b> (scope justification text, no demo video, no weeks of review).</p>
+</div>
+
+<h2>Part 1 — Gmail app password (5 minutes, no Cloud Console, no verification)</h2>
+
+<div class="step"><span class="n">A1</span><b>Enable 2-Step Verification on the agent's mailbox.</b>
+<ol>
+<li>Sign in to <a href="https://myaccount.google.com/security" target="_blank" rel="noopener noreferrer">myaccount.google.com/security</a> with <code>hey.agnibot@gmail.com</code>.</li>
+<li>Under "How you sign in to Google", click <b>2-Step Verification</b> → Get started.</li>
+<li>Follow the prompts. Save the backup codes somewhere safe.</li>
+</ol>
+<p class="small">Google requires 2FA for app passwords — this is Google specifying it, satisfying your rule. 2FA stays on forever.</p>
+</div>
+
+<div class="step"><span class="n">A2</span><b>Create an app password.</b>
+<ol>
+<li>Go to <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer">myaccount.google.com/apppasswords</a>.</li>
+<li>App name: <code>Agni</code> → Create.</li>
+<li>Google shows a 16-character code (e.g. <code>abcd efgh ijkl mnop</code>). Copy it.</li>
+</ol>
+</div>
+
+<div class="step"><span class="n">A3</span><b>Put it in <code>.env</code> and restart.</b>
+<pre><code>GMAIL_USER=hey.agnibot@gmail.com
+GMAIL_APP_PASSWORD=abcd efgh ijkl mnop</code></pre>
+<p>Restart the daemon (<code>bun run daemon restart</code>). The Gmail plugin shows as Connected in Settings → Plugins. No Cloud Console, no verification, no demo video.</p>
+<p class="small">For your own mailbox too, repeat A1-A3 with your account and set <code>GMAIL_OWNER_USER</code> + <code>GMAIL_OWNER_APP_PASSWORD</code>.</p>
+</div>
+
+<h2>Part 2 — Calendar &amp; Drive via OAuth (sensitive scopes, no verification, no demo video)</h2>
+
+<div class="step"><span class="n">1</span><b>Create a Google Cloud project.</b>
+<ol>
+<li>Open <a href="https://console.cloud.google.com/projectcreate" target="_blank" rel="noopener noreferrer">console.cloud.google.com/projectcreate</a>.</li>
+<li>Project name: <code>agni</code> (or anything). Leave Organization blank.</li>
+<li>Click <b>Create</b>. Wait for it to finish, then select it from the project dropdown at the top.</li>
+</ol>
+</div>
+
+<div class="step"><span class="n">2</span><b>Enable the three APIs Agni uses.</b>
+<ol>
+<li>Go to <b>APIs &amp; Services → Library</b>.</li>
+<li>Search and <b>Enable</b> each: <code>Google Calendar API</code>, <code>Google Drive API</code>. (Gmail uses app passwords, not the API — no need to enable Gmail API.)</li>
+<li>(Skip any you do not want; the plugins for disabled APIs simply fail to connect later.)</li>
+</ol>
+</div>
+
+<div class="step"><span class="n">3</span><b>Configure the OAuth consent screen.</b>
+<ol>
+<li>Go to <b>APIs &amp; Services → OAuth consent screen</b>.</li>
+<li>User type: <b>External</b> → Create.</li>
+<li>App name: <code>Agni</code>. User support email: your email. Developer contact: your email. Save and continue.</li>
+<li>Scopes → Add or remove scopes. Add these exact scopes:
+<pre><code>https://www.googleapis.com/auth/calendar
+https://www.googleapis.com/auth/drive.readonly
+https://www.googleapis.com/auth/drive.file
+https://www.googleapis.com/auth/userinfo.email</code></pre>
+Save and continue.</li>
+<li>Test users: skip (you are publishing to production in the next step, so anyone can consent).</li>
+<li><b>Branding page</b> (left sidebar): fill in <b>Application home page</b> and <b>Application privacy policy link</b> with the two Google Sites URLs from step 3b. Save. (This is the field Google was complaining about.)</li>
+<li>Summary → Back to dashboard.</li>
+</ol>
+</div>
+
+<div class="step"><span class="n">3b</span><b>Create a free homepage + privacy policy (Google requires these to publish).</b>
+<p>Google now refuses to publish an External app unless it has a public homepage and a public privacy policy. You do not need to buy a domain — use <b>Google Sites</b>, which is free and lives on a Google-owned domain that needs no verification.</p>
+<ol>
+<li>Open <a href="https://sites.google.com" target="_blank" rel="noopener noreferrer">sites.google.com</a> → <b>+ Blank</b>.</li>
+<li>Title the site <code>Agni</code>. Add one line of text (e.g. "Agni — personal assistant"). Click <b>Publish</b> → choose a web address like <code>agni-home</code> → <b>Publish</b>. Your homepage URL is now <code>https://sites.google.com/view/agni-home</code>.</li>
+<li>In the same site, click <b>Pages → + New page</b> → name it <code>Privacy Policy</code>. Add a short statement, e.g. "Agni stores your Google account tokens on your own daemon. They are never sent to anyone else. You can disconnect at any time from the app's Settings → Plugins pane." Publish again.</li>
+<li>Copy both URLs (homepage + privacy policy page).</li>
+</ol>
+<div class="card good">
+<p>If Google Sites is rejected as an authorised domain (rare), the fallback is a custom domain you own, verified in Google Search Console — but try Google Sites first; it works for the large majority of personal apps.</p>
+</div>
+</div>
+<ol>
+<li>On the OAuth consent screen page, find <b>Publishing status</b> and click <b>Publish app</b>.</li>
+<li>Confirm the dialog. The status changes from "Testing" to "In production".</li>
+<li>Google will warn about sensitive/restricted scopes and verification. For a personal app this is expected and harmless — proceed. (Verification is only required to remove the warning screen and the 100-user cap; neither blocks you.)</li>
+</ol>
+<div class="card red">
+<p><b>Do not skip this step.</b> A project left in "Testing" issues refresh tokens that die after 7 days, and Agni's whole point is to connect once and forget.</p>
+</div>
+</div>
+
+<div class="step"><span class="n">5</span><b>Create the OAuth client ID (Desktop app).</b>
+<ol>
+<li>Go to <b>APIs &amp; Services → Credentials → Create credentials → OAuth client ID</b>.</li>
+<li>Application type: <b>Desktop app</b>. Name: <code>Agni desktop</code>.</li>
+<li>Click Create. A dialog shows your <b>Client ID</b> and <b>Client Secret</b> — copy both now.</li>
+<li>Open the client ID you just created and, under <b>Authorized redirect URIs</b>, add exactly:
+<pre><code>http://127.0.0.1:8787/oauth/callback</code></pre>
+(Replace <code>8787</code> with your <code>AGNI_PORT</code> if you changed it.) Save.</li>
+</ol>
+</div>
+
+<div class="step"><span class="n">6</span><b>Put the credentials into Agni's <code>.env</code>.</b>
+<pre><code>GOOGLE_OAUTH_CLIENT_ID=&lt;paste client id&gt;
+GOOGLE_OAUTH_CLIENT_SECRET=&lt;paste client secret&gt;</code></pre>
+<p>Restart the daemon (<code>bun run daemon restart</code>) so it picks them up.</p>
+</div>
+
+<div class="step"><span class="n">7</span><b>Connect from the app.</b>
+<ol>
+<li>Open Agni → Settings → Plugins.</li>
+<li><b>Gmail</b> (Agni's and yours): already connected if <code>GMAIL_USER</code> + <code>GMAIL_APP_PASSWORD</code> are in <code>.env</code>. Click <b>Connect</b> to verify.</li>
+<li><b>Calendar &amp; Drive</b>: click <b>Connect</b>. Your browser opens Google's consent screen. Click <b>Advanced → proceed</b> once (the "unverified app" interstitial), then grant. The browser lands on a plain "connected" page; close the tab. The app's plugin row flips to <b>Connected</b>.</li>
+<li>Repeat for each account (Agni's mailbox and yours are separate grants — sign out of one Google account in the browser between them, or use the account chooser).</li>
+</ol>
+</div>
+
+<h2>What you get after this</h2>
+<ul>
+<li><b>Agni's Gmail</b> — full autonomy: search, read, draft, send, label. No approvals.</li>
+<li><b>Your Gmail</b> — search/read/draft direct; sends ask you first.</li>
+<li><b>Calendar (both accounts)</b> — search always; creating events and inviting people asks first on your account.</li>
+<li><b>Drive (yours)</b> — search/read direct; creating and sharing asks first.</li>
+<li><b>Granola + Notion</b> — connect via the same Plugins pane (MCP, browser sign-in, no Cloud project needed beyond this one).</li>
+</ul>
+
+<h2>Limits on the record</h2>
+<ul>
+<li><b>100-user cap</b> on the unverified project — irrelevant for a personal assistant, but if you ever host Agni for others they share this cap (and the interstitial).</li>
+<li><b>Tokens die if unused 6 months</b> or if you change the account password or revoke — reconnect from the pane to recover.</li>
+<li><b>Restricted-scope interstitial</b> re-appears if Google changes its policy; reconnect fixes it.</li>
+</ul>
+
+<footer>
+Agni plugins setup guide · 2026-10-17 · the daemon's OAuth client ID/secret live in <code>.env</code> (mode-600, gitignored); they never reach the apps or the agent. See <code>docs/plugins-plan.html</code> for the architecture behind this.</footer>
+</main>
+</body>
+</html>

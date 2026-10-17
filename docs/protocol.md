@@ -58,6 +58,30 @@ never reason about thread ids.
 | `task.update` | `{taskID, action, until?}` | Completes, reopens, or snoozes a task until an ISO timestamp. |
 | `provider.add` | `{providerID, apiKey, model?}` | Adds a supported API provider over the authenticated socket. The daemon stores the key and optional model ID in its mode-600 `.env` and updates the live router; the key is never returned. |
 | `provider.model.set` | `{providerID, model}` | Changes a configured provider's model ID on the daemon and updates the live router. |
+| `plugin.list` | `{}` | The plugin catalog bound to accounts (see below); answer: `plugin.list.ok`. |
+| `plugin.connect` | `{pluginID, account}` | Begin connecting `pluginID` to `account` (`agent` = Agni's own, `owner` = the user's). OAuth kinds answer `plugin.connect.ok` with an authorize URL to open in the system browser; MCP kinds are not connectable until their server pass lands. |
+| `plugin.disconnect` | `{connectionID}` | Revokes the connection (server-side tokens deleted, Google revoke called); answers and fans out the refreshed snapshot. |
+
+## Plugins
+
+A plugin row binds one catalog entry to one account role. `capabilities` is
+the owner's policy grid — `free` (no approval), `approval` (asks first), or
+`off` (refuses) — and lives entirely server-side in plugin capability
+policies; OAuth **scopes** (what Google granted) are separate from what the
+server then allows the agent to do with them. Wrapped-form actions opened in a
+browser complete back at the daemon's loopback redirect
+(`/oauth/callback`):
+
+| Frame | Payload | Notes |
+| --- | --- | --- |
+| `plugin.list.ok` | `{plugins: [PluginInfo]}` | Answer to `plugin.list` / `plugin.disconnect`; addressed to the requester, not replayed. |
+| `plugin.connect.ok` | `{pluginID, account, authorizeURL}` | Open `authorizeURL` in the system browser; `null` when nothing is needed. |
+| `plugin.state` | `{plugins: [PluginInfo]}` | Replayable snapshot emitted whenever a connection changes (browser callback landed, expired, errored, disconnected). |
+
+`PluginInfo`: `{id, name, category: "google"\|"mcp", description,
+authKind: "oauth"\|"mcp", account, scopes, capabilities,
+available, connectionID?, status?: "disconnected"\|"pending"\|"connected"\|"error",
+accountLabel?, error?, connectedAt?}`.
 
 ## server → client
 
@@ -92,7 +116,8 @@ never reason about thread ids.
 `unknown_agent`, `unknown_request`, `unknown_job`, `unknown_task`,
 `bad_task_action`, `capture_failed`, `job_running`, `no_provider`, `provider_failed`,
 `unknown_provider`, `invalid_key`, `provider_exists`, `provider_storage`,
-`resync_gap`, `internal`.
+`unknown_plugin`, `unknown_connection`, `plugin_not_configured`, `plugin_unavailable`,
+`plugin_connect_failed`, `resync_gap`, `internal`.
 
 ## Versioning
 

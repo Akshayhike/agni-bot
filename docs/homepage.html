@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agni — personal assistant</title>
+<style>
+:root{color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:#000;color:#fff;font:16px/1.6 ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;padding:40px 24px}
+main{max-width:640px;margin:0 auto}
+h1{font-size:28px;margin:0 0 12px;letter-spacing:-0.02em}
+h2{font-size:18px;margin:28px 0 8px;color:#cfd3d8}
+p{color:#d6d8dc;margin:0 0 12px}
+a{color:#8ab4ff;text-decoration:none}
+a:hover{text-decoration:underline}
+.small{color:#8b9096;font-size:13px;margin-top:32px}
+</style>
+</head>
+<body>
+<main>
+<h1>Agni</h1>
+<p>A speed-first personal assistant. This is its homepage and privacy policy.</p>
+
+<h2>What Agni does</h2>
+<p>Agni runs on your own machine (the daemon). It connects to the services you choose — Gmail, Google Calendar, Google Drive, Granola, Notion — and acts on your behalf under the permission rules you set in the app's Settings → Plugins pane.</p>
+
+<h2>Privacy policy</h2>
+<p><b>Data storage.</b> Conversation history, tasks, links, memories, and job schedules are stored in a local SQLite database on the machine running the daemon. Nothing is sent to any third party except the model providers you configure and the services you connect in the Plugins pane.</p>
+<p><b>Google account tokens.</b> OAuth refresh and access tokens are stored on the daemon host only (local database, mode-600). They are never sent to the apps, the agent, or any third party. You can revoke them at any time from Settings → Plugins → Disconnect.</p>
+<p><b>Untrusted input.</b> Email bodies, meeting notes, and document contents fetched by the agent are treated as data, never as instructions.</p>
+
+<p class="small">Agni · personal assistant · <a href="https://t7j737jnbmew.postplan.dev">Setup guide</a></p>
+</main>
+</body>
+</html>

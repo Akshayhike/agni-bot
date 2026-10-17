@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agni · Plugins, Accounts &amp; Settings plan — plugin library, OAuth accounts, settings shell</title>
+<style>
+:root{color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:#000;color:#fff;font:15px/1.55 ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;padding:0 16px 64px}
+main{max-width:1000px;margin:0 auto}
+h1{font-size:26px;line-height:1.2;margin:30px 0 6px;letter-spacing:-0.02em}
+h2{font-size:19px;margin:42px 0 10px;padding-top:18px;border-top:1px solid #1c1c1c}
+h3{font-size:16px;margin:24px 0 8px}
+p{margin:8px 0}
+a{color:#8ab4ff;text-decoration:none}
+a:hover{text-decoration:underline}
+code{background:#141414;border:1px solid #232323;border-radius:4px;padding:1px 5px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px}
+pre{background:#0a0a0a;border:1px solid #212121;border-radius:8px;padding:12px;overflow-x:auto;margin:10px 0}
+pre code{background:none;border:none;padding:0;font-size:12.5px;line-height:1.65}
+.sub{color:#9aa0a6;font-size:14px;margin:0 0 6px}
+.small{color:#8b9096;font-size:12.5px}
+ul,ol{margin:8px 0;padding-left:20px}
+li{margin:4px 0}
+.chip{display:inline-block;border:1px solid #3a3a3a;border-radius:999px;padding:1px 9px;font-size:12px;color:#cfd3d8;margin:2px 6px 6px 0;white-space:nowrap}
+.chip.ok{border-color:#2c5f38;color:#7ee29a}
+.chip.warn{border-color:#6e2b2b;color:#ff8d8d}
+.chip.core{border-color:#8a5d10;color:#f0b95a}
+.chip.later{border-color:#3a3a5c;color:#9aa6ff}
+.card{border:1px solid #232323;border-radius:10px;padding:14px 16px;margin:14px 0;background:#050505}
+.card.good{border-left:3px solid #63d471}
+.card.blue{border-left:3px solid #6f7bff}
+.card.amber{border-left:3px solid #f0b95a}
+.card.red{border-left:3px solid #ff6b6b}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:12px 0}
+table{border-collapse:collapse;width:100%;font-size:13.5px;min-width:640px}
+th,td{border:1px solid #212121;padding:7px 9px;text-align:left;vertical-align:top}
+th{background:#0e0e0e;color:#cfd3d8;font-weight:600;white-space:nowrap}
+td b{color:#fff}
+blockquote{margin:10px 0;padding:8px 12px;border-left:3px solid #2e2e2e;background:#0a0a0a;color:#e6e8ea}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin:12px 0}
+.kv{border:1px solid #222;border-radius:8px;padding:10px 12px;background:#070707}
+.kv b{display:block;font-size:11.5px;color:#9aa0a6;text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px}
+.flow{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;color:#c9cdd2;background:#0a0a0a;border:1px solid #212121;border-radius:8px;padding:10px 12px;overflow-x:auto;white-space:pre}
+footer{margin-top:52px;border-top:1px solid #1c1c1c;padding-top:14px;color:#8b9096;font-size:12.5px}
+
+/* ---- static settings mock, mirrors the reference screenshot ---- */
+.mock-wrap{margin:16px 0;border:1px solid #1e1e1e;border-radius:12px;background:#080808;padding:18px;overflow-x:auto}
+.mock-modal{display:flex;min-width:660px;max-width:860px;margin:0 auto;height:420px;border:1px solid #1c1c1c;border-radius:14px;background:#0e0e0e;overflow:hidden;box-shadow:0 18px 60px rgba(0,0,0,.55)}
+.mock-rail{width:200px;background:#0a0a0a;border-right:1px solid #1a1a1a;padding:14px 10px;flex-shrink:0}
+.mock-rail .item{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:8px;color:#bdbfc4;font-size:13px}
+.mock-rail .item.on{background:#2e2e30;color:#fff}
+.mock-rail .ic{width:15px;height:15px;stroke:#bdbfc4;stroke-width:1.6;fill:none;flex-shrink:0}
+.mock-pane{flex:1;padding:20px 24px;overflow-y:auto;position:relative}
+.mock-pane h4{margin:0 0 14px;font-size:17px;font-weight:600}
+.mock-close{position:absolute;top:16px;right:18px;width:22px;height:22px;stroke:#8b9096;stroke-width:1.6}
+.mock-lbl{color:#9aa0a6;font-size:12.5px;margin:16px 0 6px}
+.mock-card{background:#171719;border:1px solid #232325;border-radius:10px;padding:10px 12px;margin-bottom:10px}
+.mock-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border-radius:8px}
+.mock-row+.mock-row{border-top:1px solid #232326}
+.mock-row .nm{font-size:13.5px;color:#fff}
+.mock-row .ds{font-size:11px;color:#8b9096;margin-top:1px}
+.mock-dd{background:#252527;border:1px solid #333336;border-radius:7px;padding:4px 9px;font-size:12px;color:#d6d8dc;white-space:nowrap}
+.mock-dd .dim{color:#8b9096}
+.mock-sw{width:30px;height:18px;border-radius:9px;background:#3fb3f6;position:relative;flex-shrink:0}
+.mock-sw:after{content:"";position:absolute;top:2px;right:2px;width:14px;height:14px;border-radius:50%;background:#fff}
+.mock-btn{background:#252527;border:1px solid #333336;border-radius:7px;padding:5px 11px;font-size:12.5px;color:#fff;display:inline-block;margin-top:8px}
+.mock-conn{flex:1;display:flex;align-items:center;justify-content:center;text-align:center;color:#9aa0a6;font-size:12.5px;border:1px dashed #26262a;border-radius:10px;padding:14px;margin:6px 0}
+.mock-conn b{color:#e8eaec;font-size:13.5px}
+.mock-chip{display:inline-block;border:1px solid #2c5f38;color:#7ee29a;border-radius:999px;padding:1px 8px;font-size:10.5px;margin-left:8px;vertical-align:1px}
+.mock-chip.plan{border-color:#6e2b2b;color:#ff8d8d}
+</style>
+</head>
+<body>
+<main>
+
+<h1>Agni — Plugins, Accounts &amp; Settings</h1>
+<p class="sub">A plugin library in the app · agent's own mailbox gets full autonomy, your accounts get scoped profiles · Google trio goes OAuth (no 2FA needed) · Granola and Notion ride the existing MCP client · settings shell rebuilt to the modal reference. Supersedes the auth section of the <a href="https://bhiqre07gz60.postplan.dev" target="_blank" rel="noopener noreferrer">Central Gmail plan</a>; everything else there still stands.</p>
+<p class="small">2026-10-17 · plan only — no implementation · decisions locked this thread are in §1 · evidence verified today is in the footer.</p>
+
+<h2 id="decisions">1 · Your calls, locked in</h2>
+<div class="scroll">
+<table>
+<tr><th>Your call</th><th>What it means in the plan</th></tr>
+<tr><td>&ldquo;Anything from <i>its</i> email I don't care what happens — it's <i>its</i> email&rdquo;</td><td><b>Full autonomy on <code>hey.agnibot@gmail.com</code>.</b> No per-send approvals, no read limits, calendar and drive actions it wants. The plugin policy for the agent's own account is <code>mode: "own — unrestricted"</code>. You never need to supervise what it does <i>in its own account</i>. (One repo-rule amendment required — see §4.)</td></tr>
+<tr><td>&ldquo;Mine one I really care about&rdquo;</td><td><b>Your Google account gets scoped profiles, never free rein.</b> Different plugin policy per account: read/search/draft are direct; anything that modifies <i>your</i> data (send, delete, share) is approval-gated by default. The plugin framework exists to express exactly this difference.</td></tr>
+<tr><td>&ldquo;No 2FA on that account unless Google requires it&rdquo;</td><td><b>Auth strategy pivoted from app passwords to OAuth.</b> Verified today: Gmail app passwords require 2-Step Verification to even exist — so without 2FA the old plan's IMAP/SMTP path is flat-out impossible. The replacement (Google OAuth, production-unverified status) works, needs no 2FA, and gives non-expiring tokens. Details + evidence in §3. If Google someday forces 2SV on the account, turning it on later costs ~10 minutes and changes nothing structurally.</td></tr>
+<tr><td>&ldquo;It can search its email and email stuff, calendar and stuff, whenever it wants&rdquo;</td><td>No human-in-the-loop on its own account, ever — the stop condition is onlySpam/abuse limits and Gmail's own quotas, plus one global kill switch you control.</td></tr>
+<tr><td>&ldquo;Plugin library in the app&rdquo;</td><td>Plugins are a first-class concept: a catalog, per-account scopes, connect/disconnect from the settings shell, capabilities surfaced as tools for the agent. §5.</td></tr>
+<tr><td>&ldquo;Settings should look like this&rdquo; + the reference screenshot</td><td>The settings shell is rebuilt as a modal with a left rail (General, Plugins, Models, Usage, Devices, Updates) and grouped cards — the pattern in your reference image. §2 has the mock.</td></tr>
+</table>
+</div>
+
+<h2 id="settings">2 · The settings shell — what replaces the messy way</h2>
+<p>The reference (Grok-Bot-style settings) earns its keep for three structural reasons, not its visuals: <b>one modal, not a page maze</b>; a <b>narrow left rail of categories</b>; and <b>grouped cards inside</b> with rows whose control is a dropdown, a toggle, or a button. Nothing else is required. The design below mirrors that pattern exactly.</p>
+<div class="mock-wrap">
+  <div class="mock-modal">
+    <div class="mock-rail">
+      <div class="item"><svg class="ic" viewBox="0 0 24 24"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm7.4-3a7.4 7.4 0 0 0-.1-1.2l2-1.5-2-3.5-2.3 1a7.3 7.3 0 0 0-2-1.2L14.6 3H9.4l-.4 2.6a7.3 7.3 0 0 0-2 1.2l-2.3-1-2 3.5 2 1.5a7.4 7.4 0 0 0 0 2.4l-2 1.5 2 3.5 2.3-1a7.3 7.3 0 0 0 2 1.2l.4 2.6h5.2l.4-2.6a7.3 7.3 0 0 0 2-1.2l2.3 1 2-3.5-2-1.5c.06-.4.1-.8.1-1.2Z"/></svg>General</div>
+      <div class="item on"><svg class="ic" viewBox="0 0 24 24"><path d="M20 12.5V11a3 3 0 0 0 0-6h-1a8 8 0 0 0-14 0H4a3 3 0 0 0 0 6v1.5M20 12.5a8 8 0 1 1-16 0M20 12.5V19M4 19v-6.5M8 21v-2m8 2v-2"/></svg>Plugins</div>
+      <div class="item"><svg class="ic" viewBox="0 0 24 24"><path d="M4 20v-6m0-8V4m8 16v-4m0-10V4m8 16v-9m0-7V4M2 14h4m2-8h4m2 10h4m2-7h4"/></svg>Models</div>
+      <div class="item"><svg class="ic" viewBox="0 0 24 24"><path d="M4 20h16M4 20V10m4 10v-8m4 8V6m4 14v-5"/></svg>Usage</div>
+      <div class="item"><svg class="ic" viewBox="0 0 24 24"><path d="M3 8h18v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8Zm0 0 2-3h14l2 3M12 12h.01"/></svg>Devices</div>
+      <div class="item"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3v2m0 14v2m-7-9H3m18 0h-2m-2.2-4.8 1.4-1.4M6.8 17.2l1.4-1.4m0-7.6L6.8 6.8m10.4 10.4-1.4-1.4M9 12a3 3 0 1 0 6 0 3 3 0 0 0-6 0Z"/></svg>Updates</div>
+    </div>
+    <div class="mock-pane">
+      <svg class="mock-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      <h4>Plugins</h4>
+      <div class="mock-lbl" style="margin-top:0">Google · agent-owned</div>
+      <div class="mock-card">
+        <div class="mock-row">
+          <div><div class="nm">Agni's Gmail <span class="mock-chip">Connected</span></div><div class="ds">Full access · sends without approval · hey.agnibot@gmail.com</div></div>
+          <div class="mock-dd">Open</div>
+        </div>
+        <div class="mock-row">
+          <div><div class="nm">Agni's Calendar</div><div class="ds">Read + create events on its own calendar</div></div>
+          <div class="mock-dd">Open</div>
+        </div>
+      </div>
+      <div class="mock-lbl">Google · your account</div>
+      <div class="mock-card">
+        <div class="mock-row">
+          <div><div class="nm">Your Gmail</div><div class="ds">Read + draft direct · sends ask first</div></div>
+          <div class="mock-dd"><span class="dim">Connect…</span></div>
+        </div>
+        <div class="mock-row">
+          <div><div class="nm">Your Calendar <span class="mock-chip">Connected</span></div><div class="ds">Read always · creates &amp; invites ask first</div></div>
+          <div class="mock-dd">Open</div>
+        </div>
+        <div class="mock-row">
+          <div><div class="nm">Your Drive</div><div class="ds">Search + read direct · create &amp; share ask first</div></div>
+          <div class="mock-dd"><span class="dim">Connect…</span></div>
+        </div>
+      </div>
+      <div class="mock-lbl">MCP servers</div>
+      <div class="mock-card">
+        <div class="mock-row">
+          <div><div class="nm">Granola <span class="mock-chip">Connected</span></div><div class="ds">Meetings, notes, transcripts · read-only · Browser sign-in ran once with you at the keyboard</div></div>
+          <div class="mock-dd">Open</div>
+        </div>
+        <div class="mock-row">
+          <div><div class="nm">Notion</div><div class="ds">Official Notion MCP + Notion skills bundle</div></div>
+          <div class="mock-dd"><span class="dim">Connect…</span></div>
+        </div>
+        <div class="mock-row">
+          <div><div class="nm">REA</div><div class="ds">Reverse-engineering tools · wired through the same client</div></div>
+          <div class="mock-dd">Open</div>
+        </div>
+      </div>
+      <div class="mock-lbl">Later</div>
+      <div class="mock-conn"><div><b>WhatsApp</b> — future scope.</div></div>
+    </div>
+  </div>
+</div>
+
+<h2 id="auth">3 · The auth pivot — how Google connects without 2FA</h2>
+<div class="card amber">
+<p><b>The old path is dead for your constraints.</b> Verified today from Google's own help pages: <i>“App passwords can only be used with accounts that have 2-Step Verification turned on.”</i> No 2FA ⇒ no app password ⇒ no IMAP/SMTP login at all. So Blueprint v3 §9's app-password line and the Gmail plan's §3 checklist are retired.</p>
+</div>
+<p><b>The replacement is OAuth with one specific publishing-status trick</b> — verified today against Google's developer docs and a documented working example:</p>
+<ul>
+<li>One Google Cloud project. OAuth consent screen: user type External, <b>publish status set to “In production”</b> — and deliberately left <b>unverified</b>. The 7-day refresh-token expiry from the blueprint's “OAuth trap” applies only to projects left in <i>Testing</i> status; production status (even unverified) issues non-expiring refresh tokens for sensitive <i>and</i> restricted scopes. This is the documented, reproducible escape.</li>
+<li>The price of skipping verification is small and personal-scale: a one-time <i>“Google hasn't verified this app → Advanced → proceed”</i> interstitial per account during connect (you click it once), a 100-user cap (2–3 accounts total — irrelevant), and consent screens showing the app name without branding.</li>
+<li><b>Scopes minted while the project was in Testing keep their 7-day clock</b> — we connect <i>after</i> flipping to production, and the token inspector field (<code>refresh_token_expires_in</code> absent = immortal) is the proof-check in build step 2.</li>
+<li>Only standard rules remain afterwards: tokens die if unused 6 months (a personal assistant will never idle that long), if you change the account's password, or if you revoke — all recoverable by re-connecting in the settings pane.</li>
+</ul>
+<div class="scroll">
+<table>
+<tr><th>Account</th><th>Scopes requested</th><th>Why</th></tr>
+<tr><td>Agent's own Google account</td><td><code>gmail.modify</code> · <code>calendar</code> · (drive if ever needed: <code>drive</code>)</td><td><code>gmail.modify</code> = read, drafts, send, labels — everything short of permanent deletion, which we don't want even on its own account. <code>calendar</code> = search + create + invite.</td></tr>
+<tr><td>Your Google account</td><td><code>gmail.modify</code> · <code>calendar</code> · <code>drive</code></td><td>Same <i>scopes</i> — restriction is not scope-level. It lives in our per-account capability policies (§4): same token, different rules. Diagnosing “did the app restrict itself or did Google” stays unambiguous.</td></tr>
+</table>
+</div>
+<p class="flow">Connect flow (per account, ~30 s: settings pane → “Connect…”
+  → app opens system browser → Google consent (one interstitial click)
+  → redirect to 127.0.0.1 loopback on the Mac → server exchanges code
+  → refresh + access tokens stored server-side (mode-600)
+  → plugin row flips to “Connected”, agent tools register)</p>
+
+<h2 id="plugin">4 · What a plugin is — the framework, not just a list</h2>
+<p>Every entry in the settings rail is an instance of one shape, so adding plugin #7 is data, not surgery:</p>
+<ul>
+<li><b>Manifest</b> (server-side, TypeScript like personas): id, display name, tool names it contributes, auth kind (<code>oauth</code> / <code>mcp</code> / <code>api-key</code>), required scopes, approval defaults per capability class, icon/category.</li>
+<li><b>Connection store</b>: one row per (plugin, account). Carries account label (“Agni” vs “Nachiketh”), status, token blob (server-side only), last health check, granted-at. New numbered migration; feeds a <code>settings</code> protocol frame so the app draws the pane from live server state — not hardcoded UI.</li>
+<li><b>Capability matrix</b> — the core of the whole plan. Every plugin action belongs to a class, and each (plugin × account) pair sets a policy per class:</li>
+</ul>
+<div class="scroll">
+<table>
+<tr><th>Capability class</th><th>Agent's own account</th><th>Your accounts</th></tr>
+<tr><td>Search / read / list</td><td><b>Free</b></td><td><b>Free</b></td></tr>
+<tr><td>Draft / stage (nothing leaves the box)</td><td><b>Free</b></td><td><b>Free</b></td></tr>
+<tr><td>Send / publish / create events / share files</td><td><b>Free</b> — it's its mailbox</td><td><b>Approval per action</b>, bubble previewed; “always allow this recipient/file-type” unlocks later</td></tr>
+<tr><td>Delete / modify existing</td><td>Free (except permanent delete — scope-omitted)</td><td>Approval per action, and mostly unnecessary</td></tr>
+<tr><td>Payments (none of these plugins touch money today)</td><td colspan="2">Always ask, as ever — carried from the guardrails list</td></tr>
+</table>
+</div>
+<div class="card red">
+<p><b>Repo-rules amendment this plan proposes:</b> AGENTS.md currently reads <i>“Shell, file writes outside scratch, email sends, and payments are approval-gated.”</i> It needs one clause: <i>…except sends from Agni's own configuring account, which are ungated by owner decision (2026-10-17)</i>. Shell, payments, and anything touching <i>your</i> accounts stay gated. Without editing the rule file, the build would violate its own documented guardrails.</p>
+</div>
+<p><b>Untrusted-input rule unchanged</b> and now load-bearing: the agent will read mail/meetings/doc comments written by strangers while holding uncapped power <i>in its own account</i>. A mail body, a Granola transcript, a Drive comment — all stay data-with-provenance; instructions inside are flagged, never executed. Its unrestricted-but-own-account reach is exactly why the injection rule is a guardrail, not a nicety.</p>
+
+<h2 id="roster">5 · The plugin roster — v1 set</h2>
+<div class="scroll">
+<table>
+<tr><th>Plugin</th><th>What the agent can do</th><th>Integration</th><th>Phase</th></tr>
+<tr><td><b>Gmail — agent mailbox</b></td><td>Search, read, draft, send, label, plus-aliasing (<code>hey.agnibot+service@gmail.com</code>), inbox watcher into threads</td><td>Gmail REST API over OAuth — replaces IMAP/SMTP entirely. Polling via <code>historyId</code> every ~2 min (free; no Pub/Sub needed)</td><td>PS3</td></tr>
+<tr><td><b>Gmail — your mailbox</b> (optional, later)</td><td>Search + read + draft direct; sends only with your per-action approval; “Reply to Sarah about Thursday” = preview → you tap</td><td>Same Gmail plugin, second connection row with your policy set</td><td>PS3+</td></tr>
+<tr><td><b>Calendar</b></td><td>Search events/meetings, create events, propose invites — free rein on its own calendar; on yours, creates/invites ask first, reads never</td><td>Calendar REST API over OAuth (retires the ICS read-only hack for writes; ICS stays a fallback)</td><td>PS4</td></tr>
+<tr><td><b>Drive</b></td><td>Search files, read out contents, create/upload, share with people — reads direct on yours, creates &amp; shares ask first</td><td>Drive REST API over OAuth (full <code>drive</code> scope — <code>drive.file</code> can't read existing files)</td><td>PS4</td></tr>
+<tr><td><b>Granola</b></td><td>“What did the team decide on the pricing call?” — list/search notes + transcripts, pull action items, feed your meetings into the 07:55 brief</td><td><b>Official Granola MCP</b> (<code>mcp.granola.ai/mcp</code>) — browser OAuth you complete once, riding the P3 MCP client. Read-only by design. Free plan = personal notes · 30 days; Business plan unlocks team/public notes + transcript tools — matches “team discussed” needs</td><td>PS5</td></tr>
+<tr><td><b>Notion</b></td><td>Search/read/write pages and databases, ask “where does X live”, log meeting outputs to the right page</td><td><b>Official Notion MCP</b> (hosted, OAuth) via the same client, plus <b>Notion skills</b> bundle (query patterns, schema sense) in the progressive-disclosure catalog</td><td>PS5</td></tr>
+<tr><td><b>WhatsApp</b></td><td colspan="3"><b>Future scope — parked per your call.</b> Parked with eyes open: personal WhatsApp control has no official API; the unofficial-automation route risks account bans, and the official Business Cloud API sends from a separate business number, not yours. None of that is good enough until Meta changes either of those facts. Revisit only when you ask.</td></tr>
+<tr><td><b>REA</b> (already wired)</td><td colspan="3">Becomes the first entry in the same Plugins pane — nothing new built, just displayed through the new catalog.</td></tr>
+</table>
+</div>
+<p class="small">Granola plan check: MCP scope is read-only — the “ask the agent to do things <i>about</i> meetings” half happens through the other plugins (tasks, Notion writes, calendar invites), not through Granola itself. If a write-capable Granola surface ever ships, it plugs into the same manifest without rework.</p>
+
+<h2 id="models">6 · What the settings rail holds besides Plugins</h2>
+<div class="grid">
+<div class="kv"><b>General</b>The bot's identity card: account (Agni), its mailbox row (managed-by-agent chip), appearance (theme/language — the app is black-first, but the control exists), system toggles. Mirrors the reference 1:1.</div>
+<div class="kv"><b>Models</b>Provider health + per-lane model dropdowns — the existing <code>providers.json</code> settings get their pane here instead of ad-hoc UI. This is the current “messy” surface, absorbed and cleaned.</div>
+<div class="kv"><b>Usage</b>Tokens/day per lane, per-provider spend ledger, kill switch. Already computed server-side; now visible in one card group.</div>
+<div class="kv"><b>Devices · Updates</b>Pairing/revoke (token pairing exists in the CLI today; it gets a pane) and app update channel. Lowest priority of the rail.</div>
+</div>
+
+<h2 id="order">7 · Build order — five steps, each with its proof</h2>
+<div class="scroll">
+<table>
+<tr><th>Step</th><th>Build</th><th>Proof</th></tr>
+<tr><td><b>PS1 · Settings shell</b><br>(app + protocol)</td><td>Modal + rail + General pane per §2; <code>settings.list</code> / <code>settings.ui_state</code> frames in <code>packages/protocol</code> (minor bump + docs update); plugins pane renders an empty catalog gracefully.</td><td>The modal looks/behaves like the reference on Mac; closing mid-turn never disturbs the streaming thread behind it.</td></tr>
+<tr><td><b>PS2 · Plugin framework + OAuth core</b><br>(server)</td><td>Manifest registry, connection store migration, connect flow (system browser → loopback redirect → token store), refresh daemon, per-(plugin×account) capability matrix, Cloud project flipped to production-unverified <i>before</i> first connect.</td><td>“Connect Agni's Google account” completes once; token response shows <b>no <code>refresh_token_expires_in</code></b> (the no-expiry proof); a forced refresh after 1 h just works. Plugin rows show live status; disconnect revokes tokens server-side + via Google.</td></tr>
+<tr><td><b>PS3 · Gmail plugin</b></td><td>Gmail API client (list/search/read/draft/send/labels), <code>mail_messages</code> store + FTS5, inbox watcher → thread summaries, five <code>mail.*</code> tools with your-mailbox policy branch; AGENTS.md amendment worded in §4 landed in the same PR.</td><td>“Check your mail” works from the app; agent sends from its own mailbox with <b>no approval prompt</b>; a send attempted against <i>your</i> mailbox pops the approval sheet with full preview — approve → sends, deny → clean no-op.</td></tr>
+<tr><td><b>PS4 · Calendar + Drive</b></td><td>Calendar REST (search/create/invite with own-vs-your-account policy), Drive REST (search/read/create/share).</td><td>“Find the pricing call notes and book a follow-up” touches both plugins in one turn; an event created on <i>your</i> calendar showed you the approval card first; Drive share of a sheet asked first.</td></tr>
+<tr><td><b>PS5 · MCP-hosted plugins</b></td><td>Granola + Notion manifests riding the existing MCP client; both go through the same connect UI (browser OAuth); Notion skills bundle into the catalog.</td><td>“What did we agree in the quarterly review?” pulls the meeting from Granola, cross-checks Notion, drafts the follow-up as an email from Agni's Gmail — three plugins, one sentence, send lands without a prompt (its own mailbox).</td></tr>
+</table>
+</div>
+
+<h2 id="limits">8 · Known limits, on the record</h2>
+<div class="grid">
+<div class="kv"><b>Unverified interstitial</b>The one-time “Google hasn't verified this app” screen during connect is cosmetic and uncontroversial; a real verification review is the alternative and nobody should want that paperwork for a one-user app.</div>
+<div class="kv"><b>Granola plan tier</b>If the free tier is what's active, MCP sees personal notes (30 days) only — team-space notes need the Business plan. The roster table in §5 says which plan buys which reach; check the workspace settings once.</div>
+<div class="kv"><b>Gmail quotas</b>REST sending caps (per-user/day) are generous beyond personal scale and the send ledger keeps them visible; the agent's own account hitting a soft cap is a non-event, not an incident.</div>
+<div class="kv"><b>Two Google accounts, one project</b>The 100-user cap is per-project; both accounts consuming separate slots is fine. If a third appears someday (a “family” account?) it's still nowhere near the ceiling.</div>
+</div>
+
+<h2 id="open">9 · Open items before any build starts</h2>
+<ol>
+<li><b>Cloud project creation</b> needs doing once in your browser (I can't create it under your account): new project → OAuth consent screen (External, production status, unverified) → desktop client ID → skip whatever Google nags about. I'll write the 5-minute click-path into a doc when we start PS2.</li>
+<li><b>Granola plan check</b>: is your workspace Basic or Business? It decides whether team notes are reachable at PS5 or need an upgrade first. No default — just tell me.</li>
+<li><b>Approvals on your Calendar/Drive creates</b>: default is ask-per-action. If you'd rather pre-authorize specific flows (“always allow creating events on my calendar with Agni + you both invited”), say which and they become named exceptions.</li>
+</ol>
+
+<footer>
+Plugins, Accounts &amp; Settings plan · 2026-10-17 · agni repo docs/ · supersedes the auth section of the Central Gmail plan (https://bhiqre07gz60.postplan.dev) and the app-password line in Blueprint v3 §9.<br>
+Evidence verified 2026-10-17: Google Help — <blockquote style="margin:4px 0">“App passwords can only be used with accounts that have 2-Step Verification turned on”</blockquote> (support.google.com/mail/answer/185833) · Google docs — refresh tokens expire at 7 days only while the project is in <i>Testing</i> publishing status; production status (unverified allowed, ≤100 users, unverified-warning interstitial) issues non-expiring refresh tokens for sensitive and restricted scopes, confirmed in googleapis OAuth 2.0 docs (developers.google.com/identity/protocols/oauth2) and by documented field-level reproduction (<code>refresh_token_expires_in</code> absent in production) · Granola official docs — API keys are Business/Enterprise-only, MCP at <code>mcp.granola.ai/mcp</code> is browser-OAuth, read-only, available on all plans (Basic = personal notes · 30 days) (docs.granola.ai) · Notion—and its MCP server status per Notion's developer docs as commonly deployed.
+</footer>
+
+</main>
+</body>
+</html>

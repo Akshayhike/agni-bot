@@ -1,0 +1,1326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Agni Bot UI Redesign Mocks</title>
+<style>
+  :root {
+    --bg-page: #090a0f;
+    --text-primary: #f3f4f6;
+    --text-secondary: #9ca3af;
+    --text-muted: #6b7280;
+    --accent-agni: #ff5500;
+    --accent-agni-glow: rgba(255, 85, 0, 0.25);
+    --accent-cyan: #06b6d4;
+    --accent-emerald: #10b981;
+    --accent-purple: #8b5cf6;
+    --border-color: #26262a;
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #090a0f;
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    padding: 24px;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+  }
+
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  /* Header & Switcher */
+  .control-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 20px;
+    background: #111216;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 16px 20px;
+  }
+  .control-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .brand-badge {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .flame-icon {
+    width: 32px;
+    height: 32px;
+    background: linear-gradient(135deg, #ff7700, #ff2200);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 0 16px rgba(255, 68, 0, 0.4);
+  }
+  .flame-icon svg { width: 19px; height: 19px; fill: white; }
+  .brand-title {
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: #fff;
+  }
+  .brand-subtitle {
+    font-size: 12.5px;
+    color: var(--text-secondary);
+  }
+
+  /* Tabs */
+  .mock-tabs {
+    display: flex;
+    background: #08090b;
+    padding: 4px;
+    border-radius: 8px;
+    border: 1px solid #1f2128;
+    gap: 4px;
+  }
+  .tab-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.18s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .tab-btn:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.05);
+  }
+  .tab-btn.active {
+    background: #20222a;
+    color: #fff;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .tab-badge {
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 10px;
+    background: #2b2e3a;
+    color: #94a3b8;
+  }
+  .tab-btn.active .tab-badge {
+    background: var(--accent-agni);
+    color: white;
+  }
+
+  .mock-description {
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    border-top: 1px solid #1c1e24;
+    padding-top: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .tag-group {
+    display: flex;
+    gap: 6px;
+  }
+  .feature-tag {
+    font-size: 11px;
+    background: #181920;
+    border: 1px solid #2d303b;
+    border-radius: 4px;
+    padding: 3px 8px;
+    color: #cbd5e1;
+    font-family: var(--font-mono);
+  }
+
+  /* Mock Window Container */
+  .window-frame {
+    background: #0d0e12;
+    border: 1px solid #252833;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.05);
+    display: none;
+  }
+  .window-frame.active {
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* macOS Traffic Lights */
+  .traffic-lights {
+    display: flex;
+    gap: 7px;
+    align-items: center;
+    padding-left: 14px;
+  }
+  .light {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+  }
+  .light-close { background: #ff5f57; box-shadow: inset 0 0 1px rgba(0,0,0,0.5); }
+  .light-min { background: #febc2e; box-shadow: inset 0 0 1px rgba(0,0,0,0.5); }
+  .light-max { background: #28c840; box-shadow: inset 0 0 1px rgba(0,0,0,0.5); }
+
+  /* COMMON COMPONENTS */
+  .status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+  .status-dot.green { background: #10b981; box-shadow: 0 0 6px #10b981; }
+  .status-dot.orange { background: #f59e0b; box-shadow: 0 0 6px #f59e0b; }
+  .status-dot.fire { background: #ff5500; box-shadow: 0 0 6px #ff5500; }
+
+  /* =====================================================================
+     MOCK 1: RAKAZO-INSPIRED AGENT WORKSPACE (MODULAR STUDIO)
+     ===================================================================== */
+  .m1-app {
+    display: grid;
+    grid-template-columns: 240px 1fr 280px;
+    min-height: 620px;
+    background: #090a0d;
+  }
+  @media (max-width: 900px) {
+    .m1-app { grid-template-columns: 220px 1fr; }
+    .m1-sidebar-right { display: none !important; }
+  }
+
+  .m1-sidebar-left {
+    background: #0e1015;
+    border-right: 1px solid #1c1f26;
+    display: flex;
+    flex-direction: column;
+  }
+  .m1-sidebar-header {
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 12px;
+    border-bottom: 1px solid #181b22;
+  }
+  .m1-search-box {
+    margin: 10px 12px;
+    background: #14171f;
+    border: 1px solid #242936;
+    border-radius: 7px;
+    padding: 6px 9px;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .m1-section-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #64748b;
+    padding: 8px 14px 4px;
+    font-weight: 700;
+  }
+  .m1-agent-list {
+    display: flex;
+    flex-direction: column;
+    padding: 0 8px;
+    gap: 3px;
+    overflow-y: auto;
+    flex: 1;
+  }
+  .m1-agent-item {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 7px 9px;
+    border-radius: 7px;
+    font-size: 13px;
+    color: #cbd5e1;
+    cursor: pointer;
+    transition: background 0.15s;
+    text-decoration: none;
+  }
+  .m1-agent-item:hover { background: #151821; }
+  .m1-agent-item.active {
+    background: #1e2330;
+    color: #fff;
+    font-weight: 600;
+    border-left: 2px solid var(--accent-agni);
+  }
+  .m1-avatar {
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  .m1-sidebar-footer {
+    border-top: 1px solid #181b22;
+    padding: 10px 12px;
+    font-size: 12px;
+    color: #64748b;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #0b0c10;
+  }
+
+  .m1-chat-container {
+    display: flex;
+    flex-direction: column;
+    background: #0b0d12;
+    position: relative;
+  }
+  .m1-chat-header {
+    height: 48px;
+    border-bottom: 1px solid #1c1f26;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    background: #0d0f14;
+  }
+  .m1-header-info {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+  }
+  .m1-agent-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #fff;
+  }
+  .m1-model-pill {
+    font-size: 11px;
+    padding: 2px 7px;
+    border-radius: 12px;
+    background: #19202e;
+    color: #38bdf8;
+    border: 1px solid #233147;
+    font-family: var(--font-mono);
+  }
+  .m1-chat-feed {
+    flex: 1;
+    overflow-y: auto;
+    padding: 18px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .m1-msg {
+    display: flex;
+    gap: 12px;
+    max-width: 90%;
+  }
+  .m1-msg.user {
+    align-self: flex-end;
+    flex-direction: row-reverse;
+  }
+  .m1-msg-bubble {
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-size: 13.5px;
+    line-height: 1.5;
+  }
+  .m1-msg.user .m1-msg-bubble {
+    background: #1e293b;
+    color: #f8fafc;
+    border: 1px solid #334155;
+    border-bottom-right-radius: 2px;
+  }
+  .m1-msg.bot .m1-msg-bubble {
+    background: #11141c;
+    color: #e2e8f0;
+    border: 1px solid #1e2330;
+    border-bottom-left-radius: 2px;
+    width: 100%;
+  }
+
+  .tool-card {
+    margin: 8px 0;
+    background: #090a0f;
+    border: 1px solid #222736;
+    border-radius: 8px;
+    overflow: hidden;
+    font-size: 12px;
+  }
+  .tool-header {
+    background: #131722;
+    padding: 7px 11px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: #94a3b8;
+    cursor: pointer;
+    border-bottom: 1px solid #1f2533;
+  }
+  .tool-header span {
+    font-family: var(--font-mono);
+    color: #38bdf8;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .tool-body {
+    padding: 8px 12px;
+    font-family: var(--font-mono);
+    color: #cbd5e1;
+    font-size: 11.5px;
+    background: #08090d;
+  }
+  .approval-card {
+    background: #151610;
+    border: 1px solid #423b1c;
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-top: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .approval-text { font-size: 12px; color: #fde047; }
+  .approval-btn {
+    padding: 4px 10px;
+    border-radius: 5px;
+    font-size: 11.5px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+  }
+  .btn-approve { background: #16a34a; color: white; }
+  .btn-reject { background: #374151; color: #d1d5db; }
+
+  .m1-input-area {
+    padding: 12px 16px;
+    background: #0d0f15;
+    border-top: 1px solid #1a1e27;
+  }
+  .m1-input-box {
+    background: #13161f;
+    border: 1px solid #242938;
+    border-radius: 9px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .m1-textarea-mock {
+    color: #94a3b8;
+    font-size: 13px;
+    border: none;
+    background: transparent;
+    outline: none;
+    resize: none;
+  }
+  .m1-input-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 4px;
+    border-top: 1px solid #1d2230;
+  }
+  .m1-action-icons { display: flex; gap: 8px; color: #64748b; font-size: 13px; }
+  .m1-send-btn {
+    background: var(--accent-agni);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 4px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .m1-sidebar-right {
+    background: #0c0e13;
+    border-left: 1px solid #1c1f26;
+    display: flex;
+    flex-direction: column;
+    padding: 14px;
+    gap: 14px;
+    overflow-y: auto;
+  }
+  .m1-panel-card {
+    background: #11141b;
+    border: 1px solid #1f2430;
+    border-radius: 8px;
+    padding: 12px;
+  }
+  .m1-panel-heading {
+    font-size: 12px;
+    font-weight: 700;
+    color: #e2e8f0;
+    margin-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+  }
+  .telemetry-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: #94a3b8;
+    padding: 3px 0;
+    font-family: var(--font-mono);
+  }
+  .telemetry-val { color: #f1f5f9; font-weight: 600; }
+
+  /* =====================================================================
+     MOCK 2: OBSIDIAN SPEED / TERMINAL CANVASS (BLUEPRINT V3 CANONICAL)
+     ===================================================================== */
+  .m2-app {
+    display: grid;
+    grid-template-columns: 210px 1fr;
+    min-height: 620px;
+    background: #000000;
+  }
+  .m2-sidebar {
+    background: #050505;
+    border-right: 1px solid #171717;
+    display: flex;
+    flex-direction: column;
+  }
+  .m2-titlebar {
+    height: 44px;
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid #141414;
+    padding: 0 12px;
+    gap: 12px;
+  }
+  .m2-server-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-family: var(--font-mono);
+    color: #22c55e;
+    background: rgba(34, 197, 94, 0.08);
+    border: 1px solid rgba(34, 197, 94, 0.2);
+    border-radius: 4px;
+    padding: 2px 7px;
+  }
+  .m2-lane-section {
+    padding: 12px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    flex: 1;
+  }
+  .m2-lane-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 10px;
+    border-radius: 6px;
+    font-size: 12.5px;
+    color: #888;
+    cursor: pointer;
+    transition: all 0.12s;
+  }
+  .m2-lane-item:hover { color: #fff; background: #0f0f0f; }
+  .m2-lane-item.active {
+    background: #111;
+    color: #fff;
+    font-weight: 600;
+    box-shadow: inset 0 0 0 1px #262626;
+  }
+  .m2-lane-name { display: flex; align-items: center; gap: 8px; }
+  .m2-lane-meta {
+    font-size: 10px;
+    font-family: var(--font-mono);
+    color: #555;
+  }
+  .m2-lane-item.active .m2-lane-meta { color: #ff5500; }
+  .m2-sidebar-stats {
+    border-top: 1px solid #141414;
+    padding: 10px 14px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: #666;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    background: #030303;
+  }
+  .m2-chat-area {
+    display: flex;
+    flex-direction: column;
+    background: #000000;
+    position: relative;
+  }
+  .m2-top-strip {
+    height: 44px;
+    border-bottom: 1px solid #171717;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 18px;
+    background: #040404;
+  }
+  .m2-hud-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .m2-telemetry-badge {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: #ff7700;
+    background: rgba(255, 85, 0, 0.1);
+    border: 1px solid rgba(255, 85, 0, 0.25);
+    padding: 2px 8px;
+    border-radius: 4px;
+  }
+  .m2-chat-stream {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+  .m2-turn-user {
+    color: #fff;
+    font-size: 14px;
+    display: flex;
+    gap: 10px;
+    border-left: 2px solid #333;
+    padding-left: 12px;
+  }
+  .m2-turn-agent {
+    color: #d4d4d8;
+    font-size: 13.5px;
+    line-height: 1.6;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .m2-terminal-callout {
+    background: #09090b;
+    border: 1px solid #27272a;
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: #a1a1aa;
+  }
+  .m2-terminal-callout .cmd { color: #38bdf8; }
+  .m2-composer {
+    margin: 14px 20px 16px;
+    background: #090909;
+    border: 1px solid #262626;
+    border-radius: 8px;
+    padding: 10px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .m2-composer-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 11px;
+    color: #555;
+    font-family: var(--font-mono);
+  }
+  .m2-keyhint {
+    background: #18181b;
+    padding: 2px 6px;
+    border-radius: 3px;
+    border: 1px solid #27272a;
+    color: #a1a1aa;
+  }
+
+  /* =====================================================================
+     MOCK 3: DUAL-CANVAS PRODUCTIVITY (COLLAPSIBLE DIFF / CONTEXT DOCK)
+     ===================================================================== */
+  .m3-app {
+    display: grid;
+    grid-template-columns: 220px 1fr 310px;
+    min-height: 620px;
+    background: #0d1117;
+  }
+  @media (max-width: 900px) {
+    .m3-app { grid-template-columns: 200px 1fr; }
+    .m3-canvas-panel { display: none !important; }
+  }
+  .m3-nav {
+    background: #0b0e14;
+    border-right: 1px solid #1b212c;
+    display: flex;
+    flex-direction: column;
+  }
+  .m3-top-chrome {
+    height: 46px;
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    border-bottom: 1px solid #1b212c;
+  }
+  .m3-group-label {
+    font-size: 10.5px;
+    font-weight: 700;
+    color: #4b5563;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 12px 14px 4px;
+  }
+  .m3-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 8px 12px;
+    margin: 1px 8px;
+    border-radius: 6px;
+    font-size: 13px;
+    color: #94a3b8;
+    cursor: pointer;
+  }
+  .m3-nav-item:hover { background: #131720; color: #f1f5f9; }
+  .m3-nav-item.active { background: #1b2230; color: #fff; font-weight: 600; }
+  .m3-thread-area {
+    display: flex;
+    flex-direction: column;
+    background: #0f131a;
+  }
+  .m3-header {
+    height: 46px;
+    border-bottom: 1px solid #1b212c;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+  }
+  .m3-canvas-panel {
+    background: #0c0f15;
+    border-left: 1px solid #1b212c;
+    display: flex;
+    flex-direction: column;
+  }
+  .m3-canvas-tab-bar {
+    height: 46px;
+    border-bottom: 1px solid #1b212c;
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    gap: 8px;
+  }
+  .m3-canvas-tab {
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 5px;
+    background: #161c26;
+    color: #38bdf8;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .m3-canvas-content {
+    padding: 14px;
+    overflow-y: auto;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: #cbd5e1;
+    line-height: 1.55;
+    flex: 1;
+  }
+  .diff-add { color: #4ade80; background: rgba(74, 222, 128, 0.1); padding: 1px 4px; display: block; }
+  .diff-del { color: #f87171; background: rgba(248, 113, 113, 0.1); padding: 1px 4px; display: block; }
+  .diff-ctx { color: #94a3b8; display: block; padding: 1px 4px; }
+
+  /* Comparison Matrix */
+  .comparison-table-wrap {
+    margin-top: 24px;
+    background: #111216;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 18px 20px;
+    overflow-x: auto;
+  }
+  .comparison-table-wrap h3 {
+    font-size: 15px;
+    margin-bottom: 12px;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  table.comp-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12.5px;
+  }
+  table.comp-table th, table.comp-table td {
+    padding: 9px 12px;
+    text-align: left;
+    border-bottom: 1px solid #1f222a;
+  }
+  table.comp-table th {
+    color: #94a3b8;
+    background: #0a0b0e;
+    font-weight: 600;
+  }
+  table.comp-table tr:hover td {
+    background: #15171d;
+  }
+  .pill-rec {
+    background: rgba(255, 85, 0, 0.15);
+    color: #ff5500;
+    border: 1px solid rgba(255, 85, 0, 0.3);
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 10.5px;
+    font-weight: 600;
+  }
+</style>
+</head>
+<body>
+  <div class="container">
+    <!-- Controls & Switcher -->
+    <div class="control-panel">
+      <div class="control-top">
+        <div class="brand-badge">
+          <div class="flame-icon">
+            <svg viewBox="0 0 24 24"><path d="M12 2C9.5 6.5 14 9 11 14C10.5 11 8.5 10 7 12C5 14.5 6 18.5 9 21C14 23 20 19 19 13C18 7 13.5 6 12 2Z"/></svg>
+          </div>
+          <div>
+            <div class="brand-title">Agni Bot — UI Redesign Mocks</div>
+            <div class="brand-subtitle">Tailscale WebSocket · Tauri 2 Mac/Android · Multi-Lane Router</div>
+          </div>
+        </div>
+        <div class="mock-tabs">
+          <button class="tab-btn active" onclick="switchMock(1)">
+            Mock 1: Rakazo Studio
+            <span class="tab-badge">From .context</span>
+          </button>
+          <button class="tab-btn" onclick="switchMock(2)">
+            Mock 2: Obsidian Speed
+            <span class="tab-badge">Blueprint v3</span>
+          </button>
+          <button class="tab-btn" onclick="switchMock(3)">
+            Mock 3: Dual Canvas
+            <span class="tab-badge">ACP + Diffs</span>
+          </button>
+        </div>
+      </div>
+      <div class="mock-description" id="mock-desc">
+        <span><strong>Mock 1 · Rakazo Studio Architecture</strong>: 3-column modular desktop harness directly mirroring the <code>.context/rakazo</code> desktop shell. Dedicated agent roster, collapsible inspection drawer, tool activity disclosure cards, and action approval gates.</span>
+        <div class="tag-group">
+          <span class="feature-tag">3-Zone Studio</span>
+          <span class="feature-tag">Tool Disclosure</span>
+          <span class="feature-tag">Approvals Gate</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===============================================================
+         MOCK 1: RAKAZO STUDIO (3-PANE MODULAR DESKTOP)
+         =============================================================== -->
+    <div class="window-frame active" id="frame-mock1">
+      <div class="m1-app">
+        <!-- Left Sidebar: Agents Roster & Navigation -->
+        <aside class="m1-sidebar-left">
+          <div class="m1-sidebar-header">
+            <div class="traffic-lights">
+              <div class="light light-close"></div>
+              <div class="light light-min"></div>
+              <div class="light light-max"></div>
+            </div>
+            <button style="background:none;border:none;color:#64748b;cursor:pointer;font-size:14px;padding:4px 8px;">＋</button>
+          </div>
+          <div class="m1-search-box">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <span>Search bots or ⌘K...</span>
+          </div>
+          <div class="m1-section-title">Active Agents</div>
+          <div class="m1-agent-list">
+            <div class="m1-agent-item active">
+              <div class="m1-avatar" style="background:#ff5500;color:#fff;">⚡</div>
+              <div style="flex:1;min-width:0;">
+                <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Agni Instant</div>
+                <div style="font-size:10.5px;color:#94a3b8;font-family:var(--font-mono);">Groq 70B · p50 1.1s</div>
+              </div>
+              <span class="status-dot green"></span>
+            </div>
+
+            <div class="m1-agent-item">
+              <div class="m1-avatar" style="background:#2563eb;color:#fff;">💻</div>
+              <div style="flex:1;min-width:0;">
+                <div>Codex ACP</div>
+                <div style="font-size:10.5px;color:#64748b;font-family:var(--font-mono);">Coding lane · bb-1</div>
+              </div>
+              <span class="status-dot orange"></span>
+            </div>
+
+            <div class="m1-agent-item">
+              <div class="m1-avatar" style="background:#7c3aed;color:#fff;">🌅</div>
+              <div style="flex:1;min-width:0;">
+                <div>07:55 Morning Brief</div>
+                <div style="font-size:10.5px;color:#64748b;font-family:var(--font-mono);">ntfy push · scheduled</div>
+              </div>
+              <span class="status-dot green"></span>
+            </div>
+
+            <div class="m1-agent-item">
+              <div class="m1-avatar" style="background:#059669;color:#fff;">📬</div>
+              <div style="flex:1;min-width:0;">
+                <div>Mailbox & Calendar</div>
+                <div style="font-size:10.5px;color:#64748b;font-family:var(--font-mono);">hey.agnibot@gmail</div>
+              </div>
+              <span class="status-dot green"></span>
+            </div>
+          </div>
+
+          <div class="m1-section-title">Recent Threads</div>
+          <div class="m1-agent-list" style="flex:0.6;">
+            <div class="m1-agent-item" style="font-size:12px;color:#94a3b8;">
+              <span>💬</span> <span>Morning agenda check</span>
+            </div>
+            <div class="m1-agent-item" style="font-size:12px;color:#94a3b8;">
+              <span>💬</span> <span>Refactor sqlite stores</span>
+            </div>
+          </div>
+
+          <div class="m1-sidebar-footer">
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span class="status-dot green"></span>
+              <span style="font-family:var(--font-mono);font-size:11px;">bb-1 Tailscale</span>
+            </div>
+            <span style="font-size:11px;color:#38bdf8;">$0.00 / mo</span>
+          </div>
+        </aside>
+
+        <!-- Center: Main Chat Surface -->
+        <section class="m1-chat-container">
+          <header class="m1-chat-header">
+            <div class="m1-header-info">
+              <span class="m1-agent-title">Agni Instant</span>
+              <span class="m1-model-pill">meta-llama/llama-3.3-70b-instruct</span>
+              <span style="font-size:11px;color:#22c55e;font-family:var(--font-mono);">⚡ 480 tok/s</span>
+            </div>
+            <div style="display:flex;gap:10px;font-size:13px;color:#94a3b8;">
+              <button style="background:#171a23;border:1px solid #282f42;color:#cbd5e1;padding:3px 8px;border-radius:5px;font-size:11px;cursor:pointer;">Clear Turn</button>
+              <button style="background:#171a23;border:1px solid #282f42;color:#cbd5e1;padding:3px 8px;border-radius:5px;font-size:11px;cursor:pointer;">Share</button>
+            </div>
+          </header>
+
+          <div class="m1-chat-feed">
+            <!-- User message -->
+            <div class="m1-msg user">
+              <div class="m1-msg-bubble">
+                Can you check my unread emails from the bb-1 server mailbox and summarize anything critical from this morning?
+              </div>
+            </div>
+
+            <!-- Bot message with Rakazo-style tool activity disclosure -->
+            <div class="m1-msg bot">
+              <div class="m1-avatar" style="background:#ff5500;color:white;width:28px;height:28px;font-size:13px;">⚡</div>
+              <div class="m1-msg-bubble">
+                <div>I connected to <code>hey.agnibot@gmail.com</code> via IMAP on bb-1. You have 2 new emails.</div>
+
+                <!-- Tool disclosure card -->
+                <div class="tool-card">
+                  <div class="tool-header">
+                    <span>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m18 15-6-6-6 6"/></svg>
+                      imap.fetch_unseen(mailbox="INBOX", limit=5)
+                    </span>
+                    <span style="color:#22c55e;">✓ 240ms</span>
+                  </div>
+                  <div class="tool-body">
+                    &gt; Found message ID &lt;20261017.0912.ac9@aws.com&gt; from "AWS Billing Alerts"<br/>
+                    &gt; Found message ID &lt;20261017.0945.88f@postplan.dev&gt; from "Postplan Notification"
+                  </div>
+                </div>
+
+                <p style="margin-top:6px;">Summary:</p>
+                <ul style="padding-left:18px;margin:6px 0;">
+                  <li><strong>AWS Alert:</strong> Routine zero-tier budget report. $0.00 spent.</li>
+                  <li><strong>Postplan:</strong> Blueprint v3 revisions confirmed. Ready for P1 build.</li>
+                </ul>
+
+                <!-- Approval Card -->
+                <div class="approval-card">
+                  <div class="approval-text">
+                    ⚠️ <strong>Approval Required:</strong> Mark 2 emails as read in mailbox?
+                  </div>
+                  <div style="display:flex;gap:6px;">
+                    <button class="approval-btn btn-approve">Approve</button>
+                    <button class="approval-btn btn-reject">Reject</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="m1-input-area">
+            <div class="m1-input-box">
+              <textarea class="m1-textarea-mock" rows="2" placeholder="Ask Agni anything... (Type / for commands, ⌘K for agent switch)"></textarea>
+              <div class="m1-input-actions">
+                <div class="m1-action-icons">
+                  <span title="Attach file" style="cursor:pointer;">📎</span>
+                  <span title="Voice prompt" style="cursor:pointer;">🎙️</span>
+                  <span style="font-size:11px;font-family:var(--font-mono);color:#64748b;margin-left:6px;">Lane: Instant (Free Tier)</span>
+                </div>
+                <button class="m1-send-btn">Send ⏎</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Right Sidebar: Agent Profile & Telemetry (Rakazo inspector pattern) -->
+        <aside class="m1-sidebar-right">
+          <div class="m1-panel-card">
+            <div class="m1-panel-heading">
+              <span>Agent Telemetry</span>
+              <span style="color:#22c55e;font-size:11px;">● LIVE</span>
+            </div>
+            <div class="telemetry-row"><span>Provider:</span> <span class="telemetry-val">Groq Cloud</span></div>
+            <div class="telemetry-row"><span>Time to First Token:</span> <span class="telemetry-val">210 ms</span></div>
+            <div class="telemetry-row"><span>Stream Speed:</span> <span class="telemetry-val">512 tok/s</span></div>
+            <div class="telemetry-row"><span>Failover Backup:</span> <span class="telemetry-val">Cerebras</span></div>
+            <div class="telemetry-row"><span>Cost this turn:</span> <span class="telemetry-val">$0.000</span></div>
+          </div>
+
+          <div class="m1-panel-card">
+            <div class="m1-panel-heading">
+              <span>Working Memory</span>
+              <span style="color:#38bdf8;font-size:11px;">FTS5 Store</span>
+            </div>
+            <div style="font-size:11.5px;color:#94a3b8;line-height:1.45;">
+              • User: Nachiketh<br/>
+              • Device: Mac Book + Android<br/>
+              • Server: bb-1 (Tailscale WireGuard)<br/>
+              • Primary Goal: Own-Base Assistant P1
+            </div>
+          </div>
+
+          <div class="m1-panel-card">
+            <div class="m1-panel-heading">
+              <span>Connected MCPs</span>
+              <span style="color:#a855f7;font-size:11px;">2 Active</span>
+            </div>
+            <div style="font-size:11.5px;color:#94a3b8;display:flex;flex-direction:column;gap:5px;">
+              <div style="display:flex;justify-content:space-between;"><span>REA Real-Estate</span> <span style="color:#22c55e;">Ready</span></div>
+              <div style="display:flex;justify-content:space-between;"><span>Codex ACP Bridge</span> <span style="color:#22c55e;">Ready</span></div>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </div>
+
+    <!-- ===============================================================
+         MOCK 2: OBSIDIAN SPEED / TERMINAL CANVASS (BLUEPRINT V3)
+         =============================================================== -->
+    <div class="window-frame" id="frame-mock2">
+      <div class="m2-app">
+        <!-- Minimalist Dark Left Sidebar -->
+        <aside class="m2-sidebar">
+          <div class="m2-titlebar">
+            <div class="traffic-lights">
+              <div class="light light-close"></div>
+              <div class="light light-min"></div>
+              <div class="light light-max"></div>
+            </div>
+            <span style="font-size:12px;font-weight:700;letter-spacing:0.04em;color:#fff;">AGNI</span>
+            <span class="m2-server-badge">bb-1:9910</span>
+          </div>
+
+          <div class="m2-lane-section">
+            <div style="font-size:10px;font-weight:700;color:#555;text-transform:uppercase;margin:6px 6px 2px;">ROUTING LANES</div>
+            
+            <div class="m2-lane-item active">
+              <div class="m2-lane-name">
+                <span style="color:#ff5500;">⚡</span>
+                <span>Instant</span>
+              </div>
+              <span class="m2-lane-meta">0.9s</span>
+            </div>
+
+            <div class="m2-lane-item">
+              <div class="m2-lane-name">
+                <span style="color:#38bdf8;">💻</span>
+                <span>ACP Coding</span>
+              </div>
+              <span class="m2-lane-meta">Codex</span>
+            </div>
+
+            <div class="m2-lane-item">
+              <div class="m2-lane-name">
+                <span style="color:#a855f7;">☕</span>
+                <span>Rituals</span>
+              </div>
+              <span class="m2-lane-meta">07:55</span>
+            </div>
+
+            <div class="m2-lane-item">
+              <div class="m2-lane-name">
+                <span style="color:#22c55e;">📥</span>
+                <span>Mailbox</span>
+              </div>
+              <span class="m2-lane-meta">IMAP</span>
+            </div>
+
+            <div style="font-size:10px;font-weight:700;color:#555;text-transform:uppercase;margin:16px 6px 2px;">RECORDS</div>
+            <div class="m2-lane-item"><span>📑 /memories</span> <span class="m2-lane-meta">48 items</span></div>
+            <div class="m2-lane-item"><span>🔗 /links</span> <span class="m2-lane-meta">112 saved</span></div>
+            <div class="m2-lane-item"><span>⏰ /jobs</span> <span class="m2-lane-meta">4 active</span></div>
+          </div>
+
+          <div class="m2-sidebar-stats">
+            <div style="display:flex;justify-content:space-between;">
+              <span>SOCKET:</span> <span style="color:#22c55e;">ONLINE (RESUMABLE)</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;">
+              <span>MONTHLY COST:</span> <span style="color:#fff;">$0.00 / FREE TIER</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;">
+              <span>FAILOVER:</span> <span style="color:#ff7700;">NIM ➔ GROQ ➔ LM</span>
+            </div>
+          </div>
+        </aside>
+
+        <!-- Main High-Speed Obsidian Canvas -->
+        <main class="m2-chat-area">
+          <div class="m2-top-strip">
+            <div class="m2-hud-title">
+              <span>Thread #108 · Speed Proof Gate</span>
+              <span class="m2-telemetry-badge">⚡ Instant Lane · 490 tok/s · p50 1.02s</span>
+            </div>
+            <div style="display:flex;gap:8px;font-family:var(--font-mono);font-size:11px;color:#777;">
+              <span>⌘K PALETTE</span>
+              <span>·</span>
+              <span>⌘N NEW</span>
+            </div>
+          </div>
+
+          <div class="m2-chat-stream">
+            <div class="m2-turn-user">
+              <div><strong>Nachiketh:</strong> Execute synthetic rate-limit failover test across Groq and NVIDIA NIM.</div>
+            </div>
+
+            <div class="m2-turn-agent">
+              <div style="color:#ff5500;font-size:12px;font-family:var(--font-mono);">⚡ Agni Core [Streamed 184 tokens in 380ms]</div>
+              <div>
+                Simulating HTTP 429 on Groq endpoint <code>groq.com/v1/chat/completions</code>...
+              </div>
+
+              <div class="m2-terminal-callout">
+                <span class="cmd">[FAILOVER_GATE]</span> Groq returned 429 RateLimitExceeded (retry-after: 60s)<br/>
+                <span class="cmd">[ROUTER]</span> Instant reroute to NVIDIA NIM (meta/llama-3.3-70b-instruct)<br/>
+                <span class="cmd">[LATENCY]</span> Switchover completed in 18ms. First chunk received at +190ms.
+              </div>
+
+              <div>
+                Test successful. Stream remained uninterrupted over WebSocket frame <code>#842</code>. Client seq ID synchronized. Zero dropped tokens.
+              </div>
+            </div>
+          </div>
+
+          <div class="m2-composer">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <span style="color:#ff5500;font-weight:700;">&gt;</span>
+              <input type="text" style="flex:1;background:transparent;border:none;color:#fff;font-size:13.5px;font-family:var(--font-mono);outline:none;" placeholder="Run command or ask speed lane... (/help, /bench, /pair)"/>
+            </div>
+            <div class="m2-composer-bar">
+              <span>Model: NIM Llama-3.3-70B · Route: Instant · Latency: 110ms</span>
+              <div>
+                <span class="m2-keyhint">ESC</span> cancel &nbsp;
+                <span class="m2-keyhint">ENTER</span> stream
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <!-- ===============================================================
+         MOCK 3: DUAL-CANVAS PRODUCTIVITY (ACP CODING + DIFF PREVIEW)
+         =============================================================== -->
+    <div class="window-frame" id="frame-mock3">
+      <div class="m3-app">
+        <!-- Left Navigation -->
+        <aside class="m3-nav">
+          <div class="m3-top-chrome">
+            <div class="traffic-lights">
+              <div class="light light-close"></div>
+              <div class="light light-min"></div>
+              <div class="light light-max"></div>
+            </div>
+          </div>
+          <div class="m3-group-label">Assistants</div>
+          <div class="m3-nav-item">⚡ Quick Question</div>
+          <div class="m3-nav-item active">🛠️ Codex ACP Coding</div>
+          <div class="m3-nav-item">📅 Daily Planner & Brief</div>
+          <div class="m3-nav-item">📬 Email Assistant</div>
+
+          <div class="m3-group-label">Active Worktrees</div>
+          <div class="m3-nav-item" style="font-family:var(--font-mono);font-size:11.5px;">📁 agni/feat-sqlite-wal</div>
+          <div class="m3-nav-item" style="font-family:var(--font-mono);font-size:11.5px;">📁 agni/tauri-client</div>
+
+          <div style="margin-top:auto;padding:12px;border-top:1px solid #1b212c;font-size:12px;color:#64748b;">
+            Tailscale: 100.82.14.92<br/>
+            Server load: 0.12 (idle)
+          </div>
+        </aside>
+
+        <!-- Center Thread -->
+        <section class="m3-thread-area">
+          <header class="m3-header">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="font-weight:600;font-size:13.5px;color:#fff;">Refactor SQLite Store to WAL Mode</span>
+              <span style="background:#1e293b;color:#38bdf8;font-size:11px;padding:2px 6px;border-radius:4px;font-family:var(--font-mono);">ACP Stream</span>
+            </div>
+            <button style="background:#2563eb;color:#fff;border:none;border-radius:5px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer;">Apply Changes</button>
+          </header>
+
+          <div style="flex:1;padding:16px;overflow-y:auto;display:flex;flex-direction:column;gap:12px;">
+            <div style="background:#161c26;border-radius:8px;padding:12px;font-size:13px;border:1px solid #252f3f;">
+              <strong>Nachiketh:</strong> Delegate task to Codex: migrate database setup in <code>apps/server/src/db.ts</code> to enable WAL mode, foreign keys, and synchronous NORMAL.
+            </div>
+
+            <div style="background:#0e1219;border-radius:8px;padding:12px;font-size:13px;border:1px solid #1c2331;">
+              <div style="color:#60a5fa;font-weight:600;margin-bottom:6px;">🛠️ Codex ACP Subagent:</div>
+              <div>I analyzed the SQLite configuration in <code>packages/protocol</code> and <code>apps/server</code>. The proposed diff updates the database connection pool with WAL pragma headers. See live diff on the right inspector pane.</div>
+            </div>
+          </div>
+
+          <div style="padding:12px;border-top:1px solid #1b212c;background:#0d1017;">
+            <input type="text" placeholder="Reply to Codex ACP agent..." style="width:100%;padding:9px 12px;background:#141822;border:1px solid #232c3d;border-radius:6px;color:#fff;font-size:13px;outline:none;"/>
+          </div>
+        </section>
+
+        <!-- Right Side Diff / Artifact Preview -->
+        <aside class="m3-canvas-panel">
+          <div class="m3-canvas-tab-bar">
+            <div class="m3-canvas-tab">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              db.ts (Diff)
+            </div>
+          </div>
+          <div class="m3-canvas-content">
+            <span class="diff-ctx"> import Database from "bun:sqlite";</span>
+            <span class="diff-ctx"> </span>
+            <span class="diff-ctx"> export function openDb(path: string) {</span>
+            <span class="diff-del">-  const db = new Database(path);</span>
+            <span class="diff-add">+  const db = new Database(path, { create: true });</span>
+            <span class="diff-add">+  db.exec("PRAGMA journal_mode = WAL;");</span>
+            <span class="diff-add">+  db.exec("PRAGMA synchronous = NORMAL;");</span>
+            <span class="diff-add">+  db.exec("PRAGMA foreign_keys = ON;");</span>
+            <span class="diff-ctx">   return db;</span>
+            <span class="diff-ctx"> }</span>
+          </div>
+        </aside>
+      </div>
+    </div>
+
+    <!-- Comparison Matrix Section -->
+    <div class="comparison-table-wrap">
+      <h3>
+        <span>📊</span>
+        <span>Architectural Comparison of the 3 UI Mocks</span>
+      </h3>
+      <table class="comp-table">
+        <thead>
+          <tr>
+            <th>Attribute</th>
+            <th>Mock 1: Rakazo Studio <span class="pill-rec">From .context</span></th>
+            <th>Mock 2: Obsidian Speed</th>
+            <th>Mock 3: Dual-Canvas ACP</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Design Origin</strong></td>
+            <td>Directly leverages <code>.context/rakazo</code> architecture</td>
+            <td>Pure Agni Blueprint v3 ("Speed First, True Black")</td>
+            <td>Modern developer workflow (Linear + Cursor hybrid)</td>
+          </tr>
+          <tr>
+            <td><strong>Layout Structure</strong></td>
+            <td>3 Columns: Bots Sidebar + Chat + Inspector Drawer</td>
+            <td>2 Columns: Ultra-compact Rail + Fluid Stream</td>
+            <td>3 Columns: Navigation + Conversation + Canvas/Diff Dock</td>
+          </tr>
+          <tr>
+            <td><strong>Interaction Model</strong></td>
+            <td>Interactive Cards: Tool Disclosures, Approvals, Status</td>
+            <td>Inline Terminal Stream, Keyboard ⌘K HUD, Tokens/sec</td>
+            <td>Contextual Side-by-Side Artifacts & Code Reviews</td>
+          </tr>
+          <tr>
+            <td><strong>Target Devices</strong></td>
+            <td>Desktop macOS & Tablet (Tauri)</td>
+            <td>macOS Desktop + Ultra-fast Android client</td>
+            <td>macOS Desktop (Coding heavy)</td>
+          </tr>
+          <tr>
+            <td><strong>Best Suited For</strong></td>
+            <td>Managing persistent bots, credentials, and tool runs</td>
+            <td>Sub-second instant queries, daily logs & rituals</td>
+            <td>Repo-level coding delegation via Codex ACP</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+<script>
+  function switchMock(mockNum) {
+    // Hide all frames
+    document.getElementById('frame-mock1').classList.remove('active');
+    document.getElementById('frame-mock2').classList.remove('active');
+    document.getElementById('frame-mock3').classList.remove('active');
+
+    // Remove active tab classes
+    const tabs = document.querySelectorAll('.tab-btn');
+    tabs.forEach(t => t.classList.remove('active'));
+
+    // Activate selected
+    document.getElementById('frame-mock' + mockNum).classList.add('active');
+    tabs[mockNum - 1].classList.add('active');
+
+    // Update description text
+    const desc = document.getElementById('mock-desc');
+    if (mockNum === 1) {
+      desc.innerHTML = '<span><strong>Mock 1 · Rakazo Studio Architecture</strong>: 3-column modular desktop harness directly mirroring the <code>.context/rakazo</code> desktop shell. Dedicated agent roster, collapsible inspection drawer, tool activity disclosure cards, and action approval gates.</span>' +
+        '<div class="tag-group"><span class="feature-tag">3-Zone Studio</span><span class="feature-tag">Tool Disclosure</span><span class="feature-tag">Approvals Gate</span></div>';
+    } else if (mockNum === 2) {
+      desc.innerHTML = '<span><strong>Mock 2 · Obsidian Speed & Terminal HUD</strong>: Agni Blueprint v3 pure black (#000000) design. Ultra-clean typography, live token/sec telemetry, multi-lane failover ticker, and keyboard-first command bar.</span>' +
+        '<div class="tag-group"><span class="feature-tag">True Black OLED</span><span class="feature-tag">p50 &lt; 1.5s Ticker</span><span class="feature-tag">Keyboard-First</span></div>';
+    } else if (mockNum === 3) {
+      desc.innerHTML = '<span><strong>Mock 3 · Dual-Canvas Productivity (ACP + Diff Dock)</strong>: Split-screen workspace designed for delegating tasks to coding agents (Codex ACP) with live diff review, multi-worktree switching, and approval diffs.</span>' +
+        '<div class="tag-group"><span class="feature-tag">Side-by-Side Diff</span><span class="feature-tag">Codex ACP</span><span class="feature-tag">Worktree Switcher</span></div>';
+    }
+  }
+</script>
+</body>
+</html>
