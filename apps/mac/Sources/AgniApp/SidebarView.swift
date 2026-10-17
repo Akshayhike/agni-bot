@@ -14,6 +14,7 @@ struct SidebarView: View {
     VStack(spacing: 0) {
       header
       searchField
+      sections
       pluginsButton
       profileButton
     }
