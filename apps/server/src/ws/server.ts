@@ -9,6 +9,7 @@ import { PROTOCOL_VERSION, encodeFrame, type ServerFrame, type ServerFrameBody }
 import type { Config } from "../config";
 import { readMeta, writeMeta } from "../db";
 import { log } from "../log";
+import { PluginService } from "../plugins/service";
 import type { Router, ProviderStatus } from "../models/router";
 import { dayTotals, type DayTotals } from "../stores/usage";
 import { dispatch, newSession, type Session } from "./dispatch";
@@ -17,6 +18,8 @@ import { FrameLog } from "./frame-log";
 export interface RunningServer {
   readonly port: number;
   readonly url: string;
+  /** Plugin connection state lives here (settings pane snapshots, OAuth). */
+  readonly plugins: PluginService | undefined;
   /** Fan out a frame to every authed session (job results, notices). */
   emit(body: ServerFrameBody): ServerFrame;
   stop(): void;
@@ -61,13 +64,19 @@ export function startServer(config: Config, db: Database, router: Router, starte
     return frame;
   };
 
+  const plugins = new PluginService({ config, db, emit });
+  plugins.autoConnect();
+
   const server = Bun.serve<Session>({
     hostname: config.host,
     port: config.port,
-    fetch(request, srv) {
+    async fetch(request, srv) {
       const url = new URL(request.url);
       if (url.pathname === "/health") {
         return Response.json(healthReport(db, router, frameLog.seq, startedAt));
+      }
+      if (url.pathname === "/oauth/callback") {
+        return handleOAuthCallback(plugins, url);
       }
       if (url.pathname === "/ws") {
         if (srv.upgrade(request, { data: newSession() })) return undefined;
@@ -93,6 +102,7 @@ export function startServer(config: Config, db: Database, router: Router, starte
             router,
             frameLog,
             emit,
+            plugins,
             reply: (body) => {
               const frame = frameLog.next(body, { replay: false });
               socket.send(encodeFrame(frame));
@@ -119,10 +129,54 @@ export function startServer(config: Config, db: Database, router: Router, starte
   return {
     port: server.port ?? config.port,
     url: `ws://${config.host}:${server.port ?? config.port}/ws`,
+    plugins,
     emit,
     stop() {
       server.stop(true);
       frameLog.flush();
     },
   };
+}
+
+/**
+ * The Google OAuth redirect lands here from the system browser: one static
+ * page confirming what happened, while the real state flows through frames
+ * (`plugin.state`) into every open client. No scripts, no redirects back.
+ */
+async function handleOAuthCallback(plugins: PluginService | undefined, url: URL): Promise<Response> {
+  const state = url.searchParams.get("state") ?? "";
+  const code = url.searchParams.get("code") ?? "";
+  const oauthError = url.searchParams.get("error");
+  const title = "Agni · connecting";
+  if (!plugins) {
+    return staticPage(title, "The plugin service is not running on this server.");
+  }
+  if (oauthError) {
+    return staticPage(title, `Google refused the sign-in (${oauthError}). Nothing was connected — try again from the settings pane.`);
+  }
+  if (!state || !code) {
+    return staticPage(title, "This callback is missing its sign-in context. Connect again from the settings pane.");
+  }
+  const result = await plugins.completeSignIn(state, code);
+  const body =
+    result.plugin
+      ? `${result.plugin} is connected. You can close this tab — the app updates itself.`
+      : `Something went wrong: ${result.error ?? "unknown error"}\nNothing is connected; try again from the settings pane.`;
+  return staticPage(title, body);
+}
+
+function staticPage(title: string, body: string): Response {
+  return new Response(
+    `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${title}</title>
+<style>body{background:#000;color:#fff;font:15px/1.6 ui-sans-serif,-apple-system,sans-serif;display:grid;place-items:center;min-height:100vh;margin:0}main{max-width:420px;padding:24px}p{white-space:pre-line;margin:0}</style>
+</head>
+<body><main><p>${body.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</p></main></body>
+</html>`,
+    { headers: { "content-type": "text/html; charset=utf-8" } },
+  );
 }
