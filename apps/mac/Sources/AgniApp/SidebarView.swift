@@ -241,23 +241,28 @@ struct SidebarView: View {
       HStack(spacing: 8) {
         Image(systemName: "puzzlepiece.extension")
           .font(.system(size: 14, weight: .medium))
-          .foregroundStyle(Palette.inkSecondary)
+          .foregroundStyle(Palette.ember)
           .frame(width: 28, height: 28)
-          .background(Palette.surfaceRaised, in: Circle())
+          .background(Palette.ember.opacity(0.15), in: Circle())
         Text("Plugins")
-          .font(Typography.meta)
-          .foregroundStyle(Color(hex: 0xD4D4D8))
+          .font(Typography.meta.weight(.medium))
+          .foregroundStyle(Palette.ink)
           .lineLimit(1)
         Spacer(minLength: 0)
-        // Connection status dot
         let connected = model.plugins.filter { $0.status == "connected" }.count
         let total = model.plugins.count
         Text("\(connected)/\(total)")
-          .font(Typography.caption)
-          .foregroundStyle(Palette.inkTertiary)
+          .font(Typography.caption.weight(.medium))
+          .foregroundStyle(Palette.ember)
+          .padding(.horizontal, 6)
+          .padding(.vertical, 2)
+          .background(Palette.ember.opacity(0.1), in: Capsule())
       }
-      .padding(.horizontal, 16)
-      .frame(height: 40)
+      .padding(.horizontal, 12)
+      .padding(.vertical, 8)
+      .background(Palette.surface, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+      .padding(.horizontal, 8)
+      .padding(.vertical, 4)
       .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
