@@ -1,0 +1,26 @@
+# Self-hosted Firecrawl for Agni web search/scraping.
+# Run: docker compose -f docker-compose.firecrawl.yml up -d
+# Then set AGNI_FIRECRAWL_URL=http://localhost:3002 in .env
+#
+# Firecrawl self-hosted requires Redis. For a simpler setup, use the
+# cloud free tier instead (AGNI_FIRECRAWL_API_KEY, 500 credits/mo).
+
+version: "3.8"
+services:
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+  firecrawl:
+    image: ghcr.io/mendableai/firecrawl:latest
+    ports:
+      - "3002:3002"
+    environment:
+      - PORT=3002
+      - HOST=0.0.0.0
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - redis
+    restart: unless-stopped

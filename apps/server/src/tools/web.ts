@@ -1,17 +1,24 @@
 /**
- * Web tools. web_search tries providers in order: Brave (if AGNI_BRAVE_API_KEY
- * set), Firecrawl (if AGNI_FIRECRAWL_API_KEY set), SearXNG (if configured),
- * then DuckDuckGo Instant Answer (zero-config fallback, limited to topics
- * with Wikipedia-style abstracts). web_fetch reuses fetchPage with SSRF
- * protections; Firecrawl is used for JS-rendered pages when configured.
+ * Web tools. web_search tries providers in order: Firecrawl (cloud or
+ * self-hosted), Brave, Google CSE, SearXNG, then DuckDuckGo Instant Answer.
+ * web_fetch reuses fetchPage with SSRF protections; Firecrawl is used for
+ * JS-rendered pages when configured (cloud key or self-hosted URL).
  */
 import { fetchPage } from "./fetch-url";
 
 const SEARXNG_URL = process.env.AGNI_SEARXNG_URL?.trim();
 const FIRECRAWL_KEY = process.env.AGNI_FIRECRAWL_API_KEY?.trim();
+const FIRECRAWL_URL = process.env.AGNI_FIRECRAWL_URL?.trim(); // self-hosted instance
 const BRAVE_KEY = process.env.AGNI_BRAVE_API_KEY?.trim();
 const GOOGLE_CSE_KEY = process.env.AGNI_GOOGLE_CSE_API_KEY?.trim();
 const GOOGLE_CSE_ID = process.env.AGNI_GOOGLE_CSE_ID?.trim();
+
+/** Base URL for Firecrawl API calls (cloud or self-hosted). */
+function firecrawlBase(): string | null {
+  if (FIRECRAWL_URL) return FIRECRAWL_URL.replace(/\/$/, "");
+  if (FIRECRAWL_KEY) return "https://api.firecrawl.dev";
+  return null;
+}
 
 export interface WebSearchArgs {
   query: string;
@@ -24,7 +31,34 @@ export interface WebSearchResult {
   provider: string;
 }
 
-/** Brave Search API: free tier 2,000 queries/month, no credit card. Recommended. */
+/** Firecrawl search: works with cloud (API key) or self-hosted (URL). */
+async function searchFirecrawl(query: string, count: number): Promise<WebSearchResult | null> {
+  const base = firecrawlBase();
+  if (!base) return null;
+  try {
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (FIRECRAWL_KEY && !FIRECRAWL_URL) headers["Authorization"] = `Bearer ${FIRECRAWL_KEY}`;
+    const response = await fetch(`${base}/v1/search`, {
+      method: "POST",
+      signal: AbortSignal.timeout(15_000),
+      headers,
+      body: JSON.stringify({ query, limit: count }),
+    });
+    if (!response.ok) return null;
+    const payload = await response.json() as { data?: Array<{ title?: string; url?: string; description?: string }> };
+    const results = (payload.data ?? []).slice(0, count).map((entry) => ({
+      title: entry.title ?? "",
+      url: entry.url ?? "",
+      snippet: entry.description ?? "",
+    }));
+    if (results.length === 0) return null;
+    return { query, results, provider: FIRECRAWL_URL ? "firecrawl-selfhosted" : "firecrawl" };
+  } catch {
+    return null;
+  }
+}
+
+/** Brave Search API: free tier 2,000 queries/month, no credit card. */
 async function searchBrave(query: string, count: number): Promise<WebSearchResult | null> {
   if (!BRAVE_KEY) return null;
   try {
@@ -70,33 +104,6 @@ async function searchGoogleCSE(query: string, count: number): Promise<WebSearchR
   }
 }
 
-/** Firecrawl search: free tier 500 credits/mo. */
-async function searchFirecrawl(query: string, count: number): Promise<WebSearchResult | null> {
-  if (!FIRECRAWL_KEY) return null;
-  try {
-    const response = await fetch("https://api.firecrawl.dev/v1/search", {
-      method: "POST",
-      signal: AbortSignal.timeout(15_000),
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${FIRECRAWL_KEY}`,
-      },
-      body: JSON.stringify({ query, limit: count }),
-    });
-    if (!response.ok) return null;
-    const payload = await response.json() as { data?: Array<{ title?: string; url?: string; description?: string }> };
-    const results = (payload.data ?? []).slice(0, count).map((entry) => ({
-      title: entry.title ?? "",
-      url: entry.url ?? "",
-      snippet: entry.description ?? "",
-    }));
-    if (results.length === 0) return null;
-    return { query, results, provider: "firecrawl" };
-  } catch {
-    return null;
-  }
-}
-
 /** SearXNG: self-hosted meta-search. */
 async function searchSearXNG(query: string, count: number): Promise<WebSearchResult | null> {
   if (!SEARXNG_URL) return null;
@@ -122,7 +129,7 @@ async function searchSearXNG(query: string, count: number): Promise<WebSearchRes
   }
 }
 
-/** DuckDuckGo Instant Answer: zero-config, returns abstracts + related topics (limited). */
+/** DuckDuckGo Instant Answer: zero-config, returns abstracts + related topics. */
 async function searchDuckDuckGo(query: string, count: number): Promise<WebSearchResult | null> {
   try {
     const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`;
@@ -161,15 +168,15 @@ async function searchDuckDuckGo(query: string, count: number): Promise<WebSearch
 export async function webSearch(args: WebSearchArgs): Promise<WebSearchResult> {
   const count = Math.max(1, Math.min(args.count ?? 8, 20));
 
-  // Try providers in order: Brave → Google CSE → Firecrawl → SearXNG → DuckDuckGo Instant
+  // Try providers in order: Firecrawl → Brave → Google CSE → SearXNG → DuckDuckGo
+  const firecrawl = await searchFirecrawl(args.query, count);
+  if (firecrawl) return firecrawl;
+
   const brave = await searchBrave(args.query, count);
   if (brave) return brave;
 
   const google = await searchGoogleCSE(args.query, count);
   if (google) return google;
-
-  const firecrawl = await searchFirecrawl(args.query, count);
-  if (firecrawl) return firecrawl;
 
   const searxng = await searchSearXNG(args.query, count);
   if (searxng) return searxng;
@@ -177,7 +184,7 @@ export async function webSearch(args: WebSearchArgs): Promise<WebSearchResult> {
   const ddg = await searchDuckDuckGo(args.query, count);
   if (ddg) return ddg;
 
-  return { query: args.query, results: [], provider: "none (set AGNI_BRAVE_API_KEY for free web search)" };
+  return { query: args.query, results: [], provider: "none (set AGNI_BRAVE_API_KEY or AGNI_FIRECRAWL_URL for free web search)" };
 }
 
 export interface WebFetchArgs {
@@ -185,17 +192,17 @@ export interface WebFetchArgs {
   maxChars?: number;
 }
 
-/** Fetch page content. Uses Firecrawl for JS-rendered pages if configured, else fetchPage. */
+/** Fetch page content. Uses Firecrawl (cloud or self-hosted) for JS-rendered pages, else fetchPage. */
 export async function webFetch(args: WebFetchArgs): Promise<{ title: string | null; summary: string | null; url: string }> {
-  if (FIRECRAWL_KEY) {
+  const base = firecrawlBase();
+  if (base) {
     try {
-      const response = await fetch("https://api.firecrawl.dev/v1/scrape", {
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (FIRECRAWL_KEY && !FIRECRAWL_URL) headers["Authorization"] = `Bearer ${FIRECRAWL_KEY}`;
+      const response = await fetch(`${base}/v1/scrape`, {
         method: "POST",
         signal: AbortSignal.timeout(20_000),
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${FIRECRAWL_KEY}`,
-        },
+        headers,
         body: JSON.stringify({ url: args.url, formats: ["markdown"] }),
       });
       if (response.ok) {
