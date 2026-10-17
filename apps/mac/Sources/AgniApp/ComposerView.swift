@@ -121,7 +121,6 @@ struct ComposerView: View {
             }
           }
           .accessibilityLabel(placeholder)
-          .onSubmit(submit)
 
         if model.conversation.isStreaming {
           Button { model.stopTurn() } label: {
@@ -144,6 +143,7 @@ struct ComposerView: View {
               .background(Color(hex: 0xF3F3F3), in: Circle())
           }
           .buttonStyle(.plain)
+          .keyboardShortcut(.return, modifiers: .command)
           .disabled(draft.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
           .help(draft.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Voice input isn't available yet" : "Send")
           .accessibilityLabel(draft.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Voice input unavailable" : "Send")

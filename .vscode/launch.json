@@ -1,0 +1,44 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:Agni-Bot}/apps/mac",
+            "name": "Debug Agni (apps/mac)",
+            "target": "Agni",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug Agni (apps/mac)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:Agni-Bot}/apps/mac",
+            "name": "Release Agni (apps/mac)",
+            "target": "Agni",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release Agni (apps/mac)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:Agni-Bot}/apps/mac",
+            "name": "Debug agni-probe (apps/mac)",
+            "target": "agni-probe",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug agni-probe (apps/mac)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:Agni-Bot}/apps/mac",
+            "name": "Release agni-probe (apps/mac)",
+            "target": "agni-probe",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release agni-probe (apps/mac)"
+        }
+    ]
+}

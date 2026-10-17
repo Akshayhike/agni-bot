@@ -7,7 +7,6 @@ import type { Decision } from "./approval-broker";
 import type { Persona } from "./personas";
 import type { ChatMessage, ToolCall } from "../models/client";
 import { Router, RouterBusyError, RouterError } from "../models/router";
-import { MidStreamError } from "../models/router";
 import { appendMessage, createTurn, finishTurn, recentMessages, titleThreadFromFirstMessage, touchThread } from "../stores/threads";
 import { recordUsage } from "../stores/usage";
 import { newID, nowISO } from "../util/ids";
@@ -113,6 +112,7 @@ export async function runTaskTurn(db: Database, router: Router, settings: TaskTu
   // If the model emits N consecutive tool steps with no text progress, stop.
   const MAX_NONTEXT_STEPS = 10;
   let consecutiveNonTextSteps = 0;
+  let activeStepText = "";
   try {
     while (stepCount < MAX_STEPS && tokenCount < MAX_TOKENS) {
       if (controller.signal.aborted) { stopReason = timedOut ? "timeout" : "cancelled"; break; }
@@ -124,6 +124,7 @@ export async function runTaskTurn(db: Database, router: Router, settings: TaskTu
         ...(summary ? [{ role: "system" as const, content: `Conversation summary (untrusted context): ${summary}` }] : []),
         ...messages,
       ];
+      activeStepText = "";
       const result = await router.route({
         messages: requestMessages,
         signal: controller.signal,
@@ -132,9 +133,11 @@ export async function runTaskTurn(db: Database, router: Router, settings: TaskTu
         toolChoice: tools.length ? "auto" : "none",
         maxTokens: Math.max(1, Math.min(2_048, MAX_TOKENS - tokenCount)),
         onDelta: (delta: string) => {
+          activeStepText += delta;
           run.emit({ type: "token", turnID, threadID, delta });
         },
       });
+      activeStepText = "";
       tokenCount += (result.inputTokens ?? estimateTokens(JSON.stringify(requestMessages) + JSON.stringify(tools))) +
         (result.outputTokens ?? estimateTokens(result.text + JSON.stringify(result.toolCalls ?? [])));
       usage = { provider: result.provider, model: result.model, inputTokens: result.inputTokens, outputTokens: result.outputTokens, latencyMs: result.latencyMs };
@@ -190,9 +193,11 @@ export async function runTaskTurn(db: Database, router: Router, settings: TaskTu
     stopReason = controller.signal.aborted ? (timedOut ? "timeout" : "cancelled") : "error";
     const code = error instanceof RouterBusyError ? "server_busy" : error instanceof RouterError ? error.code : "task_turn_failed";
     run.emit({ type: "error", code, message: error instanceof Error ? error.message : String(error) });
-    if (error instanceof MidStreamError) {
-      // Partial content was already streamed to the UI; keep it so the turn isn't lost.
-      stopReason = "end";
+    if (activeStepText) {
+      // Keep the streamed fragment in durable history, but leave the turn
+      // marked failed so the UI never presents an interrupted task as done.
+      finalText += activeStepText;
+      messages.push({ role: "assistant", content: activeStepText });
     }
   } finally {
     clearTimeout(timer);

@@ -54,6 +54,7 @@ final class AppModel {
   var isAgentSwitcherPresented = false
   var searchText = ""
   private(set) var focusComposerToken = 0
+  private(set) var isStartingSession = false
   var toast: NoticeRow?
 
   /// The window reads this for its title; there is one app per process.
@@ -219,7 +220,20 @@ final class AppModel {
       )
       return
     }
-    Task { try? await connection.send(.sessionNew(conversationID: conversationID)) }
+    isStartingSession = true
+    Task { @MainActor in
+      do {
+        try await connection.send(.sessionNew(conversationID: conversationID))
+      } catch {
+        isStartingSession = false
+        showToast(
+          NoticeRow(
+            id: "new_session_failed", kind: .failure, title: "Couldn't start a new session",
+            body: error.localizedDescription, createdAt: Date()
+          )
+        )
+      }
+    }
     focusComposer()
   }
 
@@ -611,6 +625,7 @@ final class AppModel {
 
     default:
       let effects = conversation.apply(frame)
+      if case .sessionStart = frame { isStartingSession = false }
       if case .turnEnd = frame { refreshThreadList() }
       if case .turnStart = frame { refreshThreadList() }
       run(effects)

@@ -5,12 +5,15 @@
  * Tool activity is a quiet strip under the reply it belongs to.
  */
 import SwiftUI
+import AppKit
 import AgniKit
 import AgniProtocol
 
 struct MessageRowView: View {
   var message: ChatMessage
   var agent: AgentInfo?
+  var isSelected = false
+  var onSelect: () -> Void = {}
   var onNotice: () -> Void
 
   var body: some View {
@@ -32,6 +35,18 @@ struct MessageRowView: View {
       }
     }
     .frame(maxWidth: .infinity, alignment: message.role == .user ? .trailing : .leading)
+    .padding(.horizontal, isSelected ? 5 : 0)
+    .padding(.vertical, isSelected ? 4 : 0)
+    .background(isSelected ? Palette.ember.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 12))
+    .contextMenu {
+      Button(isSelected ? "Deselect message" : "Select message", systemImage: isSelected ? "checkmark.circle" : "text.cursor") {
+        onSelect()
+      }
+      Button("Copy message", systemImage: "doc.on.doc") {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(message.text, forType: .string)
+      }
+    }
   }
 
   // MARK: user
@@ -61,20 +76,28 @@ struct MessageRowView: View {
   private var assistantProse: some View {
     VStack(alignment: .leading, spacing: 8) {
       if message.text.isEmpty && message.isStreaming {
-        ThinkingDots()
+        HStack(spacing: 8) {
+          ThinkingDots()
+          Text("Thinking")
+            .font(Typography.meta)
+            .foregroundStyle(Palette.inkSecondary)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .background(Palette.surfaceRaised, in: Capsule())
       } else if !message.text.isEmpty {
-        ProseText(text: message.text, isStreaming: message.isStreaming)
+        ProseText(text: message.text)
       } else if case .failed(let reason) = message.state {
         Text(reason)
           .font(Typography.body)
           .foregroundStyle(Palette.ink)
       } else {
-        Text("Agni couldn't complete this response.")
+        Text(message.stopExplanation.map { "Response didn't finish: \($0.lowercased())." } ?? "Agni couldn't complete this response.")
           .font(Typography.body)
           .foregroundStyle(Palette.ink)
       }
-      if case .failed(let reason) = message.state, !message.text.isEmpty {
-        Text(reason)
+      if let explanation = message.stopExplanation, !message.text.isEmpty {
+        Text("Response didn't finish · \(explanation)")
           .font(Typography.caption)
           .foregroundStyle(Palette.inkSecondary)
       }
@@ -136,25 +159,16 @@ struct MessageRowView: View {
   }
 }
 
-/// Prose with inline code and links honoured, plus a caret while streaming.
+/// Prose with inline code and links honoured while tokens stream into place.
 struct ProseText: View {
   var text: String
-  var isStreaming: Bool
 
   var body: some View {
-    renderedText
+    Text(attributed)
       .font(Typography.body)
       .lineSpacing(4)
       .textSelection(.enabled)
       .fixedSize(horizontal: false, vertical: true)
-  }
-
-  /// Keep the streaming caret in the text layout so it follows the last
-  /// character across wrapped lines instead of sitting at the end of an HStack.
-  private var renderedText: Text {
-    let prose = Text(attributed)
-    guard isStreaming else { return prose }
-    return prose + Text("|").foregroundColor(Palette.ember)
   }
 
   /// Runtime markdown, inline only: bold, italic, code, links.
