@@ -91,10 +91,13 @@ export class ApprovalBroker {
   requiresApproval(toolName: string, args: Record<string, unknown>): boolean {
     if (["write_file", "task_create", "task_update", "memory_write", "link_save", "skills_load", "skills_resource", "skills_list"].includes(toolName)) return false;
     if (toolName === "bash") return isDestructive(String(args.command ?? ""));
+    // mail_send from the agent's own mailbox is ungated (AGENTS.md amendment 2026-10-17).
+    if (toolName === "mail_send" && args.account !== "owner") return false;
     // Email sends, payments, and other side-effecting tools gate here by default.
     return toolName !== "read_file" && toolName !== "grep" && toolName !== "glob" &&
       toolName !== "memory_search" && toolName !== "links_search" && toolName !== "tasks_list" &&
-      toolName !== "web_search" && toolName !== "web_fetch";
+      toolName !== "web_search" && toolName !== "web_fetch" &&
+      toolName !== "mail_search" && toolName !== "mail_read";
   }
 }
 
@@ -107,6 +110,7 @@ function describeAction(toolName: string, args: Record<string, unknown>): string
     case "link_save": return `save link: ${args.url ?? "?"}`;
     case "task_create": return `add task: ${args.title ?? "?"}`;
     case "task_update": return `update task ${args.id ?? "?"}`;
+    case "mail_send": return `send email to ${Array.isArray(args.to) ? args.to.join(", ") : args.to}: ${String(args.subject ?? "").slice(0, 80)}`;
     default: return `${toolName}(${JSON.stringify(args).slice(0, 120)})`;
   }
 }

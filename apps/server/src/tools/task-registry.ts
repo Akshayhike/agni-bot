@@ -13,6 +13,7 @@ import { writeFile } from "./write-file";
 import { webSearch, webFetch } from "./web";
 import { runBash } from "./bash";
 import { skillsList, skillsLoad, skillsResource } from "./skills";
+import { createMailTools } from "./mail";
 
 const objectSchema = (properties: Record<string, unknown>, required: string[]): Record<string, unknown> => ({
   type: "object", properties, required, additionalProperties: false,
@@ -21,7 +22,7 @@ const stringProp = { type: "string", minLength: 1 };
 const limitProp = { type: "integer", minimum: 1, maximum: 20 };
 const pathProp = { type: "string", minLength: 1 };
 
-export const TASK_TOOL_NAMES = ["memory_search", "memory_write", "links_search", "link_save", "tasks_list", "task_create", "task_update", "grep", "glob", "read_file", "write_file", "web_search", "web_fetch", "bash", "skills_list", "skills_load", "skills_resource"];
+export const TASK_TOOL_NAMES = ["memory_search", "memory_write", "links_search", "link_save", "tasks_list", "task_create", "task_update", "grep", "glob", "read_file", "write_file", "web_search", "web_fetch", "bash", "skills_list", "skills_load", "skills_resource", "mail_search", "mail_read", "mail_send"];
 
 export function buildTaskToolRegistry(db: Database): ToolRegistry {
   const registry = new ToolRegistry();
@@ -111,6 +112,10 @@ export function buildTaskToolRegistry(db: Database): ToolRegistry {
     schema: objectSchema({ skill_name: stringProp, relative_path: pathProp }, ["skill_name", "relative_path"]), timeoutMs: 2_000,
     handler: async (args) => skillsResource(parseObject(args, (v) => ({ skill_name: string(v.skill_name), relative_path: string(v.relative_path) }))),
   });
+  // Mail tools (agent's mailbox is ungated; owner's mailbox sends gate via approval broker).
+  for (const tool of createMailTools(db)) {
+    register(tool);
+  }
   return registry;
 }
 
