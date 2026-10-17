@@ -23,6 +23,8 @@ export interface Config {
   maxConcurrentTurns: number;
   /** Path to plugins.json (plugin auth + activation state). */
   pluginsPath: string;
+  /** Optional first name for first-run onboarding; never inferred from secrets. */
+  userFirstName?: string;
 }
 
 function int(env: Record<string, string | undefined>, key: string, fallback: number): number {
@@ -47,5 +49,6 @@ export function loadConfig(env: Record<string, string | undefined> = Bun.env): C
     jobPollMs: int(env, "AGNI_JOB_POLL_MS", 3000),
     maxConcurrentTurns: int(env, "AGNI_MAX_CONCURRENT_TURNS", 4),
     pluginsPath: env.AGNI_PLUGINS_PATH?.trim() || "data/plugins.json",
+    userFirstName: env.AGNI_USER_FIRST_NAME?.trim() || undefined,
   };
 }

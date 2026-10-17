@@ -48,6 +48,7 @@ import { rolloverIfNeeded, rotate, rotateById } from "../agent/rollover";
 import type { TurnJobPayload } from "../jobs/turn";
 import { newID, nowISO } from "../util/ids";
 import { createMemory, searchMemories } from "../stores/memories";
+import { addChannelMember, appendChannelMessage, createChannel, getChannel } from "../stores/channels";
 import { canonicalURL, saveLink, searchLinks } from "../stores/links";
 import { createTask, getTask, listTasks, setTaskStatus, snoozeTask } from "../stores/tasks";
 import { fetchPage } from "../tools/fetch-url";
@@ -145,6 +146,10 @@ export async function dispatch(deps: DispatchDeps, session: Session, raw: string
       return await handlePluginConnect(deps, session, frame);
     case "plugin.disconnect":
       return await handlePluginDisconnect(deps, session, frame);
+    case "user.typing":
+      return handleUserTyping(deps, session, frame);
+    case "agent.rename":
+      return handleAgentRename(deps, session, frame);
   }
 }
 
@@ -181,6 +186,7 @@ function handleHello(deps: DispatchDeps, session: Session, frame: Extract<Client
       lastSeq: deps.frameLog.seq + 1,
     });
     deps.emit({ type: "agents.update", agents: personaInfo() });
+    emitOnboardingIfNeeded(deps);
   });
 }
 
@@ -194,13 +200,130 @@ function handleResync(deps: DispatchDeps, session: Session, frame: Extract<Clien
   for (const replay of frames) deps.send(replay);
 }
 
-async function handleMsgSend(deps: DispatchDeps, session: Session, frame: Extract<ClientFrame, { type: "msg.send" }>): Promise<void> {
+interface PendingMessageBatch {
+  texts: string[];
+  frame: Extract<ClientFrame, { type: "msg.send" }>;
+  session: Session;
+  firstAt: number;
+  typing: boolean;
+  timer: ReturnType<typeof setTimeout>;
+}
+
+const messageBatches = new WeakMap<DispatchDeps, Map<string, PendingMessageBatch>>();
+
+function batchKey(frame: Extract<ClientFrame, { type: "msg.send" }>, session: Session): string {
+  return `${frame.channelId ?? frame.conversationID ?? frame.threadID ?? session.agentID}:${frame.toAgentId ?? session.agentID}`;
+}
+
+function handleMsgSend(deps: DispatchDeps, session: Session, frame: Extract<ClientFrame, { type: "msg.send" }>): void {
   if (!requireAuth(deps, session)) return;
+
+  const parts = frame.texts?.length ? frame.texts : (frame.text.trim() ? [frame.text] : []);
+  if (parts.length === 0) return sendError(deps, session, "bad_frame", "msg.send needs text or a non-empty texts array");
+  const batches = messageBatches.get(deps) ?? new Map<string, PendingMessageBatch>();
+  messageBatches.set(deps, batches);
+  const key = batchKey(frame, session);
+  const existing = batches.get(key);
+  if (existing) {
+    existing.texts.push(...parts);
+    existing.frame = frame;
+    existing.session = session;
+    clearTimeout(existing.timer);
+    existing.timer = setTimeout(() => flushMessageBatch(deps, key), 800);
+    return;
+  }
+
+  const pending: PendingMessageBatch = {
+    texts: [...parts],
+    frame,
+    session,
+    firstAt: Date.now(),
+    typing: false,
+    timer: setTimeout(() => flushMessageBatch(deps, key), 800),
+  };
+  batches.set(key, pending);
+  deps.emit({
+    type: "status.update",
+    channelId: frame.channelId ?? "main",
+    agentId: frame.toAgentId,
+    text: "Got it, looking into this…",
+    transient: true,
+  });
+}
+
+function handleUserTyping(deps: DispatchDeps, session: Session, frame: Extract<ClientFrame, { type: "user.typing" }>): void {
+  if (!requireAuth(deps, session)) return;
+  const batches = messageBatches.get(deps);
+  if (!batches) return;
+  const prefix = `${frame.channelId ?? session.agentID}:`;
+  for (const [key, batch] of batches) {
+    if (!key.startsWith(prefix)) continue;
+    batch.typing = frame.isTyping;
+    if (!frame.isTyping) {
+      clearTimeout(batch.timer);
+      batch.timer = setTimeout(() => flushMessageBatch(deps, key), 0);
+    }
+  }
+}
+
+function flushMessageBatch(deps: DispatchDeps, key: string): void {
+  const batches = messageBatches.get(deps);
+  const batch = batches?.get(key);
+  if (!batches || !batch) return;
+  const elapsed = Date.now() - batch.firstAt;
+  if (batch.typing && elapsed < 2_000) {
+    batch.timer = setTimeout(() => flushMessageBatch(deps, key), Math.min(800, 2_000 - elapsed));
+    return;
+  }
+  batches.delete(key);
+  void runUserMessage(deps, batch.session, batch.frame, batch.texts.join("\n\n"));
+}
+
+async function runUserMessage(
+  deps: DispatchDeps,
+  session: Session,
+  frame: Extract<ClientFrame, { type: "msg.send" }>,
+  text: string,
+): Promise<void> {
+
+  const channelID = frame.channelId ?? "main";
+  let channel = getChannel(deps.db, channelID);
+  if (!channel && frame.toAgentId && channelID === `dm:${frame.toAgentId}`) {
+    channel = createChannel(deps.db, { type: "dm", visibility: "public", name: frame.toAgentId, agentID: frame.toAgentId });
+    // Keep the protocol-facing DM id stable and explicit.
+    deps.db.run("UPDATE channels SET id = ? WHERE id = ?", [channelID, channel.id]);
+    channel = getChannel(deps.db, channelID);
+    addChannelMember(deps.db, channelID, frame.toAgentId, "agent", "member");
+    addChannelMember(deps.db, channelID, "user", "user", "member");
+  }
+  if (frame.channelId && !channel) return sendError(deps, session, "unknown_channel", `no channel ${frame.channelId}`);
+  const requestedAgentID = frame.toAgentId ?? (frame.channelId ? channel?.agent_id : session.agentID) ?? session.agentID;
+
+  // While the primary assistant is waiting for its first name, an ordinary
+  // main-channel message is treated as the answer to the inline prompt.
+  const onboardingPrompt = deps.db.query<{ count: number }, []>(
+    "SELECT count(*) AS count FROM channel_messages WHERE channel_id = 'main' AND ui_hint = 'onboarding_name_prompt'",
+  ).get()?.count ?? 0;
+  const primary = deps.db.query<{ onboarded: number }, []>("SELECT onboarded FROM agents WHERE id = 'ea'").get();
+  if (frame.channelId === "main" && channelID === "main" && primary?.onboarded === 0 && onboardingPrompt > 0) {
+    completeAgentRename(deps, "ea", text);
+    return;
+  }
 
   let thread;
   let conversationID: string | undefined;
   let carrySummary: string | null = null;
-  if (frame.conversationID) {
+  if (frame.channelId || frame.toAgentId) {
+    const conversation = ensureConversation(deps.db, requestedAgentID);
+    const result = await rolloverIfNeeded(rolloverDeps(deps), conversation);
+    thread = getThread(deps.db, result.threadID);
+    if (!thread) return sendError(deps, session, "internal", "channel conversation has no active session");
+    conversationID = conversation.id;
+    carrySummary = result.carry;
+    if (result.rolledOver && result.reason !== "none") {
+      deps.emit({ type: "session.start", conversationID: conversation.id, sessionID: thread.id, reason: result.reason });
+    }
+  } else if (frame.conversationID) {
     // v2 path: send into the conversation's active session block, rolling a
     // context-pressure block over first when needed.
     const conversation = getConversation(deps.db, frame.conversationID);
@@ -232,23 +355,39 @@ async function handleMsgSend(deps: DispatchDeps, session: Session, frame: Extrac
     deps.emit({ type: "session.start", conversationID: result.conversationID, sessionID: thread.id, reason: "manual" });
   }
 
-  const persona = getPersona(thread.agent_id) ?? defaultPersona();
-  if (isCapture(frame.text) || isStoreQuery(frame.text)) {
-    void captureMessage(deps, session, thread, persona.id, frame.text);
+  const persona = getPersona(requestedAgentID) ?? getPersona(thread.agent_id) ?? defaultPersona();
+  if (channel) {
+    const userMessage = appendChannelMessage(deps.db, {
+      channelID,
+      fromType: "user",
+      fromID: session.device?.id ?? "user",
+      toAgentID: frame.toAgentId ?? null,
+      text,
+    });
+    deps.emit({
+      type: "msg.new", id: userMessage.id, channelId: channelID, fromType: "user",
+      fromId: userMessage.from_id, senderName: session.device?.name ?? "You", text,
+      internal: false, uiHint: "normal", createdAt: userMessage.created_at,
+    });
+  }
+  if (isCapture(text) || isStoreQuery(text)) {
+    void captureMessage(deps, session, thread, persona.id, text);
     return;
-  }  const turnID = newID("trn");
+  }
+  const turnID = newID("trn");
   const controller = new AbortController();
   session.aborts.set(turnID, controller);
   const turnSettings = { firstTokenTimeoutMs: deps.config.firstTokenTimeoutMs, turnTimeoutMs: deps.config.turnTimeoutMs };
   const turn = runTaskTurn(deps.db, deps.router, turnSettings, {
     turnID,
     threadID: thread.id,
-    text: frame.text,
+    text,
     persona,
     conversationID,
     carrySummary,
     emit: deps.emit,
     signal: controller.signal,
+    channelID: channel ? channelID : undefined,
   });
 
   void turn
@@ -443,13 +582,42 @@ function handleConversationHistory(
   if (!getConversation(deps.db, frame.conversationID)) {
     return sendError(deps, session, "unknown_conversation", `no conversation ${frame.conversationID}`);
   }
-  const messages = conversationTranscript(deps.db, frame.conversationID, frame.limit ?? 200).map((message) => ({
+  const messages: Array<{
+    id: string; role: string; text: string; createdAt: string; turnID?: string; sessionID?: string;
+    senderName?: string; senderColor?: string; uiHint?: string;
+  }> = conversationTranscript(deps.db, frame.conversationID, frame.limit ?? 200).map((message) => ({
     id: message.id,
     role: message.role,
     text: message.text,
     createdAt: message.created_at,
     sessionID: message.sessionID,
   }));
+  const conversation = getConversation(deps.db, frame.conversationID)!;
+  {
+    const channelID = conversation.agent_id === "ea" ? "main" : `dm:${conversation.agent_id}`;
+    const channelRows = deps.db.query<{
+      id: string; role: string; text: string; created_at: string; turn_id: string | null;
+      from_id: string; sender_name: string | null; sender_color: string | null; ui_hint: string | null;
+    }, [string]>(`SELECT cm.id, cm.role, cm.text, cm.created_at, cm.turn_id, cm.from_id,
+      a.display_name AS sender_name, a.avatar_color AS sender_color, cm.ui_hint
+      FROM channel_messages cm LEFT JOIN agents a ON a.id = cm.from_id
+      WHERE cm.channel_id = ? AND cm.internal = 0 ORDER BY cm.created_at, cm.rowid`).all(channelID);
+    for (const row of channelRows) {
+      const role = row.role === "assistant" ? "assistant" : row.role;
+      const messageData = {
+        id: row.id, role, text: row.text, createdAt: row.created_at, turnID: row.turn_id ?? undefined,
+        senderName: row.sender_name ?? (role === "user" ? "You" : row.from_id),
+        senderColor: row.sender_color ?? undefined, uiHint: row.ui_hint ?? undefined,
+      };
+      const duplicateIndex = messages.findIndex((message) =>
+        message.role === role && message.text === row.text
+          && Math.abs(Date.parse(message.createdAt) - Date.parse(row.created_at)) < 30_000,
+      );
+      if (duplicateIndex >= 0) messages[duplicateIndex] = { ...messages[duplicateIndex], ...messageData };
+      else messages.push(messageData);
+    }
+    messages.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  }
   deps.reply({ type: "conversation.history.ok", conversationID: frame.conversationID, messages });
 }
 
@@ -735,4 +903,89 @@ function requireAuth(deps: DispatchDeps, session: Session): boolean {
 function sendError(deps: DispatchDeps, _session: Session, code: string, message: string): void {
   deps.emit({ type: "error", code, message });
   log.debug(`error frame → ${code}: ${message}`);
+}
+
+
+function handleAgentRename(deps: DispatchDeps, session: Session, frame: Extract<ClientFrame, { type: "agent.rename" }>): void {
+  if (!requireAuth(deps, session)) return;
+  const ok = completeAgentRename(deps, frame.agentId, frame.name);
+  if (!ok) sendError(deps, session, "bad_frame", "agent name must be 1–64 characters");
+}
+
+function completeAgentRename(deps: DispatchDeps, agentID: string, proposedName: string): boolean {
+  const name = proposedName.trim().replace(/\s+/g, " ");
+  if (!name || name.length > 64 || /[\r\n\0]/.test(name)) return false;
+  const exists = deps.db.query<{ id: string }, [string]>("SELECT id FROM agents WHERE id = ?").get(agentID);
+  if (!exists) return false;
+  const now = nowISO();
+  deps.db.run("UPDATE agents SET display_name = ?, onboarded = 1, updated_at = ? WHERE id = ?", [name, now, agentID]);
+  deps.emit({ type: "agent.updated", agentId: agentID, displayName: name, onboarded: true });
+  if (agentID === "ea") {
+    emitOnboardingMessage(
+      deps,
+      "main",
+      "ea",
+      `${name}. Nice to meet you. I can research, analyze, and summarize information; coordinate specialist agents; and keep you updated while I work.`,
+      "normal",
+    );
+  }
+  return true;
+}
+
+function emitOnboardingMessage(
+  deps: DispatchDeps,
+  channelID: string,
+  agentID: string,
+  text: string,
+  uiHint: "onboarding_name_prompt" | "handoff_notice" | "normal",
+): void {
+  const row = appendChannelMessage(deps.db, {
+    channelID,
+    fromType: "agent",
+    fromID: agentID,
+    text,
+    uiHint,
+  });
+  const agent = deps.db.query<{ display_name: string | null; avatar_color: string | null }, [string]>(
+    "SELECT display_name, avatar_color FROM agents WHERE id = ?",
+  ).get(agentID);
+  deps.emit({
+    type: "msg.new",
+    id: row.id,
+    channelId: channelID,
+    fromType: "agent",
+    fromId: agentID,
+    senderName: agent?.display_name ?? agentID,
+    senderColor: agent?.avatar_color ?? undefined,
+    text,
+    internal: false,
+    uiHint,
+    createdAt: row.created_at,
+  });
+}
+
+function emitOnboardingIfNeeded(deps: DispatchDeps): void {
+  const primary = deps.db.query<{ onboarded: number; display_name: string | null }, []>(
+    "SELECT onboarded, display_name FROM agents WHERE id = 'ea'",
+  ).get();
+  if (!primary || primary.onboarded !== 0) return;
+  const sent = deps.db.query<{ count: number }, []>(
+    "SELECT count(*) AS count FROM channel_messages WHERE channel_id = 'main' AND from_id = 'ea'",
+  ).get()?.count ?? 0;
+  if (sent > 0) return;
+  const firstName = deps.config.userFirstName?.trim() || "there";
+  emitOnboardingMessage(
+    deps,
+    "main",
+    "ea",
+    `Hi ${firstName}, I'm ${primary.display_name ?? "Agni Bot"}, your personal assistant. I can help with work and everyday life, and take things off your plate.`,
+    "normal",
+  );
+  emitOnboardingMessage(
+    deps,
+    "main",
+    "ea",
+    "What would you like to call me? You can always change this later.",
+    "onboarding_name_prompt",
+  );
 }

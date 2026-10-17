@@ -135,7 +135,7 @@ final class ProbeRunner {
     sent = true
     Task { @MainActor in
       do {
-        try await connection.send(.msgSend(threadID: threadID ?? "", text: text, files: nil, conversationID: nil))
+        try await connection.send(.msgSend(threadID: threadID ?? "", text: text, files: nil, conversationID: nil, channelId: nil, toAgentId: nil, texts: nil))
       } catch {
         settle(failure: "send failed: \(error)")
       }

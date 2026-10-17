@@ -67,6 +67,9 @@ export const MessageInfoSchema = z.object({
   turnID: z.string().optional(),
   /** Session block the message belongs to (conversation model, v2). */
   sessionID: z.string().optional(),
+  senderName: z.string().optional(),
+  senderColor: z.string().optional(),
+  uiHint: z.string().optional(),
 });
 export type MessageInfo = z.infer<typeof MessageInfoSchema>;
 
@@ -184,6 +187,12 @@ export const ClientFrameSchema = z.discriminatedUnion("type", [
      * block. Takes precedence over threadID.
      */
     conversationID: z.string().min(1).optional(),
+    /** Channel this message targets; absent for thread/conversation sends. */
+    channelId: z.string().optional(),
+    /** Agent to address this message to. */
+    toAgentId: z.string().optional(),
+    /** Multiple message bodies for batched content; `text` is the primary body. */
+    texts: z.array(z.string()).optional(),
   }),
   z.object({ type: z.literal("msg.cancel"), turnID: z.string().min(1) }),
   z.object({
@@ -260,6 +269,18 @@ export const ClientFrameSchema = z.discriminatedUnion("type", [
   }),
   /** Disconnect one connection (revokes tokens server-side, then Google). */
   z.object({ type: z.literal("plugin.disconnect"), connectionID: z.string().min(1) }),
+  /** Typing indicator from this client, aimed at a channel (or conversation when channelId is absent). */
+  z.object({
+    type: z.literal("user.typing"),
+    channelId: z.string().optional(),
+    isTyping: z.boolean(),
+  }),
+  /** Rename an agent/persona; answered with a fresh `agents.update`. */
+  z.object({
+    type: z.literal("agent.rename"),
+    agentId: z.string().min(1),
+    name: z.string().min(1).max(64),
+  }),
 ]);
 export type ClientFrame = z.infer<typeof ClientFrameSchema>;
 export type ClientFrameType = ClientFrame["type"];
@@ -377,6 +398,38 @@ export const ServerFrameSchema = z.discriminatedUnion("type", [
   /** Replayable stream state: a plugin connection changed (connect, error, disconnect). */
   z.object({ type: z.literal("plugin.state"), seq, plugins: z.array(PluginInfoSchema) }),
   z.object({ type: z.literal("presence"), seq, state: z.enum(["online", "offline"]) }),
+  /** A channel's status changed (e.g. typing/activity broadcast). */
+  z.object({
+    type: z.literal("status.update"),
+    seq,
+    channelId: z.string(),
+    agentId: z.string().optional(),
+    text: z.string(),
+    transient: z.boolean(),
+  }),
+  /** A new message arrived; clients render it as a message row. */
+  z.object({
+    type: z.literal("msg.new"),
+    seq,
+    id: z.string(),
+    channelId: z.string(),
+    fromType: z.enum(["user", "agent", "system"]),
+    fromId: z.string(),
+    senderName: z.string(),
+    senderColor: z.string().optional(),
+    text: z.string(),
+    internal: z.boolean(),
+    uiHint: z.enum(["onboarding_name_prompt", "handoff_notice", "normal"]).optional(),
+    createdAt: z.string(),
+  }),
+  /** An agent was renamed/updated; clients refresh the roster. */
+  z.object({
+    type: z.literal("agent.updated"),
+    seq,
+    agentId: z.string(),
+    displayName: z.string(),
+    onboarded: z.boolean(),
+  }),
   z.object({ type: z.literal("error"), seq, code: z.string(), message: z.string(), retryAfter: z.number().optional() }),
 ]);
 export type ServerFrame = z.infer<typeof ServerFrameSchema>;

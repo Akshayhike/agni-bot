@@ -12,6 +12,8 @@ import { appendMessage, createTurn, finishTurn, recentMessages, titleThreadFromF
 import { recordUsage } from "../stores/usage";
 import { newID } from "../util/ids";
 import type { Persona } from "./personas";
+import { recallFact } from "../tools/facts";
+import { buildFastPathMessages } from "./prompts";
 
 /** S1: hard ceiling on history riding in the prompt — never the full thread. */
 export const HISTORY_MESSAGE_LIMIT = 16;
@@ -31,6 +33,13 @@ export interface TurnRun {
   conversationID?: string;
   /** Carried summary of the session blocks that closed before this one. */
   carrySummary?: string | null;
+  /**
+   * Bounded durable facts injected into the stable prompt prefix. Default
+   * true: facts are agent-kept (remember_fact), read from the indexed store at
+   * write time (S4), and capped hard — they never make the instant lane call a
+   * tool or grow the prompt with history (S1/S2).
+   */
+  facts?: boolean;
 }
 
 export interface TurnResult {
@@ -62,14 +71,21 @@ export async function runInstantTurn(
 
   // Prompt: stable system prefix + the last N messages. Nothing else — no
   // memory dump, no tool output (S1/S2). The only cross-bridge content is
-  // the carried summary of session blocks that closed before this one.
+  // the carried summary of session blocks that closed before this one, plus
+  // the bounded durable facts the agent has kept (read from the indexed store
+  // at write time — S4 — never a tool call on the hot path).
   const history = recentMessages(db, threadID, HISTORY_MESSAGE_LIMIT)
     .filter((message) => message.role === "user" || message.role === "assistant")
     .map((message) => ({ role: message.role as "user" | "assistant", content: message.text }));
-  const systemContent = run.carrySummary
-    ? `${persona.systemPrompt}\n\nSummary of your earlier session blocks with this user (server-written, untrusted):\n${run.carrySummary}`
-    : persona.systemPrompt;
-  const messages = [{ role: "system" as const, content: systemContent }, ...history];
+  if (history.at(-1)?.role === "user" && history.at(-1)?.content === run.text) history.pop();
+  const facts = run.facts !== false ? recallFact(db, { limit: 6 }).facts.map((row) => row.fact) : [];
+  const messages = buildFastPathMessages({
+    persona,
+    facts,
+    history,
+    carrySummary: run.carrySummary ?? null,
+    userText: run.text,
+  });
 
   // The turn timer and the caller's cancel both land on this controller.
   const controller = new AbortController();

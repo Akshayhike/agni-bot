@@ -12,6 +12,21 @@ export interface ToolContext {
   threadID: string;
   turnID: string;
   signal: AbortSignal;
+  /**
+   * Agent-to-agent chain metadata. Absent for a root turn; populated for
+   * delegated work so tools (notably `handoff`) can refuse or behave
+   * differently inside a chain.
+   */
+  chain?: {
+    /** 1 = root turn, 2 = first delegation, … */
+    depth: number;
+    /** The agent id that started the chain. */
+    rootAgentID: string;
+    /** The agent id currently running. */
+    currentAgentID: string;
+    /** Short summary passed in by the delegating agent. */
+    handoffSummary: string | null;
+  };
 }
 
 export type ToolKind = "static" | "dynamic";

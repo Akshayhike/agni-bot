@@ -12,7 +12,9 @@
 import type { Database } from "bun:sqlite";
 import type { ServerFrameBody } from "@agni/protocol";
 import { runInstantTurn, type TurnSettings } from "../agent/loop";
+import { runTaskTurn } from "../agent/task-loop";
 import { defaultPersona, getPersona } from "../agent/personas";
+import { rootGuardrail } from "../agent/guardrails";
 import type { Router } from "../models/router";
 import { getThread } from "../stores/threads";
 import { backgroundSession, ensureConversation, getConversation, type ConversationRow } from "../stores/conversations";
@@ -26,6 +28,17 @@ export interface TurnJobPayload {
   /** Raise a notify frame when the turn ends. Default true. */
   notify?: boolean;
   everyMs?: number;
+  /**
+   * Which lane the job runs in. `instant` (default) is one call, no tools,
+   * bounded prompt (S1/S3) — the fast path for routine chat. `task` runs the
+   * Plan → Act → Observe loop with tools, so a job can delegate to another
+   * agent via the `handoff` tool. Background work that needs delegation must
+   * opt into the task lane; it cannot be the default because the instant lane
+   * is what keeps quick questions fast.
+   */
+  lane?: "instant" | "task";
+  /** When true (default), bounded durable facts ride in the prompt prefix. */
+  facts?: boolean;
 }
 
 export interface TurnJobDeps {
@@ -66,15 +79,7 @@ export function registerTurnJob(runner: JobRunner, deps: TurnJobDeps): void {
       ]);
     }
 
-    const result = await runInstantTurn(deps.db, deps.router, deps.settings, {
-      threadID,
-      text,
-      persona,
-      conversationID: conversation?.id,
-      carrySummary: conversation?.summary ?? null,
-      emit: deps.emit,
-      signal: new AbortController().signal,
-    });
+    const result = await runTurn(deps, payload, persona, threadID, conversation, text);
 
     if (result.stopReason !== "end") {
       // runInstantTurn already reported the failure as frames; a non-end stop
@@ -103,4 +108,48 @@ function firstLine(text: string): string {
 function truncate(text: string, max: number): string {
   const cleaned = text.replace(/\s+/g, " ").trim();
   return cleaned.length > max ? `${cleaned.slice(0, max)}…` : cleaned;
+}
+
+/**
+ * Run the job's prompt in the requested lane. The instant lane is the fast
+ * path (one call, no tools, bounded prompt — S1/S3); the task lane runs the
+ * Plan → Act → Observe loop with tools, which is what lets a background job
+ * delegate to another agent via the `handoff` tool. The task lane is opt-in
+ * because it is slower and stateful; routine chat stays on the instant lane.
+ */
+async function runTurn(
+  deps: TurnJobDeps,
+  payload: TurnJobPayload,
+  persona: ReturnType<typeof getPersona> & { systemPrompt: string },
+  threadID: string,
+  conversation: ConversationRow | undefined,
+  text: string,
+): Promise<{ turnID: string; text: string; stopReason: string }> {
+  const lane = payload.lane ?? "instant";
+  const signal = new AbortController().signal;
+  if (lane === "task") {
+    const result = await runTaskTurn(deps.db, deps.router, deps.settings, {
+      threadID,
+      text,
+      persona,
+      emit: deps.emit,
+      signal,
+      conversationID: conversation?.id,
+      carrySummary: conversation?.summary ?? null,
+      guardrail: rootGuardrail(persona.id),
+      facts: payload.facts,
+    });
+    return { turnID: result.turnID, text: result.text, stopReason: result.stopReason };
+  }
+  const result = await runInstantTurn(deps.db, deps.router, deps.settings, {
+    threadID,
+    text,
+    persona,
+    conversationID: conversation?.id,
+    carrySummary: conversation?.summary ?? null,
+    emit: deps.emit,
+    signal,
+    facts: payload.facts,
+  });
+  return { turnID: result.turnID, text: result.text, stopReason: result.stopReason };
 }

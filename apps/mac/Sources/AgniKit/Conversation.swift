@@ -55,6 +55,9 @@ public struct ChatMessage: Identifiable, Sendable, Equatable {
   public var tools: [ToolActivity]
   /// Shown immediately, before the server confirms the turn.
   public var isLocalEcho: Bool
+  public var senderName: String?
+  public var senderColor: String?
+  public var uiHint: String?
 
   public init(
     id: String,
@@ -67,7 +70,10 @@ public struct ChatMessage: Identifiable, Sendable, Equatable {
     state: State = .complete,
     usage: Usage? = nil,
     tools: [ToolActivity] = [],
-    isLocalEcho: Bool = false
+    isLocalEcho: Bool = false,
+    senderName: String? = nil,
+    senderColor: String? = nil,
+    uiHint: String? = nil
   ) {
     self.id = id
     self.role = role
@@ -80,6 +86,9 @@ public struct ChatMessage: Identifiable, Sendable, Equatable {
     self.usage = usage
     self.tools = tools
     self.isLocalEcho = isLocalEcho
+    self.senderName = senderName
+    self.senderColor = senderColor
+    self.uiHint = uiHint
   }
 
   public var isStreaming: Bool { state == .streaming }
@@ -297,7 +306,10 @@ public struct Conversation: Sendable, Equatable {
         text: info.text,
         createdAt: AgniFormat.parseISO(info.createdAt),
         turnID: info.turnID,
-        sessionID: info.sessionID
+        sessionID: info.sessionID,
+        senderName: info.senderName,
+        senderColor: info.senderColor,
+        uiHint: info.uiHint
       )
     }
 
@@ -329,6 +341,38 @@ public struct Conversation: Sendable, Equatable {
 
     case .agentsUpdate(let update):
       return [.agentsChanged(update.agents)]
+
+    case .statusUpdate:
+      return []
+
+    case .msgNew(let incoming):
+      let role: ChatMessage.Role = incoming.fromType == "user" ? .user : (incoming.fromType == "system" ? .system : .assistant)
+      if messages.contains(where: { $0.id == incoming.id }) { return [] }
+      if role == .user, let index = messages.firstIndex(where: { $0.isLocalEcho && $0.text == incoming.text }) {
+        messages[index].id = incoming.id
+        messages[index].isLocalEcho = false
+        messages[index].senderName = incoming.senderName
+        return []
+      }
+      if role == .assistant, let index = messages.firstIndex(where: { $0.id == Self.assistantID(turnID: inFlightTurnID ?? "") && $0.isStreaming }) {
+        messages[index].senderName = incoming.senderName
+        messages[index].senderColor = incoming.senderColor
+        messages[index].uiHint = incoming.uiHint
+        return []
+      }
+      messages.append(ChatMessage(
+        id: incoming.id, role: role, text: incoming.text, createdAt: ISO8601DateFormatter().date(from: incoming.createdAt),
+        agentID: role == .assistant ? incoming.fromId : nil, state: .complete,
+        senderName: incoming.senderName, senderColor: incoming.senderColor, uiHint: incoming.uiHint
+      ))
+      return []
+
+    case .agentUpdated(let updated):
+      for index in messages.indices where messages[index].uiHint == "onboarding_name_prompt" {
+        messages[index].uiHint = "onboarding_completed"
+        messages[index].senderName = updated.displayName
+      }
+      return []
 
     case .sessionStart(let seam):
       startSession(sessionID: seam.sessionID, conversationID: seam.conversationID)

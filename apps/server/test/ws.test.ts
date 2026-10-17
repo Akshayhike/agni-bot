@@ -158,6 +158,40 @@ async function startTestServer(): Promise<void> {
 }
 
 describe("websocket end-to-end", () => {
+  test("onboards the primary agent and persists channel messages", async () => {
+    await startTestServer();
+    const prompt = await client!.next("msg.new", { match: (frame) => frame.uiHint === "onboarding_name_prompt" });
+    expect(prompt.channelId).toBe("main");
+    expect(prompt.fromId).toBe("ea");
+
+    client!.send({ type: "agent.rename", agentId: "ea", name: "Grot Bottis" });
+    const updated = await client!.next("agent.updated");
+    expect(updated.displayName).toBe("Grot Bottis");
+    await client!.next("msg.new", { match: (frame) => frame.text.startsWith("Grot Bottis. Nice to meet you") });
+
+    client!.send({ type: "msg.send", channelId: "main", text: "say hi" });
+    const userMessage = await client!.next("msg.new", { match: (frame) => frame.fromType === "user" && frame.text === "say hi" });
+    expect(userMessage.channelId).toBe("main");
+    const started = await client!.next("turn.start");
+    await client!.next("turn.end");
+    expect(started.conversationID).toBeTruthy();
+    const stored = db!.query<{ role: string; text: string }, [string]>(
+      "SELECT role, text FROM channel_messages WHERE id = ?",
+    ).get(userMessage.id);
+    expect(stored).toEqual({ role: "user", text: "say hi" });
+  });
+
+  test("opens a direct channel for a specialist", async () => {
+    await startTestServer();
+    client!.send({ type: "msg.send", channelId: "dm:researcher", toAgentId: "researcher", text: "hello researcher" });
+    const userMessage = await client!.next("msg.new", { match: (frame) => frame.fromType === "user" });
+    expect(userMessage.channelId).toBe("dm:researcher");
+    const started = await client!.next("turn.start");
+    await client!.next("turn.end");
+    expect(started.agentID).toBe("researcher");
+    expect(db!.query("SELECT id FROM channels WHERE id = 'dm:researcher'").get()).toBeTruthy();
+  });
+
   test("streams a turn, then serves thread list and history", async () => {
     await startTestServer();
 

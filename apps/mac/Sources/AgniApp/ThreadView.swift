@@ -21,12 +21,24 @@ struct ThreadView: View {
 
   var body: some View {
     VStack(spacing: 0) {
-      if model.conversation.messages.isEmpty && !model.isStartingSession {
+      if model.conversation.messages.isEmpty {
         emptyState
       } else {
         transcript
       }
       PendingInbox(model: model)
+      if let status = model.statusText {
+        HStack(spacing: 8) {
+          Circle()
+            .fill(Palette.ember)
+            .frame(width: 6, height: 6)
+            .symbolEffect(.pulse, options: .repeating)
+          Text(status).font(Typography.meta).foregroundStyle(Palette.inkSecondary)
+          Spacer(minLength: 0)
+        }
+        .padding(.horizontal, Metrics.gutter + 8)
+        .padding(.vertical, 6)
+      }
       if !selectedMessageIDs.wrappedValue.isEmpty {
         selectionBar
       }
@@ -46,9 +58,6 @@ struct ThreadView: View {
         LazyVStack(alignment: .leading, spacing: 16) {
           Color.clear.frame(height: 1).id(topAnchor)
           ForEach(Array(model.conversation.messages.enumerated()), id: \.element.id) { index, message in
-            if isSessionBoundary(index: index) {
-              SessionDivider()
-            }
             if isNewDay(index: index) {
               DayDivider(label: index == 0 ? AgniFormat.stamp(message.createdAt ?? Date()) : AgniFormat.dayTitle(message.createdAt ?? Date()))
             }
@@ -57,13 +66,9 @@ struct ThreadView: View {
               agent: model.agent,
               isSelected: selectedMessageIDs.wrappedValue.contains(message.id),
               onSelect: { toggleSelection(message.id) },
-              onNotice: { model.dismissToast() }
+              onNotice: { model.dismissToast() },
+              onRename: { model.renameAgent($0) }
             )
-          }
-          if model.isStartingSession {
-            SessionDivider(label: "Starting new session…", isPending: true)
-          } else if hasOpenSessionBoundary {
-            SessionDivider()
           }
           Color.clear.frame(height: 1).id(bottomAnchor)
         }
@@ -130,16 +135,6 @@ struct ThreadView: View {
   private let bottomAnchor = "agni.bottom"
   private let topAnchor = "agni.top"
 
-  /// Keep the confirmed seam visible while the new session is still empty.
-  /// Once its first message arrives, the per-message boundary takes over at
-  /// exactly the same position.
-  private var hasOpenSessionBoundary: Bool {
-    guard let activeSessionID = model.conversation.threadID,
-      let lastMessage = model.conversation.messages.last
-    else { return false }
-    return lastMessage.sessionID != activeSessionID
-  }
-
   private var selectionBar: some View {
     HStack(spacing: 12) {
       Text("\(selectedMessageIDs.wrappedValue.count) selected")
@@ -180,15 +175,6 @@ struct ThreadView: View {
     if index == 0 { return true }
     guard let previous = messages[index - 1].createdAt else { return true }
     return !Calendar.current.isDate(previous, inSameDayAs: date)
-  }
-
-  /// The seam between session blocks: wherever consecutive messages carry
-  /// different (non-nil) block ids. A boundary from nil → a block id renders
-  /// too — that is where the conversation model begins.
-  private func isSessionBoundary(index: Int) -> Bool {
-    let messages = model.conversation.messages
-    guard index > 0, index < messages.count, let current = messages[index].sessionID else { return false }
-    return messages[index - 1].sessionID != current
   }
 
   private var emptyState: some View {
@@ -334,29 +320,5 @@ private struct DayDivider: View {
       .frame(maxWidth: .infinity, alignment: .center)
     .padding(.vertical, 4)
     .accessibilityLabel(label)
-  }
-}
-
-/// The invisible seam made visible: a session block boundary. Everything above
-/// the line lives in an earlier context window; the agent still carries the
-/// summary forward, the old prose stays where it was.
-private struct SessionDivider: View {
-  var label = "New session"
-  var isPending = false
-
-  var body: some View {
-    HStack(spacing: 10) {
-      Rectangle().fill(Palette.hairline).frame(height: 1)
-      Image(systemName: "scissors")
-        .font(.system(size: 10, weight: .medium))
-        .foregroundStyle(Palette.inkTertiary)
-      Text(label)
-        .font(Typography.caption)
-        .foregroundStyle(isPending ? Palette.ember : Palette.inkTertiary)
-      if isPending { ProgressView().controlSize(.mini) }
-      Rectangle().fill(Palette.hairline).frame(height: 1)
-    }
-    .padding(.vertical, 6)
-    .accessibilityLabel(isPending ? "Starting new session" : "New session — the older messages above stay in place")
   }
 }

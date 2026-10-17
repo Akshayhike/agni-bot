@@ -18,9 +18,6 @@ struct ComposerView: View {
 
   var commands: [Command] {
     [
-      Command(trigger: "new", title: "New session", subtitle: "A seam here — the thread above stays") {
-        model.newSession()
-      },
       Command(trigger: "agent", title: "Switch agent…", subtitle: "Another conversation surface") {
         model.isAgentSwitcherPresented = true
       },
@@ -89,11 +86,6 @@ struct ComposerView: View {
         .accessibilityLabel("Conversation actions")
         .popover(isPresented: isActionsPresented.projectedValue, arrowEdge: .bottom) {
           VStack(alignment: .leading, spacing: 8) {
-            Button("New session", systemImage: "square.and.pencil") {
-              isActionsPresented.wrappedValue = false
-              model.newSession()
-            }
-            .buttonStyle(.plain)
             Button("Switch agent…", systemImage: "person.crop.circle") {
               isActionsPresented.wrappedValue = false
               model.isAgentSwitcherPresented = true
@@ -111,6 +103,9 @@ struct ComposerView: View {
           .frame(maxWidth: .infinity, alignment: .leading)
           .lineLimit(1...4)
           .focused(composerFocused.projectedValue)
+          .onChange(of: draft.wrappedValue) { _, value in
+            model.updateTypingState(isTyping: !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+          }
           .padding(.vertical, 8)
           .overlay(alignment: .leading) {
             if draft.wrappedValue.isEmpty {

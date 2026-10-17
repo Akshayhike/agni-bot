@@ -23,6 +23,12 @@ describe("client frames", () => {
     }
   });
 
+  test("accepts channel sends, typing, and agent rename frames", () => {
+    expect(parseClientFrame({ type: "msg.send", text: "hello", channelId: "main", texts: ["hello"] }).ok).toBe(true);
+    expect(parseClientFrame({ type: "user.typing", channelId: "main", isTyping: true }).ok).toBe(true);
+    expect(parseClientFrame({ type: "agent.rename", agentId: "ea", name: "Agni" }).ok).toBe(true);
+  });
+
   test("accepts empty threadID as new-thread signal", () => {
     const result = parseClientFrame({ type: "msg.send", threadID: "", text: "hi" });
     expect(result.ok).toBe(true);
@@ -58,6 +64,14 @@ describe("client frames", () => {
 });
 
 describe("server frames", () => {
+  test("accepts channel messages, activity, and agent updates", () => {
+    expect(parseServerFrame({ type: "status.update", seq: 1, channelId: "main", text: "Working", transient: true }).ok).toBe(true);
+    expect(parseServerFrame({
+      type: "msg.new", seq: 2, id: "m1", channelId: "main", fromType: "agent", fromId: "ea",
+      senderName: "Agni", text: "Hi", internal: false, uiHint: "normal", createdAt: "2026-10-17T00:00:00Z",
+    }).ok).toBe(true);
+    expect(parseServerFrame({ type: "agent.updated", seq: 3, agentId: "ea", displayName: "Agni", onboarded: true }).ok).toBe(true);
+  });
   test("accepts hello.ok with seq", () => {
     const result = parseServerFrame({
       type: "hello.ok",

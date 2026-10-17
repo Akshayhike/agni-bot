@@ -29,10 +29,7 @@ struct AgniApp: App {
     .windowStyle(.hiddenTitleBar)
     .windowToolbarStyle(.unifiedCompact)
     .commands {
-      CommandGroup(replacing: .newItem) {
-        Button("New session") { model.newSession() }
-          .keyboardShortcut("n", modifiers: .command)
-      }
+      CommandGroup(replacing: .newItem) { }
       CommandMenu("Agni") {
         Button("Switch agent…") { model.isAgentSwitcherPresented = true }
           .keyboardShortcut("k", modifiers: .command)

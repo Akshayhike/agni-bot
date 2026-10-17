@@ -37,17 +37,6 @@ struct SidebarView: View {
   private var header: some View {
     HStack {
       Spacer()
-      Button { model.newSession() } label: {
-        Image(systemName: "plus")
-          .font(.system(size: 16, weight: .medium))
-          .foregroundStyle(Palette.inkSecondary)
-          .frame(width: 30, height: 30)
-          .contentShape(Rectangle())
-      }
-      .buttonStyle(.plain)
-      .help("New session — a seam in this conversation, the thread stays")
-      .accessibilityLabel("New session")
-      .offset(y: -13)
     }
     .padding(.horizontal, 14)
     .frame(height: 52)
@@ -167,10 +156,6 @@ struct SidebarView: View {
     .accessibilityLabel("Open \(agent.name) chat")
     .contextMenu {
       Button("Open chat") { model.selectAgent(agent) }
-      Button("New session", systemImage: "square.and.pencil") {
-        model.selectAgent(agent)
-        model.newSession()
-      }
     }
   }
 

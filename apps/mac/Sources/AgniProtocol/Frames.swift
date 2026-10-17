@@ -131,6 +131,9 @@ public struct MessageInfo: Sendable, Equatable, Decodable {
   public var turnID: String?
   /// Session block the message belongs to (conversation model, v2).
   public var sessionID: String?
+  public var senderName: String?
+  public var senderColor: String?
+  public var uiHint: String?
 }
 
 public struct JobInfo: Sendable, Equatable, Decodable, Identifiable {
@@ -239,7 +242,7 @@ public struct ProviderInfo: Sendable, Equatable, Decodable, Identifiable {
 public enum ClientFrame: Sendable, Equatable {
   case hello(v: Int, token: String, device: String)
   case resync(lastSeq: Int)
-  case msgSend(threadID: String?, text: String, files: [String]?, conversationID: String?)
+  case msgSend(threadID: String?, text: String, files: [String]?, conversationID: String?, channelId: String?, toAgentId: String?, texts: [String]?)
   case msgCancel(turnID: String)
   case approveReply(requestID: String, decision: Decision)
   case agentSelect(agentID: String)
@@ -260,6 +263,8 @@ public enum ClientFrame: Sendable, Equatable {
   case pluginList
   case pluginConnect(pluginID: String, account: String)
   case pluginDisconnect(connectionID: String)
+  case agentRename(agentId: String, name: String)
+  case userTyping(channelId: String?, isTyping: Bool)
 
   public var type: String {
     switch self {
@@ -286,6 +291,8 @@ public enum ClientFrame: Sendable, Equatable {
   case .pluginList: "plugin.list"
   case .pluginConnect: "plugin.connect"
   case .pluginDisconnect: "plugin.disconnect"
+  case .agentRename: "agent.rename"
+  case .userTyping: "user.typing"
     }
   }
 
@@ -299,11 +306,14 @@ public enum ClientFrame: Sendable, Equatable {
       object["device"] = device
     case .resync(let lastSeq):
       object["lastSeq"] = lastSeq
-    case .msgSend(let threadID, let text, let files, let conversationID):
+    case .msgSend(let threadID, let text, let files, let conversationID, let channelId, let toAgentId, let texts):
       if let threadID { object["threadID"] = threadID }
       object["text"] = text
       if let files, !files.isEmpty { object["files"] = files }
       if let conversationID { object["conversationID"] = conversationID }
+      if let channelId { object["channelId"] = channelId }
+      if let toAgentId { object["toAgentId"] = toAgentId }
+      if let texts, !texts.isEmpty { object["texts"] = texts }
     case .msgCancel(let turnID):
       object["turnID"] = turnID
     case .approveReply(let requestID, let decision):
@@ -356,6 +366,12 @@ public enum ClientFrame: Sendable, Equatable {
       object["account"] = account
     case .pluginDisconnect(let connectionID):
       object["connectionID"] = connectionID
+    case .agentRename(let agentId, let name):
+      object["agentId"] = agentId
+      object["name"] = name
+    case .userTyping(let channelId, let isTyping):
+      if let channelId { object["channelId"] = channelId }
+      object["isTyping"] = isTyping
     }
     return object
   }
@@ -388,7 +404,10 @@ public enum ClientFrame: Sendable, Equatable {
         threadID: object["threadID"] as? String,
         text: try Require.string(object, "text"),
         files: object["files"] as? [String],
-        conversationID: object["conversationID"] as? String)
+        conversationID: object["conversationID"] as? String,
+        channelId: object["channelId"] as? String,
+        toAgentId: object["toAgentId"] as? String,
+        texts: object["texts"] as? [String])
     case "msg.cancel":
       self = .msgCancel(turnID: try Require.string(object, "turnID"))
     case "approve.reply":
@@ -440,6 +459,14 @@ public enum ClientFrame: Sendable, Equatable {
         account: try Require.string(object, "account"))
     case "plugin.disconnect":
       self = .pluginDisconnect(connectionID: try Require.string(object, "connectionID"))
+    case "agent.rename":
+      self = .agentRename(
+        agentId: try Require.string(object, "agentId"),
+        name: try Require.string(object, "name"))
+    case "user.typing":
+      self = .userTyping(
+        channelId: object["channelId"] as? String,
+        isTyping: try Require.bool(object, "isTyping"))
     default:
       throw ProtocolError.unknownFrameType(type)
     }
@@ -474,6 +501,9 @@ public enum ServerFrame: Sendable, Equatable {
   case pluginConnectOK(PluginConnectOK)
   case pluginState(PluginState)
   case presence(Presence)
+  case statusUpdate(StatusUpdate)
+  case msgNew(MsgNew)
+  case agentUpdated(AgentUpdated)
   case error(ErrorFrame)
   /// A frame this build does not know. Ignored, never fatal.
   case unknown(type: String, seq: Int)
@@ -505,6 +535,9 @@ public enum ServerFrame: Sendable, Equatable {
   case .pluginConnectOK(let f): f.seq
   case .pluginState(let f): f.seq
     case .presence(let f): f.seq
+    case .statusUpdate(let f): f.seq
+    case .msgNew(let f): f.seq
+    case .agentUpdated(let f): f.seq
     case .error(let f): f.seq
     case .unknown(_, let seq): seq
     }
@@ -537,6 +570,9 @@ public enum ServerFrame: Sendable, Equatable {
   case .pluginConnectOK: "plugin.connect.ok"
   case .pluginState: "plugin.state"
     case .presence: "presence"
+    case .statusUpdate: "status.update"
+    case .msgNew: "msg.new"
+    case .agentUpdated: "agent.updated"
     case .error: "error"
     case .unknown(let type, _): type
     }
@@ -718,6 +754,42 @@ public enum ServerFrame: Sendable, Equatable {
     public var isOnline: Bool { state == "online" }
   }
 
+  /// A channel's status changed (e.g. typing/activity broadcast).
+  public struct StatusUpdate: Sendable, Equatable, Decodable {
+    public var seq: Int
+    public var channelId: String
+    public var agentId: String?
+    public var text: String
+    public var transient: Bool
+  }
+
+  /// A new message arrived; clients render it as a message row.
+  public struct MsgNew: Sendable, Equatable, Decodable {
+    public var seq: Int
+    public var id: String
+    public var channelId: String
+    public var fromType: String
+    public var fromId: String
+    public var senderName: String
+    public var senderColor: String?
+    public var text: String
+    public var `internal`: Bool
+    public var uiHint: String?
+    public var createdAt: String
+
+    private enum CodingKeys: String, CodingKey {
+      case seq, id, channelId, fromType, fromId, senderName, senderColor, text, `internal`, uiHint, createdAt
+    }
+  }
+
+  /// An agent was renamed/updated; clients refresh the roster.
+  public struct AgentUpdated: Sendable, Equatable, Decodable {
+    public var seq: Int
+    public var agentId: String
+    public var displayName: String
+    public var onboarded: Bool
+  }
+
   public struct ErrorFrame: Sendable, Equatable, Decodable {
     public var seq: Int
     public var code: String
@@ -755,6 +827,9 @@ public enum ServerFrame: Sendable, Equatable {
     case "plugin.connect.ok": self = .pluginConnectOK(try Decode.frame(PluginConnectOK.self, object))
     case "plugin.state": self = .pluginState(try Decode.frame(PluginState.self, object))
     case "presence": self = .presence(try Decode.frame(Presence.self, object))
+    case "status.update": self = .statusUpdate(try Decode.frame(StatusUpdate.self, object))
+    case "msg.new": self = .msgNew(try Decode.frame(MsgNew.self, object))
+    case "agent.updated": self = .agentUpdated(try Decode.frame(AgentUpdated.self, object))
     case "error": self = .error(try Decode.frame(ErrorFrame.self, object))
     default: self = .unknown(type: type, seq: (object["seq"] as? Int) ?? 0)
     }
@@ -791,6 +866,11 @@ enum Require {
 
   static func int(_ object: [String: Any], _ key: String) throws -> Int {
     guard let value = object[key] as? Int else { throw ProtocolError.encoding("missing int field \(key)") }
+    return value
+  }
+
+  static func bool(_ object: [String: Any], _ key: String) throws -> Bool {
+    guard let value = object[key] as? Bool else { throw ProtocolError.decoding("missing bool field \(key)") }
     return value
   }
 }

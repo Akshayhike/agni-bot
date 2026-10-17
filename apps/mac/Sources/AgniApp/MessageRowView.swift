@@ -15,6 +15,8 @@ struct MessageRowView: View {
   var isSelected = false
   var onSelect: () -> Void = {}
   var onNotice: () -> Void
+  var onRename: (String) -> Void = { _ in }
+  var preferredName = State(wrappedValue: "")
 
   var body: some View {
     VStack(alignment: .leading, spacing: 8) {
@@ -24,7 +26,9 @@ struct MessageRowView: View {
       case .assistant:
         assistantProse
       case .system:
-        if message.tools.isEmpty {
+        if message.uiHint == "handoff_notice" {
+          handoffNotice
+        } else if message.tools.isEmpty {
           systemNote
         } else {
           toolGroup(message.tools)
@@ -32,6 +36,24 @@ struct MessageRowView: View {
       }
       if !message.tools.isEmpty && message.role != .system {
         toolGroup(message.tools)
+      }
+      if message.uiHint == "onboarding_name_prompt" {
+        HStack(spacing: 8) {
+          TextField("Type your preferred name…", text: preferredName.projectedValue)
+            .textFieldStyle(.roundedBorder)
+            .onSubmit(saveName)
+          Button("Save", action: saveName)
+            .buttonStyle(.borderedProminent)
+        }
+        .frame(maxWidth: 420, alignment: .leading)
+      }
+      if message.uiHint == "onboarding_completed" {
+        Text("Renamed to \(message.senderName ?? "your assistant")")
+          .font(Typography.caption)
+          .foregroundStyle(Palette.inkTertiary)
+          .padding(.horizontal, 9)
+          .padding(.vertical, 4)
+          .background(Palette.surfaceRaised, in: Capsule())
       }
     }
     .frame(maxWidth: .infinity, alignment: message.role == .user ? .trailing : .leading)
@@ -47,6 +69,13 @@ struct MessageRowView: View {
         NSPasteboard.general.setString(message.text, forType: .string)
       }
     }
+  }
+
+  private func saveName() {
+    let name = preferredName.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !name.isEmpty else { return }
+    onRename(name)
+    preferredName.wrappedValue = ""
   }
 
   // MARK: user
@@ -75,6 +104,12 @@ struct MessageRowView: View {
 
   private var assistantProse: some View {
     VStack(alignment: .leading, spacing: 8) {
+      if let sender = message.senderName {
+        HStack(spacing: 6) {
+          Circle().fill(Color(hex: senderColorValue)).frame(width: 7, height: 7)
+          Text(sender).font(Typography.caption).foregroundStyle(Palette.inkSecondary)
+        }
+      }
       if message.text.isEmpty && message.isStreaming {
         HStack(spacing: 8) {
           ThinkingDots()
@@ -108,6 +143,11 @@ struct MessageRowView: View {
     .background(Palette.incomingBubble, in: RoundedRectangle(cornerRadius: Metrics.bubbleRadius, style: .continuous))
   }
 
+  private var senderColorValue: UInt32 {
+    let raw = (message.senderColor ?? agent?.color ?? "#9A9AA0").trimmingCharacters(in: CharacterSet(charactersIn: "#"))
+    return UInt32(raw, radix: 16) ?? 0x9A9AA0
+  }
+
   // MARK: system + tools
 
   private var systemNote: some View {
@@ -115,6 +155,16 @@ struct MessageRowView: View {
       .font(Typography.meta)
       .foregroundStyle(Palette.inkSecondary)
       .padding(.vertical, 2)
+  }
+
+  private var handoffNotice: some View {
+    Text(message.text)
+      .font(Typography.caption)
+      .foregroundStyle(Palette.inkSecondary)
+      .padding(.horizontal, 11)
+      .padding(.vertical, 6)
+      .background(Palette.surfaceRaised, in: Capsule())
+      .frame(maxWidth: .infinity, alignment: .center)
   }
 
   private func toolGroup(_ tools: [ToolActivity]) -> some View {

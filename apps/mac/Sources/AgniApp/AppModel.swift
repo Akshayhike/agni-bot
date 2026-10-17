@@ -30,7 +30,7 @@ final class AppModel {
   var pairingError: String?
 
   // conversation surface + transcript
-  var conversation = Conversation(agentID: "agni")
+  var conversation = Conversation(agentID: "ea")
   private(set) var threads: [ThreadInfo] = []
   private(set) var agents: [AgentInfo] = []
   private(set) var unread: Set<String> = []
@@ -54,7 +54,7 @@ final class AppModel {
   var isAgentSwitcherPresented = false
   var searchText = ""
   private(set) var focusComposerToken = 0
-  private(set) var isStartingSession = false
+  private(set) var statusText: String?
   var toast: NoticeRow?
 
   /// The window reads this for its title; there is one app per process.
@@ -66,6 +66,7 @@ final class AppModel {
   private var pendingProviderID: String?
   private var healthTask: Task<Void, Never>?
   private var toastTask: Task<Void, Never>?
+  private var typingTask: Task<Void, Never>?
   private let settingsStore = SettingsStore()
 
   // MARK: lifecycle
@@ -79,7 +80,7 @@ final class AppModel {
       secretKind = stored.kind
       tokenIsStored = true
     }
-    agents = [AgentInfo(id: "agni", name: "Agni", color: "#f0b95a", model: nil, tools: [])]
+    agents = [AgentInfo(id: "ea", name: "Agni Bot", color: "#f0b95a", model: nil, tools: [])]
   }
 
   func start() {
@@ -150,8 +151,8 @@ final class AppModel {
     tokenIsStored = false
     secretKind = nil
     threads = []
-    agents = [AgentInfo(id: "agni", name: "Agni", color: "#f0b95a", model: nil, tools: [])]
-    conversation = Conversation(agentID: "agni")
+    agents = [AgentInfo(id: "ea", name: "Agni Bot", color: "#f0b95a", model: nil, tools: [])]
+    conversation = Conversation(agentID: "ea")
     health = nil
     configuredProviders = []
     jobs = []
@@ -208,35 +209,6 @@ final class AppModel {
     }
   }
 
-  /// ⌘N: close the active session block and continue in a fresh one. The
-  /// conversation is untouched — a seam, not a switch.
-  func newSession() {
-    guard let conversationID = conversation.conversationID, let connection, connectionState.isReady else {
-      showToast(
-        NoticeRow(
-          id: "offline_new", kind: .failure, title: "Not connected",
-          body: "A new session needs the conversation open — reconnecting…", createdAt: Date()
-        )
-      )
-      return
-    }
-    isStartingSession = true
-    Task { @MainActor in
-      do {
-        try await connection.send(.sessionNew(conversationID: conversationID))
-      } catch {
-        isStartingSession = false
-        showToast(
-          NoticeRow(
-            id: "new_session_failed", kind: .failure, title: "Couldn't start a new session",
-            body: error.localizedDescription, createdAt: Date()
-          )
-        )
-      }
-    }
-    focusComposer()
-  }
-
   func refreshThreadList() {
     guard let connection, connectionState.isReady else { return }
     Task { try? await connection.send(.threadList(limit: 100)) }
@@ -282,17 +254,32 @@ final class AppModel {
       showToast(NoticeRow(id: "offline", kind: .failure, title: "Not connected", body: "Reconnecting. Your message was kept in the list but was not sent.", createdAt: Date()))
       return
     }
-    guard let conversationID = conversation.conversationID else {
-      conversation.markLocalFailure(id: localID, reason: "Still connecting — the conversation is not open yet.")
-      showToast(NoticeRow(id: "opening", kind: .failure, title: "Still connecting", body: "The conversation has not opened yet; try again in a moment.", createdAt: Date()))
-      return
-    }
     Task {
       do {
-        try await connection.send(.msgSend(threadID: nil, text: trimmed, files: nil, conversationID: conversationID))
+        let specialistID = conversation.agentID == "ea" ? nil : conversation.agentID
+        let channelID = specialistID.map { "dm:\($0)" } ?? "main"
+        try await connection.send(.msgSend(threadID: nil, text: trimmed, files: nil, conversationID: nil, channelId: channelID, toAgentId: specialistID, texts: nil))
       } catch {
         conversation.markLocalFailure(id: localID, reason: "Send failed: \(error)")
       }
+    }
+  }
+
+  func renameAgent(_ name: String, agentID: String = "ea") {
+    guard let connection else { return }
+    Task { try? await connection.send(.agentRename(agentId: agentID, name: name)) }
+  }
+
+  func updateTypingState(isTyping: Bool) {
+    typingTask?.cancel()
+    guard let connection, connectionState.isReady else { return }
+    let channelID = conversation.agentID == "ea" ? "main" : "dm:\(conversation.agentID)"
+    Task { try? await connection.send(.userTyping(channelId: channelID, isTyping: isTyping)) }
+    guard isTyping else { return }
+    typingTask = Task { [weak self] in
+      try? await Task.sleep(for: .seconds(1))
+      guard !Task.isCancelled else { return }
+      self?.updateTypingState(isTyping: false)
     }
   }
 
@@ -524,6 +511,23 @@ final class AppModel {
 
   private func handleFrame(_ frame: ServerFrame) {
     switch frame {
+    case .statusUpdate(let status):
+      let activeChannel = conversation.agentID == "ea" ? "main" : "dm:\(conversation.agentID)"
+      guard status.channelId == activeChannel else { return }
+      statusText = status.transient ? status.text : nil
+      return
+    case .msgNew(let message):
+      let activeChannel = conversation.agentID == "ea" ? "main" : "dm:\(conversation.agentID)"
+      guard message.channelId == activeChannel, !message.internal else { return }
+      statusText = nil
+      run(conversation.apply(frame))
+      return
+    case .agentUpdated(let updated):
+      if let index = agents.firstIndex(where: { $0.id == updated.agentId }) {
+        agents[index].name = updated.displayName
+      }
+      _ = conversation.apply(frame)
+      return
     case .threadListOK(let list):
       threads = list.threads.sorted { ($0.updatedAt, $0.id) > ($1.updatedAt, $1.id) }
 
@@ -625,7 +629,6 @@ final class AppModel {
 
     default:
       let effects = conversation.apply(frame)
-      if case .sessionStart = frame { isStartingSession = false }
       if case .turnEnd = frame { refreshThreadList() }
       if case .turnStart = frame { refreshThreadList() }
       run(effects)

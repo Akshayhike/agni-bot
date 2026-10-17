@@ -295,4 +295,194 @@ export const MIGRATIONS: Migration[] = [
       CREATE INDEX idx_plugin_connections_status ON plugin_connections(status);
     `,
   },
+  {
+    id: 9,
+    name: "channels_agents_memory",
+    sql: `
+      CREATE TABLE agents (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        color TEXT,
+        model TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE TABLE channels (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        agent_id TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX idx_channels_agent ON channels(agent_id);
+
+      CREATE TABLE channel_messages (
+        id TEXT PRIMARY KEY,
+        channel_id TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+        role TEXT NOT NULL,
+        text TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'sent',
+        turn_id TEXT,
+        created_at TEXT NOT NULL
+      );
+      CREATE INDEX idx_channel_messages_channel ON channel_messages(channel_id, created_at);
+    `,
+  },
+  {
+    id: 10,
+    name: "master_spec_channels_agents_memories",
+    sql: `
+      ALTER TABLE agents ADD COLUMN role TEXT NOT NULL DEFAULT 'agent';
+      ALTER TABLE agents ADD COLUMN default_name TEXT;
+      ALTER TABLE agents ADD COLUMN display_name TEXT;
+      ALTER TABLE agents ADD COLUMN system_prompt TEXT;
+      ALTER TABLE agents ADD COLUMN avatar_color TEXT;
+      ALTER TABLE agents ADD COLUMN onboarded INTEGER NOT NULL DEFAULT 0;
+
+      ALTER TABLE channels ADD COLUMN type TEXT NOT NULL DEFAULT 'dm';
+      ALTER TABLE channels ADD COLUMN visibility TEXT NOT NULL DEFAULT 'private';
+      ALTER TABLE channels ADD COLUMN parent_turn_id TEXT;
+
+      CREATE TABLE IF NOT EXISTS channel_members (
+        channel_id TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+        member_id TEXT NOT NULL,
+        member_type TEXT NOT NULL DEFAULT 'agent',
+        joined_at TEXT NOT NULL,
+        PRIMARY KEY (channel_id, member_id)
+      );
+
+      ALTER TABLE channel_messages ADD COLUMN from_type TEXT NOT NULL DEFAULT 'user';
+      ALTER TABLE channel_messages ADD COLUMN from_id TEXT NOT NULL DEFAULT '';
+      ALTER TABLE channel_messages ADD COLUMN to_agent_id TEXT;
+      ALTER TABLE channel_messages ADD COLUMN internal INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE channel_messages ADD COLUMN compacted INTEGER NOT NULL DEFAULT 0;
+      CREATE INDEX idx_channel_messages_channel2 ON channel_messages(channel_id, created_at);
+
+      CREATE TABLE IF NOT EXISTS channel_summaries (
+        id TEXT PRIMARY KEY,
+        channel_id TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+        summary TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS agent_memories (
+        id TEXT PRIMARY KEY,
+        scope TEXT NOT NULL DEFAULT 'agent',
+        agent_id TEXT NOT NULL,
+        key_slug TEXT NOT NULL,
+        text TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(agent_id, key_slug)
+      );
+
+      INSERT OR IGNORE INTO agents (id, name, role, default_name, display_name, system_prompt, avatar_color, onboarded, created_at, updated_at) VALUES
+        ('ea', 'Agni Bot', 'orchestrator', 'Agni Bot', 'Agni Bot', 'You are the executive assistant.', '#c96442', 0, datetime('now'), datetime('now')),
+        ('researcher', 'Researcher', 'agent', 'Researcher', 'Researcher', 'You are the researcher.', '#4a90d9', 0, datetime('now'), datetime('now')),
+        ('coder', 'Coder', 'agent', 'Coder', 'Coder', 'You are the coder.', '#4caf50', 0, datetime('now'), datetime('now')),
+        ('analyst', 'Analyst', 'agent', 'Analyst', 'Analyst', 'You are the analyst.', '#9c27b0', 0, datetime('now'), datetime('now'));
+    `,
+  },
+  {
+    id: 11,
+    name: "agent_memories_semantic_key",
+    sql: `
+      -- Finalize agent_memories: agent_id is nullable for global memories,
+      -- add type/tags/importance, rename text→content, and enforce a
+      -- semantic key uniqueness that treats NULL agent_id (global) the same
+      -- as the empty string so global and per-agent slugs don't collide.
+      CREATE TABLE agent_memories_new (
+        id TEXT PRIMARY KEY,
+        scope TEXT NOT NULL DEFAULT 'agent',
+        agent_id TEXT,
+        type TEXT NOT NULL DEFAULT 'fact',
+        key_slug TEXT NOT NULL,
+        content TEXT NOT NULL,
+        tags TEXT,
+        importance INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      INSERT INTO agent_memories_new (id, scope, agent_id, type, key_slug, content, tags, importance, created_at, updated_at)
+        SELECT id, scope, agent_id, 'fact', key_slug, text, NULL, 0, created_at, updated_at
+        FROM agent_memories;
+
+      DROP TABLE agent_memories;
+
+      ALTER TABLE agent_memories_new RENAME TO agent_memories;
+
+      CREATE UNIQUE INDEX idx_agent_memories_semantic_key
+        ON agent_memories(scope, COALESCE(agent_id, ''), key_slug);
+    `,
+  },
+  {
+    id: 12,
+    name: "channel_memory_constraints_and_main_channel",
+    sql: `
+      -- The published contract keys membership by both participant kind and id.
+      CREATE TABLE channel_members_v12 (
+        channel_id TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+        participant_type TEXT NOT NULL,
+        participant_id TEXT NOT NULL,
+        role TEXT NOT NULL DEFAULT 'member',
+        PRIMARY KEY (channel_id, participant_type, participant_id)
+      );
+      INSERT OR IGNORE INTO channel_members_v12 (channel_id, participant_type, participant_id, role)
+        SELECT channel_id, member_type, member_id, 'member' FROM channel_members;
+      DROP TABLE channel_members;
+      ALTER TABLE channel_members_v12 RENAME TO channel_members;
+
+      CREATE TABLE channel_summaries_v12 (
+        id TEXT PRIMARY KEY,
+        channel_id TEXT NOT NULL UNIQUE REFERENCES channels(id) ON DELETE CASCADE,
+        summary TEXT NOT NULL,
+        last_compacted_message_id TEXT,
+        token_estimate INTEGER NOT NULL DEFAULT 0,
+        updated_at TEXT NOT NULL
+      );
+      INSERT OR IGNORE INTO channel_summaries_v12 (id, channel_id, summary, updated_at)
+        SELECT id, channel_id, summary, created_at FROM channel_summaries;
+      DROP TABLE channel_summaries;
+      ALTER TABLE channel_summaries_v12 RENAME TO channel_summaries;
+
+      CREATE TABLE agent_memories_v12 (
+        id TEXT PRIMARY KEY,
+        scope TEXT NOT NULL,
+        agent_id TEXT,
+        type TEXT NOT NULL,
+        key_slug TEXT NOT NULL,
+        content TEXT NOT NULL,
+        tags TEXT,
+        importance REAL NOT NULL DEFAULT 0.5,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      INSERT OR IGNORE INTO agent_memories_v12 (id, scope, agent_id, type, key_slug, content, tags, importance, created_at, updated_at)
+        SELECT id, scope, agent_id, type, key_slug, content, tags, importance, created_at, updated_at FROM agent_memories;
+      DROP TABLE agent_memories;
+      ALTER TABLE agent_memories_v12 RENAME TO agent_memories;
+      CREATE UNIQUE INDEX idx_agent_memories_semantic_key
+        ON agent_memories(scope, COALESCE(agent_id, ''), key_slug);
+      CREATE INDEX idx_agent_memories_scope ON agent_memories(scope, agent_id, importance DESC);
+
+      UPDATE agents SET default_name = COALESCE(default_name, name), display_name = COALESCE(display_name, name),
+        system_prompt = COALESCE(system_prompt, ''), avatar_color = COALESCE(avatar_color, color, '#f0b95a');
+      UPDATE agents SET role = 'orchestrator', default_name = 'Agni Bot', display_name = 'Agni Bot'
+        WHERE id = 'ea' AND display_name = 'EA';
+      INSERT OR IGNORE INTO agents (id, name, color, role, default_name, display_name, system_prompt, avatar_color, onboarded, created_at, updated_at)
+        VALUES ('agni', 'Agni', '#f0b95a', 'orchestrator', 'Agni', 'Agni', 'You are the primary assistant.', '#f0b95a', 1, datetime('now'), datetime('now'));
+
+      INSERT OR IGNORE INTO channels (id, name, agent_id, type, visibility, parent_turn_id, created_at, updated_at)
+        VALUES ('main', 'Main', 'ea', 'main', 'public', NULL, datetime('now'), datetime('now'));
+      INSERT OR IGNORE INTO channel_members (channel_id, participant_type, participant_id, role)
+        VALUES ('main', 'agent', 'ea', 'owner'), ('main', 'user', 'user', 'member');
+    `,
+  },
+  {
+    id: 13,
+    name: "channel_message_ui_hint",
+    sql: `ALTER TABLE channel_messages ADD COLUMN ui_hint TEXT;`,
+  },
 ];

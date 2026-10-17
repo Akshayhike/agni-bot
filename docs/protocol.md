@@ -41,7 +41,9 @@ never reason about thread ids.
 | --- | --- | --- |
 | `hello` | `{v, token, device}` | First frame. `v` is the protocol version. |
 | `resync` | `{lastSeq}` | Replay everything after `lastSeq`. |
-| `msg.send` | `{threadID?, text, files?, conversationID?}` | With `conversationID`: sends into the conversation's active session block (no thread id needed). Otherwise `threadID` targets a session block (CLI); empty/omitted opens a fresh block in the connection's agent conversation. |
+| `msg.send` | `{threadID?, text, files?, conversationID?, channelId?, toAgentId?, texts?}` | Channel clients target a channel (default `main`) and may address an agent. `texts` batches multiple bodies; legacy clients continue to send `text`. |
+| `user.typing` | `{channelId?, isTyping}` | Extends server-side message coalescing while the user is typing. |
+| `agent.rename` | `{agentId, name}` | Renames an agent and completes primary-agent onboarding. |
 | `msg.cancel` | `{turnID}` | Interrupts the turn: providers abort, partial output is kept. |
 | `approve.reply` | `{requestID, decision}` | `decision`: `once \| always \| reject`. |
 | `agent.select` | `{agentID}` | Sets the persona for subsequent `msg.send` on this connection. |
@@ -108,6 +110,9 @@ accountLabel?, error?, connectedAt?}`.
 | `task.update.ok` | `{task: {...}}` | Updated task snapshot after a persisted state change. |
 | `provider.add.ok` | `{providers: [...]}` | Provider metadata after adding a key; contains no credentials. |
 | `presence` | `{state}` | `online \| offline`. |
+| `status.update` | `{channelId, agentId?, text, transient}` | Activity text; transient updates clear on the next message. |
+| `msg.new` | `{id, channelId, fromType, fromId, senderName, senderColor?, text, internal, uiHint?, createdAt}` | Durable channel message; `uiHint` can be `onboarding_name_prompt` or `handoff_notice`. |
+| `agent.updated` | `{agentId, displayName, onboarded}` | Agent rename/onboarding state changed. |
 | `error` | `{code, message, retryAfter?}` | See codes below. |
 
 ## Error codes (v2)
