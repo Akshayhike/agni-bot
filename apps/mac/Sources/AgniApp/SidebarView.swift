@@ -14,7 +14,7 @@ struct SidebarView: View {
     VStack(spacing: 0) {
       header
       searchField
-      sections
+      pluginsButton
       profileButton
     }
     .background(Palette.sidebar)
@@ -233,6 +233,35 @@ struct SidebarView: View {
     if !task.enabled { return "Paused" }
     if task.state == "failed" { return "Failed" }
     return AgniFormat.cadence(everyMs: task.everyMs, runAt: AgniFormat.parseISO(task.runAt))
+  }
+
+  private var pluginsButton: some View {
+    Button { model.isSettingsPresented = true } label: {
+      HStack(spacing: 8) {
+        Image(systemName: "puzzlepiece.extension")
+          .font(.system(size: 14, weight: .medium))
+          .foregroundStyle(Palette.inkSecondary)
+          .frame(width: 28, height: 28)
+          .background(Palette.surfaceRaised, in: Circle())
+        Text("Plugins")
+          .font(Typography.meta)
+          .foregroundStyle(Color(hex: 0xD4D4D8))
+          .lineLimit(1)
+        Spacer(minLength: 0)
+        // Connection status dot
+        let connected = model.plugins.filter { $0.status == "connected" }.count
+        let total = model.plugins.count
+        Text("\(connected)/\(total)")
+          .font(Typography.caption)
+          .foregroundStyle(Palette.inkTertiary)
+      }
+      .padding(.horizontal, 16)
+      .frame(height: 40)
+      .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    .help("Connect plugins (Gmail, Calendar, Drive, Granola, Notion)")
+    .accessibilityLabel("Open plugins")
   }
 
   private var profileButton: some View {
