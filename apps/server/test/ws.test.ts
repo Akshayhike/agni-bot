@@ -151,6 +151,12 @@ async function startTestServer(): Promise<void> {
     frameLogCapacity: 100,
     jobPollMs: 1000,
     maxConcurrentTurns: 4,
+    googleOAuthClientID: "",
+    googleOAuthClientSecret: "",
+    gmailUser: "",
+    gmailAppPassword: "",
+    gmailOwnerUser: "",
+    gmailOwnerAppPassword: "",
   };
   server = startServer(config, db, router);
   client = await TestClient.connect(`ws://127.0.0.1:${server.port}/ws`, token);

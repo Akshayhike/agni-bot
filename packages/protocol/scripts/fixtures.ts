@@ -17,6 +17,7 @@ import {
   parseClientFrame,
   parseServerFrame,
   type ClientFrame,
+  type PluginInfo,
   type ServerFrame,
 } from "../src/index.ts";
 
@@ -44,6 +45,49 @@ const CLIENT_FRAMES: ClientFrame[] = [
   { type: "provider.add", providerID: "groq", apiKey: "fixture-key", model: "llama-3.1-8b-instant" },
   { type: "provider.model.set", providerID: "groq", model: "llama-3.1-8b-instant" },
   { type: "provider.models.list", providerID: "groq" },
+  { type: "plugin.list" },
+  { type: "plugin.connect", pluginID: "gmail", account: "agent" },
+  { type: "plugin.disconnect", connectionID: "plc_01hq" },
+];
+
+/** A representative plugins snapshot: one connected agent row, one disconnected owner row. */
+const PLUGIN_SNAPSHOT: PluginInfo[] = [
+  {
+    id: "gmail",
+    name: "Gmail",
+    category: "google",
+    description: "Search, read, draft, send and label mail for this account.",
+    authKind: "oauth",
+    account: "agent",
+    scopes: ["https://www.googleapis.com/auth/gmail.modify", "https://www.googleapis.com/auth/userinfo.email"],
+    capabilities: [
+      { capability: "read", mode: "free" },
+      { capability: "draft", mode: "free" },
+      { capability: "send", mode: "free" },
+      { capability: "modify", mode: "free" },
+    ],
+    available: true,
+    connectionID: "plc_01hq",
+    status: "connected",
+    accountLabel: "hey.agnibot@gmail.com",
+    connectedAt: "2026-10-17T09:00:00.000Z",
+  },
+  {
+    id: "calendar",
+    name: "Calendar",
+    category: "google",
+    description: "Search events, create events and invite people for this account.",
+    authKind: "oauth",
+    account: "owner",
+    scopes: ["https://www.googleapis.com/auth/calendar"],
+    capabilities: [
+      { capability: "read", mode: "free" },
+      { capability: "create", mode: "approval" },
+      { capability: "modify", mode: "approval" },
+      { capability: "share", mode: "approval" },
+    ],
+    available: true,
+  },
 ];
 
 const SERVER_FRAMES: ServerFrame[] = [
@@ -142,6 +186,15 @@ const SERVER_FRAMES: ServerFrame[] = [
   { type: "task.update.ok", seq: 60, task: { id: "tsk_01hq", title: "Renew insurance", dueAt: "2026-10-17T01:00:00.000Z", priority: "high", status: "snoozed", snoozedUntil: "2026-10-17T01:00:00.000Z", createdAt: "2026-10-16T12:00:00.000Z", updatedAt: "2026-10-16T12:01:00.000Z" } },
   { type: "provider.add.ok", seq: 61, providers: [{ id: "groq", label: "Groq", model: "llama-3.1-8b-instant", available: true, cooldownRemainingMs: 0 }] },
   { type: "provider.models.ok", seq: 62, providerID: "groq", models: ["llama-3.1-8b-instant"] },
+  {
+    type: "plugin.connect.ok",
+    seq: 66,
+    pluginID: "gmail",
+    account: "agent",
+    authorizeURL: "https://accounts.google.com/o/oauth2/v2/auth?client_id=fixture&state=st_01hq",
+  },
+  { type: "plugin.list.ok", seq: 67, plugins: PLUGIN_SNAPSHOT },
+  { type: "plugin.state", seq: 68, plugins: PLUGIN_SNAPSHOT },
   { type: "conversation.ok", seq: 63, conversationID: "cnv_01hq", agentID: "agni", sessionID: "thr_01hq" },
   { type: "session.start", seq: 64, conversationID: "cnv_01hq", sessionID: "thr_01hs", reason: "manual" },
   {

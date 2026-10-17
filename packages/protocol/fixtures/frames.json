@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-17T02:36:50.010Z",
+  "generatedAt": "2026-10-17T05:14:58.694Z",
   "protocolVersion": 2,
   "client": [
     {
@@ -111,6 +111,18 @@
     {
       "type": "provider.models.list",
       "providerID": "groq"
+    },
+    {
+      "type": "plugin.list"
+    },
+    {
+      "type": "plugin.connect",
+      "pluginID": "gmail",
+      "account": "agent"
+    },
+    {
+      "type": "plugin.disconnect",
+      "connectionID": "plc_01hq"
     }
   ],
   "server": [
@@ -345,6 +357,155 @@
       "providerID": "groq",
       "models": [
         "llama-3.1-8b-instant"
+      ]
+    },
+    {
+      "type": "plugin.connect.ok",
+      "seq": 66,
+      "pluginID": "gmail",
+      "account": "agent",
+      "authorizeURL": "https://accounts.google.com/o/oauth2/v2/auth?client_id=fixture&state=st_01hq"
+    },
+    {
+      "type": "plugin.list.ok",
+      "seq": 67,
+      "plugins": [
+        {
+          "id": "gmail",
+          "name": "Gmail",
+          "category": "google",
+          "description": "Search, read, draft, send and label mail for this account.",
+          "authKind": "oauth",
+          "account": "agent",
+          "scopes": [
+            "https://www.googleapis.com/auth/gmail.modify",
+            "https://www.googleapis.com/auth/userinfo.email"
+          ],
+          "capabilities": [
+            {
+              "capability": "read",
+              "mode": "free"
+            },
+            {
+              "capability": "draft",
+              "mode": "free"
+            },
+            {
+              "capability": "send",
+              "mode": "free"
+            },
+            {
+              "capability": "modify",
+              "mode": "free"
+            }
+          ],
+          "available": true,
+          "connectionID": "plc_01hq",
+          "status": "connected",
+          "accountLabel": "hey.agnibot@gmail.com",
+          "connectedAt": "2026-10-17T09:00:00.000Z"
+        },
+        {
+          "id": "calendar",
+          "name": "Calendar",
+          "category": "google",
+          "description": "Search events, create events and invite people for this account.",
+          "authKind": "oauth",
+          "account": "owner",
+          "scopes": [
+            "https://www.googleapis.com/auth/calendar"
+          ],
+          "capabilities": [
+            {
+              "capability": "read",
+              "mode": "free"
+            },
+            {
+              "capability": "create",
+              "mode": "approval"
+            },
+            {
+              "capability": "modify",
+              "mode": "approval"
+            },
+            {
+              "capability": "share",
+              "mode": "approval"
+            }
+          ],
+          "available": true
+        }
+      ]
+    },
+    {
+      "type": "plugin.state",
+      "seq": 68,
+      "plugins": [
+        {
+          "id": "gmail",
+          "name": "Gmail",
+          "category": "google",
+          "description": "Search, read, draft, send and label mail for this account.",
+          "authKind": "oauth",
+          "account": "agent",
+          "scopes": [
+            "https://www.googleapis.com/auth/gmail.modify",
+            "https://www.googleapis.com/auth/userinfo.email"
+          ],
+          "capabilities": [
+            {
+              "capability": "read",
+              "mode": "free"
+            },
+            {
+              "capability": "draft",
+              "mode": "free"
+            },
+            {
+              "capability": "send",
+              "mode": "free"
+            },
+            {
+              "capability": "modify",
+              "mode": "free"
+            }
+          ],
+          "available": true,
+          "connectionID": "plc_01hq",
+          "status": "connected",
+          "accountLabel": "hey.agnibot@gmail.com",
+          "connectedAt": "2026-10-17T09:00:00.000Z"
+        },
+        {
+          "id": "calendar",
+          "name": "Calendar",
+          "category": "google",
+          "description": "Search events, create events and invite people for this account.",
+          "authKind": "oauth",
+          "account": "owner",
+          "scopes": [
+            "https://www.googleapis.com/auth/calendar"
+          ],
+          "capabilities": [
+            {
+              "capability": "read",
+              "mode": "free"
+            },
+            {
+              "capability": "create",
+              "mode": "approval"
+            },
+            {
+              "capability": "modify",
+              "mode": "approval"
+            },
+            {
+              "capability": "share",
+              "mode": "approval"
+            }
+          ],
+          "available": true
+        }
       ]
     },
     {

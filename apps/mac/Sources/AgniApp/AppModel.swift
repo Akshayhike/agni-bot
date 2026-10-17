@@ -7,6 +7,7 @@
 import Foundation
 import Observation
 import SwiftUI
+import AppKit
 import AgniKit
 import AgniProtocol
 
@@ -38,6 +39,7 @@ final class AppModel {
   private(set) var health: HealthReport?
   private(set) var healthError: String?
   private(set) var configuredProviders: [ProviderStatus] = []
+  private(set) var plugins: [PluginInfo] = []
   private(set) var jobs: [JobInfo] = []
   private(set) var tasks: [TaskInfo] = []
   private(set) var isAddingProvider = false
@@ -234,6 +236,21 @@ final class AppModel {
   func refreshTasks() {
     guard let connection, connectionState.isReady else { return }
     Task { try? await connection.send(.taskList(status: "all", limit: 200)) }
+  }
+
+  func refreshPlugins() {
+    guard let connection, connectionState.isReady else { return }
+    Task { try? await connection.send(.pluginList) }
+  }
+
+  func connectPlugin(pluginID: String, account: String) {
+    guard let connection, connectionState.isReady else { return }
+    Task { try? await connection.send(.pluginConnect(pluginID: pluginID, account: account)) }
+  }
+
+  func disconnectPlugin(connectionID: String) {
+    guard let connection, connectionState.isReady else { return }
+    Task { try? await connection.send(.pluginDisconnect(connectionID: connectionID)) }
   }
 
   func updateTask(_ task: TaskInfo, action: String, until: Date? = nil) {
@@ -558,6 +575,17 @@ final class AppModel {
       providerModels = result.models
       providerModelsError = nil
 
+    case .pluginListOK(let result):
+      plugins = result.plugins
+
+    case .pluginState(let result):
+      plugins = result.plugins
+
+    case .pluginConnectOK(let result):
+      if let raw = result.authorizeURL, let url = URL(string: raw) {
+        NSWorkspace.shared.open(url)
+      }
+
     case .helloOK:
       break
 
@@ -569,6 +597,10 @@ final class AppModel {
 
     case .error(let error) where error.code == "provider_models":
       providerModelsError = error.message
+      return
+
+    case .error(let error) where ["unknown_plugin", "unknown_connection", "plugin_not_configured", "plugin_unavailable", "plugin_connect_failed"].contains(error.code):
+      showToast(NoticeRow(id: UUID().uuidString, kind: .info, title: "Plugin", body: error.message, createdAt: Date()))
       return
 
     case .error(let error) where error.code == "unknown_conversation":
@@ -640,6 +672,7 @@ final class AppModel {
     await refreshHealth()
     refreshJobs()
     refreshTasks()
+    refreshPlugins()
   }
 
   // MARK: notifications

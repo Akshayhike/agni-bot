@@ -1,6 +1,5 @@
 /**
  * Minimal IMAP client over TLS. Supports LOGIN, SELECT, SEARCH, FETCH, LOGOUT.
- * Enough for the agent to search and read mail. No IDLE, no APPEND.
  */
 import tls from "node:tls";
 
@@ -31,7 +30,7 @@ function parseHeaders(raw: string): { subject: string; from: string; to: string;
     else if (lower.startsWith("from:")) from = line.slice(5).trim();
     else if (lower.startsWith("to:")) to = line.slice(3).trim();
     else if (lower.startsWith("date:")) date = line.slice(5).trim();
-    if (line === "") break; // end of headers
+    if (line === "") break;
   }
   return { subject, from, to, date };
 }
@@ -48,29 +47,30 @@ export class ImapClient {
 
   async connect(cfg: ImapConfig): Promise<void> {
     return new Promise((resolve, reject) => {
-      const socket = tls.connect(cfg.port, cfg.host, { rejectUnauthorized: true }, () => {
-        // Wait for greeting
-      });
+      const socket = tls.connect(cfg.port, cfg.host, { rejectUnauthorized: true }, () => {});
       this.socket = socket;
       let greeted = false;
+      let loginTag = "";
       socket.on("data", (data) => {
         this.buffer += data.toString();
         if (!greeted && this.buffer.includes("\r\n")) {
           greeted = true;
-          // Send login
-          const tag = this.nextTag();
-          socket.write(`${tag} LOGIN "${cfg.user}" "${cfg.pass}"\r\n`);
+          loginTag = this.nextTag();
+          socket.write(`${loginTag} LOGIN "${cfg.user}" "${cfg.pass}"\r\n`);
         }
       });
-      // Handle login response
       const checkLogin = setInterval(() => {
-        if (this.buffer.includes("OK") && this.buffer.includes("LOGIN")) {
+        if (loginTag && this.buffer.includes(`${loginTag} OK`)) {
           clearInterval(checkLogin);
           resolve();
         }
+        if (loginTag && (this.buffer.includes(`${loginTag} NO`) || this.buffer.includes(`${loginTag} BAD`))) {
+          clearInterval(checkLogin);
+          reject(new Error("IMAP login failed: " + this.buffer.slice(0, 300)));
+        }
       }, 50);
       socket.on("error", (err) => { clearInterval(checkLogin); reject(err); });
-      setTimeout(() => { clearInterval(checkLogin); if (!greeted) reject(new Error("IMAP greeting timeout")); }, 10000);
+      setTimeout(() => { clearInterval(checkLogin); reject(new Error("IMAP connect timeout. Buffer: " + this.buffer.slice(0, 300))); }, 15000);
     });
   }
 
@@ -82,7 +82,6 @@ export class ImapClient {
       let response = "";
       const handler = (data: Buffer) => {
         response += data.toString();
-        // Check if we got the tagged response
         if (response.includes(`${tag} OK`) || response.includes(`${tag} NO`) || response.includes(`${tag} BAD`)) {
           this.socket!.removeListener("data", handler);
           resolve(response);
@@ -116,15 +115,23 @@ export class ImapClient {
 
   async fetch(uid: number): Promise<ImapMessage | null> {
     const resp = await this.sendCommand(`FETCH ${uid} (FLAGS RFC822)`);
-    // Parse the RFC822 content
     const rfcMatch = resp.match(/\{(\d+)\}\r?\n([\s\S]+?)\r?\nA\d+ (?:OK|NO|BAD)/);
-    if (!rfcMatch) return null;
+    if (!rfcMatch) {
+      // Try alternate pattern
+      const altMatch = resp.match(/\{(\d+)\}\r?\n([\s\S]+)/);
+      if (!altMatch) return null;
+      const raw = altMatch[2]!.replace(/\r?\nA\d+ (?:OK|NO|BAD).*/s, "");
+      const { subject, from, to, date } = parseHeaders(raw);
+      const bodyStart = raw.indexOf("\r\n\r\n");
+      const body = bodyStart >= 0 ? raw.slice(bodyStart + 4) : "";
+      const flagsMatch = resp.match(/FLAGS \(([^)]*)\)/);
+      const flags = flagsMatch ? flagsMatch[1]!.split(" ").filter(Boolean) : [];
+      return { uid, flags, subject, from, to, date, body, raw };
+    }
     const raw = rfcMatch[2]!;
     const { subject, from, to, date } = parseHeaders(raw);
-    // Extract body (after blank line)
     const bodyStart = raw.indexOf("\r\n\r\n");
     const body = bodyStart >= 0 ? raw.slice(bodyStart + 4) : "";
-    // Parse flags
     const flagsMatch = resp.match(/FLAGS \(([^)]*)\)/);
     const flags = flagsMatch ? flagsMatch[1]!.split(" ").filter(Boolean) : [];
     return { uid, flags, subject, from, to, date, body, raw };

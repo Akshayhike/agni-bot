@@ -2,22 +2,38 @@
 import SwiftUI
 import AgniKit
 import AgniProtocol
+import AppKit
 
 struct SettingsView: View {
   var model: AppModel
   var showingAddProvider = State(wrappedValue: false)
   var editingProvider = State<ProviderStatus?>(wrappedValue: nil)
+  var section = State(wrappedValue: Section.plugins)
+
+  enum Section: String, CaseIterable, Identifiable {
+    case general = "General"
+    case plugins = "Plugins"
+    case models = "Models & providers"
+    case device = "This Mac"
+    var id: String { rawValue }
+    var systemImage: String {
+      switch self {
+      case .general: return "gearshape"
+      case .plugins: return "puzzlepiece.extension"
+      case .models: return "cpu"
+      case .device: return "laptopcomputer"
+      }
+    }
+  }
 
   var body: some View {
     HStack(spacing: 0) {
-      navigation
+      rail
       Rectangle().fill(Palette.hairline).frame(width: 1)
       ScrollView {
         VStack(alignment: .leading, spacing: 24) {
           heading
-          modelsSection
-          connectionSection
-          deviceSection
+          content
         }
         .padding(28)
         .frame(maxWidth: 760, alignment: .leading)
@@ -38,27 +54,26 @@ struct SettingsView: View {
     .task { await model.refreshSettingsData() }
   }
 
-  private var navigation: some View {
+  private var rail: some View {
     VStack(alignment: .leading, spacing: 5) {
       Text("Settings")
         .font(.system(size: 17, weight: .semibold))
         .padding(.horizontal, 14)
         .padding(.top, 24)
         .padding(.bottom, 12)
-      Label("Models & providers", systemImage: "cpu")
-        .foregroundStyle(Palette.ink)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 9)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Palette.surfaceRaised, in: RoundedRectangle(cornerRadius: 8))
-      Label("Connection", systemImage: "network")
-        .foregroundStyle(Palette.inkSecondary)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 9)
-      Label("This Mac", systemImage: "laptopcomputer")
-        .foregroundStyle(Palette.inkSecondary)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 9)
+      ForEach(Section.allCases) { item in
+        Button {
+          section.wrappedValue = item
+        } label: {
+          Label(item.rawValue, systemImage: item.systemImage)
+            .foregroundStyle(section.wrappedValue == item ? Palette.ink : Palette.inkSecondary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(section.wrappedValue == item ? Palette.surfaceRaised : Color.clear, in: RoundedRectangle(cornerRadius: 8))
+        }
+        .buttonStyle(.plain)
+      }
       Spacer()
       Button { model.isSettingsPresented = false } label: {
         Label("Back to chat", systemImage: "arrow.left")
@@ -77,14 +92,159 @@ struct SettingsView: View {
 
   private var heading: some View {
     VStack(alignment: .leading, spacing: 6) {
-      Text("Models & providers")
+      Text(section.wrappedValue.rawValue)
         .font(.system(size: 24, weight: .semibold))
-      Text("Connect API providers to the Agni daemon. Keys are stored on the server and never on this Mac.")
+      Text(subtitle)
         .font(Typography.body)
         .foregroundStyle(Palette.inkSecondary)
         .fixedSize(horizontal: false, vertical: true)
     }
   }
+
+  private var subtitle: String {
+    switch section.wrappedValue {
+    case .general: return "Account, appearance and system preferences."
+    case .plugins: return "Connections Agni can use on your behalf. Tokens stay on the daemon."
+    case .models: return "Connect API providers. Keys are stored on the server and never on this Mac."
+    case .device: return "This Mac and how it pairs with the daemon."
+    }
+  }
+
+  @ViewBuilder
+  private var content: some View {
+    switch section.wrappedValue {
+    case .general: generalSection
+    case .plugins: pluginsSection
+    case .models: modelsSection
+    case .device: deviceSection
+    }
+  }
+
+  // MARK: - General
+
+  private var generalSection: some View {
+    VStack(alignment: .leading, spacing: 14) {
+      VStack(alignment: .leading, spacing: 12) {
+        Text("Account").font(Typography.title)
+        HStack(spacing: 10) {
+          Image(systemName: "person.crop.circle.fill").font(.system(size: 28)).foregroundStyle(Palette.ember)
+          VStack(alignment: .leading, spacing: 2) {
+            Text("Agni").font(Typography.rowTitle)
+            Text("Your personal assistant").font(Typography.caption).foregroundStyle(Palette.inkSecondary)
+          }
+          Spacer()
+        }
+      }
+      .padding(16)
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .background(Palette.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+      connectionSection
+    }
+  }
+
+  // MARK: - Plugins
+
+  private var pluginsSection: some View {
+    VStack(alignment: .leading, spacing: 14) {
+      pluginGroup(title: "Agent-owned", subtitle: "Agni's own accounts — it acts freely within Google's limits.", account: "agent")
+      pluginGroup(title: "Your accounts", subtitle: "Your data — reads and drafts are direct; sends, creates and shares ask first.", account: "owner")
+    }
+  }
+
+  private func pluginGroup(title: String, subtitle: String, account: String) -> some View {
+    let rows = model.plugins.filter { $0.account == account }
+    return VStack(alignment: .leading, spacing: 10) {
+      VStack(alignment: .leading, spacing: 3) {
+        Text(title).font(Typography.title)
+        Text(subtitle).font(Typography.meta).foregroundStyle(Palette.inkSecondary)
+      }
+      VStack(spacing: 0) {
+        if rows.isEmpty {
+          Text("No plugins in this group.")
+            .font(Typography.meta).foregroundStyle(Palette.inkSecondary)
+            .padding(.vertical, 8)
+        } else {
+          ForEach(rows) { plugin in pluginRow(plugin) }
+        }
+      }
+      .padding(16)
+      .background(Palette.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+  }
+
+  private func pluginRow(_ plugin: PluginInfo) -> some View {
+    HStack(spacing: 12) {
+      Image(systemName: plugin.authKind == "oauth" ? "link" : "puzzlepiece.extension")
+        .font(.system(size: 14))
+        .foregroundStyle(Palette.inkSecondary)
+        .frame(width: 24)
+      VStack(alignment: .leading, spacing: 3) {
+        HStack(spacing: 6) {
+          Text(plugin.name).font(Typography.rowTitle)
+          statusChip(plugin)
+        }
+        Text(plugin.description)
+          .font(Typography.caption).foregroundStyle(Palette.inkSecondary)
+          .fixedSize(horizontal: false, vertical: true)
+        if let label = plugin.accountLabel {
+          Text(label).font(Typography.machine).foregroundStyle(Palette.inkTertiary)
+        }
+        if let error = plugin.error {
+          Text(error).font(Typography.caption).foregroundStyle(.orange)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+      }
+      Spacer()
+      pluginAction(plugin)
+    }
+    .padding(.vertical, 10)
+    .overlay(alignment: .bottom) { Rectangle().fill(Palette.hairline).frame(height: 1) }
+  }
+
+  private func statusChip(_ plugin: PluginInfo) -> some View {
+    let status = plugin.status ?? "disconnected"
+    let (text, color): (String, Color) = {
+      switch status {
+      case "connected": return ("Connected", .green)
+      case "pending": return ("Connecting…", .orange)
+      case "error": return ("Error", .red)
+      default: return ("Not connected", Palette.inkTertiary)
+      }
+    }()
+    return Text(text)
+      .font(Typography.caption)
+      .foregroundStyle(color)
+      .padding(.horizontal, 7).padding(.vertical, 2)
+      .background(color.opacity(0.12), in: Capsule())
+  }
+
+  @ViewBuilder
+  private func pluginAction(_ plugin: PluginInfo) -> some View {
+    if plugin.status == "connected" {
+      Button("Disconnect") {
+        if let id = plugin.connectionID { model.disconnectPlugin(connectionID: id) }
+      }
+      .buttonStyle(.bordered)
+      .tint(.red)
+    } else if plugin.status == "pending" {
+      Button("Waiting…") {}
+        .buttonStyle(.bordered)
+        .disabled(true)
+    } else if !plugin.available {
+      Button("Coming soon") {}
+        .buttonStyle(.bordered)
+        .disabled(true)
+    } else {
+      Button("Connect") {
+        model.connectPlugin(pluginID: plugin.id, account: plugin.account)
+      }
+      .buttonStyle(.borderedProminent)
+      .tint(Palette.ember)
+    }
+  }
+
+  // MARK: - Models
 
   private var modelsSection: some View {
     VStack(alignment: .leading, spacing: 14) {
@@ -166,6 +326,22 @@ struct SettingsView: View {
     .overlay(alignment: .bottom) { Rectangle().fill(Palette.hairline).frame(height: 1) }
   }
 
+  // MARK: - Device
+
+  private var deviceSection: some View {
+    VStack(alignment: .leading, spacing: 10) {
+      Text("This Mac").font(Typography.title)
+      settingsRow("Device", model.settings.deviceName)
+      settingsRow("Token storage", model.secretKind == .file ? "Secure local file" : "macOS Keychain")
+      Button("Forget this device", role: .destructive) { model.forgetDevice() }
+        .buttonStyle(.bordered)
+      connectionSection
+    }
+    .padding(16)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .background(Palette.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+  }
+
   private var connectionSection: some View {
     VStack(alignment: .leading, spacing: 12) {
       Text("Connection").font(Typography.title)
@@ -175,19 +351,6 @@ struct SettingsView: View {
       }
       Text(model.serverAddress).font(Typography.machine).foregroundStyle(Palette.inkSecondary)
       Button("Connection settings…") { model.editConnection() }
-        .buttonStyle(.bordered)
-    }
-    .padding(16)
-    .frame(maxWidth: .infinity, alignment: .leading)
-    .background(Palette.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-  }
-
-  private var deviceSection: some View {
-    VStack(alignment: .leading, spacing: 10) {
-      Text("This Mac").font(Typography.title)
-      settingsRow("Device", model.settings.deviceName)
-      settingsRow("Token storage", model.secretKind == .file ? "Secure local file" : "macOS Keychain")
-      Button("Forget this device", role: .destructive) { model.forgetDevice() }
         .buttonStyle(.bordered)
     }
     .padding(16)
@@ -208,6 +371,8 @@ struct SettingsView: View {
     model.connectionState.isReady ? "Agni is connected" : "Agni is disconnected"
   }
 }
+
+// MARK: - Provider editors (unchanged)
 
 private struct ProviderModelEditor: View {
   var model: AppModel

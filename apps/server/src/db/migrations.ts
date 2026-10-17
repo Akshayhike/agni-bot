@@ -262,11 +262,37 @@ export const MIGRATIONS: Migration[] = [
       UPDATE threads
         SET conversation_id = (SELECT c.id FROM conversations c WHERE c.agent_id = threads.agent_id);
 
-      UPDATE conversations SET active_thread_id = (
+            UPDATE conversations SET active_thread_id = (
         SELECT t.id FROM threads t
         WHERE t.conversation_id = conversations.id
         ORDER BY t.updated_at DESC, t.created_at DESC LIMIT 1
       );
+    `,
+  },
+  {
+    id: 8,
+    name: "plugin_connections",
+    sql: `
+      -- One row per catalog plugin bound to one account (agent's own vs the
+      -- owner's). Tokens stay here, server-side only — the daemon host is the
+      -- trust boundary; clients only ever see the frame snapshot which never
+      -- carries them.
+      CREATE TABLE plugin_connections (
+        id TEXT PRIMARY KEY,
+        plugin_id TEXT NOT NULL,
+        account TEXT NOT NULL,                       -- agent | owner
+        status TEXT NOT NULL DEFAULT 'disconnected', -- pending | connected | error | disconnected
+        account_label TEXT,                          -- the signed-in email
+        scopes TEXT,                                 -- JSON array actually granted
+        capabilities TEXT,                           -- JSON policy snapshot at connect time
+        tokens TEXT,                                 -- JSON {state?, refresh_token?, access_token?, expires_at?}
+        error TEXT,
+        grant_started_at TEXT,
+        connected_at TEXT,
+        updated_at TEXT NOT NULL,
+        UNIQUE(plugin_id, account)
+      );
+      CREATE INDEX idx_plugin_connections_status ON plugin_connections(status);
     `,
   },
 ];

@@ -159,6 +159,53 @@ public struct TaskInfo: Sendable, Equatable, Decodable, Identifiable {
   public var updatedAt: String
 }
 
+// MARK: - plugins
+
+public struct PluginCapability: Sendable, Equatable, Decodable, Hashable {
+  public var capability: String
+  public var mode: String
+}
+
+public struct PluginInfo: Sendable, Equatable, Decodable, Identifiable {
+  public var id: String
+  public var name: String
+  public var category: String
+  public var description: String
+  public var authKind: String
+  public var account: String
+  public var scopes: [String]
+  public var capabilities: [PluginCapability]
+  public var available: Bool
+  public var connectionID: String?
+  public var status: String?
+  public var accountLabel: String?
+  public var error: String?
+  public var connectedAt: String?
+
+  private enum CodingKeys: String, CodingKey {
+    case id, name, category, description, authKind, account, scopes, capabilities,
+         available, connectionID, status, accountLabel, error, connectedAt
+  }
+
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    id = try container.decode(String.self, forKey: .id)
+    name = try container.decode(String.self, forKey: .name)
+    category = try container.decode(String.self, forKey: .category)
+    description = try container.decode(String.self, forKey: .description)
+    authKind = try container.decode(String.self, forKey: .authKind)
+    account = try container.decode(String.self, forKey: .account)
+    scopes = try container.decodeIfPresent([String].self, forKey: .scopes) ?? []
+    capabilities = try container.decodeIfPresent([PluginCapability].self, forKey: .capabilities) ?? []
+    available = try container.decodeIfPresent(Bool.self, forKey: .available) ?? false
+    connectionID = try container.decodeIfPresent(String.self, forKey: .connectionID)
+    status = try container.decodeIfPresent(String.self, forKey: .status)
+    accountLabel = try container.decodeIfPresent(String.self, forKey: .accountLabel)
+    error = try container.decodeIfPresent(String.self, forKey: .error)
+    connectedAt = try container.decodeIfPresent(String.self, forKey: .connectedAt)
+  }
+}
+
 public struct ProviderInfo: Sendable, Equatable, Decodable, Identifiable {
   public var id: String
   public var label: String
@@ -210,6 +257,9 @@ public enum ClientFrame: Sendable, Equatable {
   case providerAdd(providerID: String, apiKey: String, model: String?)
   case providerModelSet(providerID: String, model: String)
   case providerModelsList(providerID: String)
+  case pluginList
+  case pluginConnect(pluginID: String, account: String)
+  case pluginDisconnect(connectionID: String)
 
   public var type: String {
     switch self {
@@ -233,6 +283,9 @@ public enum ClientFrame: Sendable, Equatable {
     case .providerAdd: "provider.add"
     case .providerModelSet: "provider.model.set"
     case .providerModelsList: "provider.models.list"
+  case .pluginList: "plugin.list"
+  case .pluginConnect: "plugin.connect"
+  case .pluginDisconnect: "plugin.disconnect"
     }
   }
 
@@ -296,6 +349,13 @@ public enum ClientFrame: Sendable, Equatable {
       object["model"] = model
     case .providerModelsList(let providerID):
       object["providerID"] = providerID
+    case .pluginList:
+      break
+    case .pluginConnect(let pluginID, let account):
+      object["pluginID"] = pluginID
+      object["account"] = account
+    case .pluginDisconnect(let connectionID):
+      object["connectionID"] = connectionID
     }
     return object
   }
@@ -372,6 +432,14 @@ public enum ClientFrame: Sendable, Equatable {
         model: try Require.string(object, "model"))
     case "provider.models.list":
       self = .providerModelsList(providerID: try Require.string(object, "providerID"))
+    case "plugin.list":
+      self = .pluginList
+    case "plugin.connect":
+      self = .pluginConnect(
+        pluginID: try Require.string(object, "pluginID"),
+        account: try Require.string(object, "account"))
+    case "plugin.disconnect":
+      self = .pluginDisconnect(connectionID: try Require.string(object, "connectionID"))
     default:
       throw ProtocolError.unknownFrameType(type)
     }
@@ -402,6 +470,9 @@ public enum ServerFrame: Sendable, Equatable {
   case taskUpdateOK(TaskUpdateOK)
   case providerAddOK(ProviderAddOK)
   case providerModelsOK(ProviderModelsOK)
+  case pluginListOK(PluginListOK)
+  case pluginConnectOK(PluginConnectOK)
+  case pluginState(PluginState)
   case presence(Presence)
   case error(ErrorFrame)
   /// A frame this build does not know. Ignored, never fatal.
@@ -430,6 +501,9 @@ public enum ServerFrame: Sendable, Equatable {
     case .taskUpdateOK(let f): f.seq
     case .providerAddOK(let f): f.seq
     case .providerModelsOK(let f): f.seq
+  case .pluginListOK(let f): f.seq
+  case .pluginConnectOK(let f): f.seq
+  case .pluginState(let f): f.seq
     case .presence(let f): f.seq
     case .error(let f): f.seq
     case .unknown(_, let seq): seq
@@ -459,6 +533,9 @@ public enum ServerFrame: Sendable, Equatable {
     case .taskUpdateOK: "task.update.ok"
     case .providerAddOK: "provider.add.ok"
     case .providerModelsOK: "provider.models.ok"
+  case .pluginListOK: "plugin.list.ok"
+  case .pluginConnectOK: "plugin.connect.ok"
+  case .pluginState: "plugin.state"
     case .presence: "presence"
     case .error: "error"
     case .unknown(let type, _): type
@@ -617,6 +694,23 @@ public enum ServerFrame: Sendable, Equatable {
     public var models: [String]
   }
 
+  public struct PluginListOK: Sendable, Equatable, Decodable {
+    public var seq: Int
+    public var plugins: [PluginInfo]
+  }
+
+  public struct PluginConnectOK: Sendable, Equatable, Decodable {
+    public var seq: Int
+    public var pluginID: String
+    public var account: String
+    public var authorizeURL: String?
+  }
+
+  public struct PluginState: Sendable, Equatable, Decodable {
+    public var seq: Int
+    public var plugins: [PluginInfo]
+  }
+
   public struct Presence: Sendable, Equatable, Decodable {
     public var seq: Int
     public var state: String
@@ -657,6 +751,9 @@ public enum ServerFrame: Sendable, Equatable {
     case "task.update.ok": self = .taskUpdateOK(try Decode.frame(TaskUpdateOK.self, object))
     case "provider.add.ok": self = .providerAddOK(try Decode.frame(ProviderAddOK.self, object))
     case "provider.models.ok": self = .providerModelsOK(try Decode.frame(ProviderModelsOK.self, object))
+    case "plugin.list.ok": self = .pluginListOK(try Decode.frame(PluginListOK.self, object))
+    case "plugin.connect.ok": self = .pluginConnectOK(try Decode.frame(PluginConnectOK.self, object))
+    case "plugin.state": self = .pluginState(try Decode.frame(PluginState.self, object))
     case "presence": self = .presence(try Decode.frame(Presence.self, object))
     case "error": self = .error(try Decode.frame(ErrorFrame.self, object))
     default: self = .unknown(type: type, seq: (object["seq"] as? Int) ?? 0)

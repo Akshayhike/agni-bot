@@ -320,7 +320,8 @@ public struct Conversation: Sendable, Equatable {
   public mutating func apply(_ frame: ServerFrame) -> [ConversationEffect] {
     switch frame {
     case .helloOK, .conversationOK, .conversationHistoryOK, .threadListOK, .threadHistoryOK,
-      .jobListOK, .taskListOK, .taskUpdateOK, .providerAddOK, .providerModelsOK, .unknown:
+      .jobListOK, .taskListOK, .taskUpdateOK, .providerAddOK, .providerModelsOK,
+      .pluginListOK, .pluginConnectOK, .pluginState, .unknown:
       return []
 
     case .presence(let presence):

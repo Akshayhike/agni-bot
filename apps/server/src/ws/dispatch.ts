@@ -51,6 +51,7 @@ import { createMemory, searchMemories } from "../stores/memories";
 import { canonicalURL, saveLink, searchLinks } from "../stores/links";
 import { createTask, getTask, listTasks, setTaskStatus, snoozeTask } from "../stores/tasks";
 import { fetchPage } from "../tools/fetch-url";
+import type { PluginService } from "../plugins/service";
 import type { FrameLog } from "./frame-log";
 
 export interface Session {
@@ -86,6 +87,8 @@ export interface DispatchDeps {
   send: (frame: ServerFrame) => void;
   /** Close the connection that produced the current message. */
   close: (code: number, reason: string) => void;
+  /** Plugin connections (catalog, connect flows, OAuth callbacks). */
+  plugins?: PluginService;
 }
 
 export async function dispatch(deps: DispatchDeps, session: Session, raw: string): Promise<void> {
@@ -136,6 +139,12 @@ export async function dispatch(deps: DispatchDeps, session: Session, raw: string
       return await handleProviderModelSet(deps, session, frame);
     case "provider.models.list":
       return await handleProviderModelsList(deps, session, frame);
+    case "plugin.list":
+      return handlePluginList(deps, session);
+    case "plugin.connect":
+      return await handlePluginConnect(deps, session, frame);
+    case "plugin.disconnect":
+      return await handlePluginDisconnect(deps, session, frame);
   }
 }
 
@@ -627,6 +636,49 @@ async function handleProviderModelsList(
   } catch (error) {
     sendError(deps, session, "provider_models", error instanceof Error ? error.message : "Could not load provider models.");
   }
+}
+
+// --- plugins -----------------------------------------------------------------
+
+function handlePluginList(deps: DispatchDeps, session: Session): void {
+  if (!requireAuth(deps, session)) return;
+  if (!deps.plugins) return sendError(deps, session, "internal", "plugin service unavailable");
+  deps.reply({ type: "plugin.list.ok", plugins: deps.plugins.list() });
+}
+
+async function handlePluginConnect(
+  deps: DispatchDeps,
+  session: Session,
+  frame: Extract<ClientFrame, { type: "plugin.connect" }>,
+): Promise<void> {
+  if (!requireAuth(deps, session)) return;
+  if (!deps.plugins) return sendError(deps, session, "internal", "plugin service unavailable");
+  const result = deps.plugins.connect(frame.pluginID, frame.account);
+  if (result.error) {
+    sendError(deps, session, result.error.code, result.error.message);
+    return;
+  }
+  deps.reply({
+    type: "plugin.connect.ok",
+    pluginID: frame.pluginID,
+    account: frame.account,
+    authorizeURL: result.authorizeURL ?? null,
+  });
+}
+
+async function handlePluginDisconnect(
+  deps: DispatchDeps,
+  session: Session,
+  frame: Extract<ClientFrame, { type: "plugin.disconnect" }>,
+): Promise<void> {
+  if (!requireAuth(deps, session)) return;
+  if (!deps.plugins) return sendError(deps, session, "internal", "plugin service unavailable");
+  const result = await deps.plugins.disconnect(frame.connectionID);
+  if (result.error) {
+    sendError(deps, session, result.error.code, result.error.message);
+    return;
+  }
+  deps.reply({ type: "plugin.list.ok", plugins: deps.plugins.list() });
 }
 
 function jobSnapshot(db: Database, limit: number): JobInfo[] {

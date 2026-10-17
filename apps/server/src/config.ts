@@ -21,6 +21,15 @@ export interface Config {
   jobPollMs: number;
   /** Maximum simultaneous model streams across chat and background turns. */
   maxConcurrentTurns: number;
+  /** Google OAuth client for plugin connections (both values required). */
+  googleOAuthClientID: string;
+  googleOAuthClientSecret: string;
+  /** Gmail app password auth (simpler than OAuth, requires 2FA on the account). */
+  gmailUser: string;
+  gmailAppPassword: string;
+  /** Optional second mailbox (the owner's) via app password. */
+  gmailOwnerUser: string;
+  gmailOwnerAppPassword: string;
 }
 
 function int(env: Record<string, string | undefined>, key: string, fallback: number): number {
@@ -44,5 +53,11 @@ export function loadConfig(env: Record<string, string | undefined> = Bun.env): C
     frameLogCapacity: int(env, "AGNI_FRAME_LOG_CAPACITY", 1000),
     jobPollMs: int(env, "AGNI_JOB_POLL_MS", 3000),
     maxConcurrentTurns: int(env, "AGNI_MAX_CONCURRENT_TURNS", 4),
+    googleOAuthClientID: env.GOOGLE_OAUTH_CLIENT_ID?.trim() || "",
+    googleOAuthClientSecret: env.GOOGLE_OAUTH_CLIENT_SECRET?.trim() || "",
+    gmailUser: env.GMAIL_USER?.trim() || "",
+    gmailAppPassword: env.GMAIL_APP_PASSWORD?.trim() || "",
+    gmailOwnerUser: env.GMAIL_OWNER_USER?.trim() || "",
+    gmailOwnerAppPassword: env.GMAIL_OWNER_APP_PASSWORD?.trim() || "",
   };
 }

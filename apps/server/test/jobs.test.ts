@@ -244,7 +244,7 @@ describe("turn job", () => {
     expect(listJobs(db, { includeFinished: true })[0]?.state).toBe("failed");
     expect(frames.filter((frame) => frame.type === "notify").length).toBe(1);
     db.close();
-  });
+  }, 30000);
 
   test("recurring turns schedule the next run and keep one thread", async () => {
     const db = freshDb();

@@ -110,6 +110,54 @@ export const TaskInfoSchema = z.object({
 });
 export type TaskInfo = z.infer<typeof TaskInfoSchema>;
 
+// --- plugins -----------------------------------------------------------------
+
+/** Whose account a plugin connection binds to. */
+export const PLUGIN_ACCOUNTS = ["agent", "owner"] as const;
+export const PluginAccountSchema = z.enum(PLUGIN_ACCOUNTS);
+export type PluginAccount = z.infer<typeof PluginAccountSchema>;
+
+/** Connection lifecycle, as the settings pane renders it. */
+export const PLUGIN_STATUSES = ["disconnected", "pending", "connected", "error"] as const;
+export const PluginStatusSchema = z.enum(PLUGIN_STATUSES);
+export type PluginStatus = z.infer<typeof PluginStatusSchema>;
+
+/**
+ * One capability class of one plugin connection, with the owner's policy:
+ * `free` runs without asking, `approval` asks before acting, `off` refuses.
+ * Scopes are what Google granted; capabilities are what WE allow — the two
+ * are separate on purpose (see docs/protocol.md §plugins).
+ */
+export const PluginCapabilitySchema = z.object({
+  capability: z.enum(["read", "draft", "send", "create", "share", "modify"]),
+  mode: z.enum(["free", "approval", "off"]),
+});
+export type PluginCapability = z.infer<typeof PluginCapabilitySchema>;
+
+/** One settings-pane row: a catalog plugin bound to one account. */
+export const PluginInfoSchema = z.object({
+  /** Catalog id, e.g. "gmail"; unique together with `account`. */
+  id: z.string().min(1),
+  name: z.string().min(1),
+  category: z.enum(["google", "mcp"]),
+  description: z.string(),
+  authKind: z.enum(["oauth", "mcp", "app-password"]),
+  account: PluginAccountSchema,
+  /** What the catalog will ask Google for, at connect time. */
+  scopes: z.array(z.string()),
+  /** The full default policy grid; always present, even while disconnected. */
+  capabilities: z.array(PluginCapabilitySchema),
+  /** True when the server can complete this kind of connect flow today. */
+  available: z.boolean(),
+  connectionID: z.string().optional(),
+  status: PluginStatusSchema.optional(),
+  /** The signed-in email for the connection, once known. */
+  accountLabel: z.string().optional(),
+  error: z.string().optional(),
+  connectedAt: z.string().optional(),
+});
+export type PluginInfo = z.infer<typeof PluginInfoSchema>;
+
 // ---------------------------------------------------------------------------
 // client → server
 // ---------------------------------------------------------------------------
@@ -198,6 +246,20 @@ export const ClientFrameSchema = z.discriminatedUnion("type", [
     type: z.literal("provider.models.list"),
     providerID: z.enum(["groq", "cerebras", "nim", "gemini", "openrouter"]),
   }),
+  /** Read the catalog bound to accounts; the settings Plugins pane renders it. */
+  z.object({ type: z.literal("plugin.list") }),
+  /**
+   * Begin connecting a plugin to an account. OAuth kinds answer with
+   * `plugin.connect.ok` carrying an authorize URL to open in the browser;
+   * the flow completes server-side, then every client gets `plugin.state`.
+   */
+  z.object({
+    type: z.literal("plugin.connect"),
+    pluginID: z.string().min(1),
+    account: PluginAccountSchema,
+  }),
+  /** Disconnect one connection (revokes tokens server-side, then Google). */
+  z.object({ type: z.literal("plugin.disconnect"), connectionID: z.string().min(1) }),
 ]);
 export type ClientFrame = z.infer<typeof ClientFrameSchema>;
 export type ClientFrameType = ClientFrame["type"];
@@ -302,6 +364,18 @@ export const ServerFrameSchema = z.discriminatedUnion("type", [
     lastSuccessAt: z.number().optional(),
   })) }),
   z.object({ type: z.literal("provider.models.ok"), seq, providerID: z.string(), models: z.array(z.string()) }),
+  /** Answer to `plugin.list`; addressed to the requester, not replayed. */
+  z.object({ type: z.literal("plugin.list.ok"), seq, plugins: z.array(PluginInfoSchema) }),
+  z.object({
+    type: z.literal("plugin.connect.ok"),
+    seq,
+    pluginID: z.string(),
+    account: PluginAccountSchema,
+    /** Open this in the system browser; null when the flow awaits nothing. */
+    authorizeURL: z.string().nullable(),
+  }),
+  /** Replayable stream state: a plugin connection changed (connect, error, disconnect). */
+  z.object({ type: z.literal("plugin.state"), seq, plugins: z.array(PluginInfoSchema) }),
   z.object({ type: z.literal("presence"), seq, state: z.enum(["online", "offline"]) }),
   z.object({ type: z.literal("error"), seq, code: z.string(), message: z.string(), retryAfter: z.number().optional() }),
 ]);
