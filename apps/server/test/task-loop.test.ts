@@ -53,8 +53,6 @@ describe("task lane loop", () => {
     expect((requestBodies[1]?.messages as Array<Record<string, unknown>>).some((message) => message.role === "tool" && message.tool_call_id === "call-1")).toBe(true);
     expect(db.query("SELECT tool_name, ok FROM tool_calls WHERE turn_id = ?").get(result.turnID)).toEqual({ tool_name: "tasks_list", ok: 1 });
     expect(db.query("SELECT state FROM agent_sessions WHERE thread_id = ?").get(thread.id)).toEqual({ state: "done" });
-    expect(emitted.map((frame) => frame.type)).toContain("tool.start");
-    expect(emitted.map((frame) => frame.type)).toContain("tool.end");
   });
 
   test("keeps generic shell and file tools outside the task allowlist", async () => {

@@ -163,7 +163,6 @@ export async function runTaskTurn(db: Database, router: Router, settings: TaskTu
         if (lastSeen !== undefined && stepCount - lastSeen <= DUPLICATE_WINDOW) {
           const content = JSON.stringify({ skipped: true, reason: `Duplicate ${call.function.name} call already tried in this turn.` });
           messages.push({ role: "tool", toolCallID: call.id, content });
-          run.emit({ type: "tool.end", callID: call.id, ok: false, preview: "Duplicate call skipped" });
           continue;
         }
         recentCalls.set(signature, stepCount);
@@ -232,10 +231,8 @@ async function executeTool(
   if (!tool || !allowlist.includes(call.function.name)) {
     const content = JSON.stringify({ error: `Tool is not available to this persona: ${call.function.name}` });
     storeResult(content, false, "tool_not_allowed");
-    emit({ type: "tool.end", callID: call.id, ok: false, preview: "Tool not allowed" });
     return { content, awaiting: false };
   }
-  emit({ type: "tool.start", callID: call.id, name: tool.name, preview: tool.description });
   if (broker.requiresApproval(tool.name, args)) {
     setState("awaiting_approval");
     const decision = await broker.request(threadID, turnID, tool.name, call.id, args, signal);
@@ -243,7 +240,6 @@ async function executeTool(
     if (!decision || decision === "reject") {
       const content = JSON.stringify({ error: decision ? "User denied this action." : "Approval was cancelled." });
       storeResult(content, false, "approval_rejected");
-      emit({ type: "tool.end", callID: call.id, ok: false, preview: "Approval denied" });
       return { content, awaiting: true };
     }
   }
@@ -257,13 +253,11 @@ async function executeTool(
     ]);
     const content = truncate(JSON.stringify(result), MAX_TOOL_RESULT_CHARS);
     storeResult(content, true, null);
-    emit({ type: "tool.end", callID: call.id, ok: true, preview: truncate(content, 240) });
     return { content, awaiting: false };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const content = JSON.stringify({ error: truncate(message, 500) });
     storeResult(content, false, message);
-    emit({ type: "tool.end", callID: call.id, ok: false, preview: truncate(message, 240) });
     return { content, awaiting: false };
   }
 }

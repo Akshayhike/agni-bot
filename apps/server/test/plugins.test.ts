@@ -13,6 +13,7 @@ import {
 } from "../src/plugins/store";
 import { CATALOG, manifestFor } from "../src/plugins/catalog";
 import type { Config } from "../src/config";
+import { writeFileSync } from "node:fs";
 
 function fakeConfig(overrides: Partial<Config> = {}): Config {
   return {
@@ -28,14 +29,7 @@ function fakeConfig(overrides: Partial<Config> = {}): Config {
     frameLogCapacity: 100,
     jobPollMs: 1000,
     maxConcurrentTurns: 4,
-    googleOAuthClientID: "test-client-id",
-    googleOAuthClientSecret: "test-client-secret",
-    gmailUser: "test@gmail.com",
-    gmailAppPassword: "test-app-password",
-    gmailOwnerUser: "",
-    gmailOwnerAppPassword: "",
-    firecrawlURL: "",
-    firecrawlAPIKey: "",
+    pluginsPath: ":memory:",
     ...overrides,
   };
 }
@@ -54,7 +48,13 @@ function harness(
   const states: ServerFrameBody[] = [];
   const calls: { url: string; init?: RequestInit }[] = [];
   let step = 0;
-  const service = new PluginService({ config: fakeConfig(), db, emit: (body) => states.push(body) });
+  const pluginsPath = "/tmp/agni-plugins-test.json";
+  writeFileSync(pluginsPath, JSON.stringify({
+    version: 1,
+    oauthClients: { google: { clientID: "test-client-id", clientSecret: "test-client-secret" } },
+    plugins: {},
+  }));
+  const service = new PluginService({ config: fakeConfig(), db, emit: (body) => states.push(body), pluginsPath });
   service.fetchOverride = ((url: string | URL | Request, init?: RequestInit) => {
     calls.push({ url: url.toString(), init });
     step += 1;
@@ -108,11 +108,9 @@ describe("plugin catalog", () => {
 // --- connect flow ------------------------------------------------------------
 
 describe("plugin connect flow", () => {
-  test("connect refuses OAuth plugins until credentials exist", () => {
+  test("connect refuses OAuth plugins until credentials exist in plugins.json", () => {
     const db = openDatabase(":memory:");
-    const service = new PluginService({ config: fakeConfig({ googleOAuthClientID: "", googleOAuthClientSecret: "" }), db, emit: () => {} });
-    expect(isConfigured(fakeConfig())).toBe(true);
-    expect(isConfigured(fakeConfig({ googleOAuthClientID: "" }))).toBe(false);
+    const service = new PluginService({ config: fakeConfig(), db, emit: () => {}, pluginsPath: ":memory:" });
     const result = service.connect("calendar", "agent");
     expect(result.error?.code).toBe("plugin_not_configured");
     db.close();
@@ -217,12 +215,18 @@ describe("oauth callback", () => {
   test("state survives a fresh service over the same database", async () => {
     const db = openDatabase(":memory:");
     const states: ServerFrameBody[] = [];
-    const first = new PluginService({ config: fakeConfig(), db, emit: (body) => states.push(body) });
+    const pluginsPath = "/tmp/agni-plugins-test.json";
+    writeFileSync(pluginsPath, JSON.stringify({
+      version: 1,
+      oauthClients: { google: { clientID: "test-client-id", clientSecret: "test-client-secret" } },
+      plugins: {},
+    }));
+    const first = new PluginService({ config: fakeConfig(), db, emit: (body) => states.push(body), pluginsPath });
     const connect = first.connect("calendar", "agent");
     const state = new URL(connect.authorizeURL!).searchParams.get("state")!;
 
     // A daemon restart: new process, same db.
-    const second = new PluginService({ config: fakeConfig(), db, emit: (body) => states.push(body) });
+    const second = new PluginService({ config: fakeConfig(), db, emit: (body) => states.push(body), pluginsPath });
     let step = 0;
     second.fetchOverride = ((url: string | URL | Request) => {
       step += 1;
@@ -298,6 +302,8 @@ describe("access tokens for API clients", () => {
       { refresh_token: "rt_kept", access_token: "at_stale", expires_at: Date.now() - 1000 },
       row.account_label ?? "hey.agnibot@gmail.com",
     );
+    const entry = service["pluginsFile"].plugins["calendar"]!;
+    entry.auth = { ...entry.auth, refresh_token: "rt_kept", access_token: "at_stale", expires_at: Date.now() - 1000 };
     const token = await service.accessTokenFor("calendar", "agent");
     expect(token).toBe("at_fresh");
     const refreshCall = (calls[calls.length - 1]!.init?.body as URLSearchParams).toString();
@@ -320,7 +326,7 @@ describe("oauth URL surface", () => {
   });
 
   test("the authorize URL asks only for the requested scopes", () => {
-    const url = authorizeURL(fakeConfig(), ["https://www.googleapis.com/auth/gmail.modify"], "st_x");
+    const url = authorizeURL({ config: fakeConfig(), clientID: "test-id", clientSecret: "test-secret" }, fakeConfig(), ["https://www.googleapis.com/auth/gmail.modify"], "st_x");
     const parsed = new URL(url);
     expect(parsed.searchParams.get("scope")).toBe("https://www.googleapis.com/auth/gmail.modify");
     expect(parsed.searchParams.get("prompt")).toBe("consent");

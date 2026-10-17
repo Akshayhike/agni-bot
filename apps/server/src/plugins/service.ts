@@ -22,10 +22,23 @@ import {
   type TokenBlob,
   updateTokens,
 } from "./store";
+import {
+  loadPluginsFile,
+  savePluginsFile,
+  getPluginEntry,
+  isPluginEnabled,
+  upsertPlugin,
+  removePlugin,
+  enabledPluginIDs,
+  type PluginsFile,
+  type PluginEntry,
+} from "./config";
 
 export interface PluginDeps {
   config: Config;
   db: Database;
+  /** Path to plugins.json (the single source of truth for plugin auth). */
+  pluginsPath: string;
   /** Fan out to every authed session (the `plugin.state` snapshot). */
   emit: (body: ServerFrameBody) => void;
 }
@@ -34,13 +47,51 @@ export class PluginService {
   private deps: PluginDeps;
   /** Test hook: injected fetch for Google endpoints. */
   fetchOverride?: typeof fetch;
+  /** In-memory view of plugins.json, loaded on construction. */
+  private pluginsFile: PluginsFile;
 
   constructor(deps: PluginDeps) {
     this.deps = deps;
+    this.pluginsFile = loadPluginsFile(deps.pluginsPath);
   }
 
   private oauthDeps(): oauth.OAuthDeps {
-    return { config: this.deps.config, ...(this.fetchOverride ? { fetch: this.fetchOverride } : {}) };
+    const client = this.pluginsFile.oauthClients?.google;
+    return {
+      config: this.deps.config,
+      clientID: client?.clientID ?? "",
+      clientSecret: client?.clientSecret ?? "",
+      ...(this.fetchOverride ? { fetch: this.fetchOverride } : {}),
+    };
+  }
+
+  /** Mark a plugin as enabled in plugins.json and persist. */
+  private markEnabledInFile(pluginID: string, account: PluginAccount, label: string): void {
+    const existing = this.pluginsFile.plugins[pluginID];
+    if (existing) {
+      existing.enabled = true;
+      existing.label = label;
+      existing.connectedAt = Date.now();
+    } else {
+      upsertPlugin(this.pluginsFile, pluginID, {
+        account,
+        enabled: true,
+        auth: { kind: "oauth" },
+        label,
+        connectedAt: Date.now(),
+      });
+    }
+    this.save();
+  }
+
+  /** Read a plugin's auth entry from plugins.json. */
+  private authFor(pluginID: string): PluginEntry | undefined {
+    return getPluginEntry(this.pluginsFile, pluginID);
+  }
+
+  /** Persist the in-memory plugins.json to disk (mode-600). */
+  private save(): void {
+    savePluginsFile(this.deps.pluginsPath, this.pluginsFile);
   }
 
   /** The full settings-pane snapshot: every catalog row, live status merged in. */
@@ -85,15 +136,16 @@ export class PluginService {
       return { error: { code: "unknown_plugin", message: `plugin "${pluginID}" does not offer an ${account} connection` } };
     }
 
-    // App-password plugins: credentials come from .env, not OAuth.
+    // App-password plugins: credentials from plugins.json.
     if (manifest.authKind === "app-password") {
-      const user = this.appPasswordUser(pluginID, account);
-      const pass = this.appPassword(pluginID, account);
+      const entry = this.authFor(pluginID);
+      const user = entry?.auth.user ?? "";
+      const pass = entry?.auth.pass ?? "";
       if (!user || !pass) {
         return {
           error: {
             code: "plugin_not_configured",
-            message: `Set GMAIL_USER and GMAIL_APP_PASSWORD in .env (and restart the daemon) to connect this mailbox.`,
+            message: `Enable this plugin in Settings → Plugins (credentials are stored in plugins.json, not .env).`,
           },
         };
       }
@@ -104,25 +156,25 @@ export class PluginService {
           scopes: [],
           capabilities: role.capabilities,
         });
-        // Mark connected immediately — credentials are already in .env.
-        // (A real IMAP verify lands with the Gmail plugin in PS3.)
         completeConnect(this.deps.db, pending.id, { access_token: pass }, user);
+        this.markEnabledInFile(pluginID, account, user);
         this.emitState();
-        return {}; // no authorize URL needed
+        return {};
       } catch (error) {
         return { error: { code: "plugin_connect_failed", message: error instanceof Error ? error.message : String(error) } };
       }
     }
 
-    // API-key plugins (Firecrawl): key or URL from .env.
+    // API-key plugins (Firecrawl): key or URL from plugins.json.
     if (manifest.authKind === "api-key") {
-      const url = this.deps.config.firecrawlURL;
-      const key = this.deps.config.firecrawlAPIKey;
+      const entry = this.authFor(pluginID);
+      const url = entry?.auth.url ?? "";
+      const key = entry?.auth.key ?? "";
       if (!url && !key) {
         return {
           error: {
             code: "plugin_not_configured",
-            message: `Set AGNI_FIRECRAWL_URL (self-hosted) or AGNI_FIRECRAWL_API_KEY (cloud) in .env and restart the daemon.`,
+            message: `Enable this plugin in Settings → Plugins (set a self-hosted URL or cloud API key in plugins.json).`,
           },
         };
       }
@@ -135,6 +187,7 @@ export class PluginService {
           capabilities: role.capabilities,
         });
         completeConnect(this.deps.db, pending.id, { access_token: key || "self-hosted" }, label);
+        this.markEnabledInFile(pluginID, account, label);
         this.emitState();
         return {};
       } catch (error) {
@@ -150,9 +203,13 @@ export class PluginService {
         },
       };
     }
-    if (!oauth.isConfigured(this.deps.config)) {
+    const oauthClient = this.oauthDeps();
+    if (!oauth.isConfigured(oauthClient)) {
       return {
-        error: { code: "plugin_not_configured", message: "set GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET in .env first" },
+        error: {
+          code: "plugin_not_configured",
+          message: "Set google.clientID and google.clientSecret in plugins.json (or via Settings → Plugins) and restart the daemon.",
+        },
       };
     }
 
@@ -165,7 +222,7 @@ export class PluginService {
       });
       this.emitState();
       const tokens = readTokens(pending);
-      return { authorizeURL: oauth.authorizeURL(this.deps.config, role.scopes, tokens.state ?? "") };
+      return { authorizeURL: oauth.authorizeURL(oauthClient, this.deps.config, role.scopes, tokens.state ?? "") };
     } catch (error) {
       return { error: { code: "plugin_connect_failed", message: error instanceof Error ? error.message : String(error) } };
     }
@@ -178,10 +235,26 @@ export class PluginService {
       return { error: "This sign-in is stale or was already completed. Connect again from the settings pane." };
     }
     try {
-      const tokens = await oauth.exchangeCode(this.oauthDeps(), code);
+      const tokens = await oauth.exchangeCode(this.oauthDeps(), this.deps.config, code);
       if (!tokens.access_token) throw new Error("Google returned no access token");
       const { email } = await oauth.whoami(this.oauthDeps(), tokens.access_token);
       completeConnect(this.deps.db, pending.id, tokens, email ?? "Google account");
+      // Persist tokens to plugins.json so they survive daemon restarts.
+      const entry = this.authFor(pending.plugin_id);
+      if (entry) {
+        entry.auth = { ...entry.auth, ...tokens };
+        entry.label = email ?? "Google account";
+        entry.connectedAt = Date.now();
+      } else {
+        upsertPlugin(this.pluginsFile, pending.plugin_id, {
+          account: pending.account,
+          enabled: true,
+          auth: { kind: "oauth", ...tokens },
+          label: email ?? "Google account",
+          connectedAt: Date.now(),
+        });
+      }
+      this.save();
       this.emitState();
       return { plugin: pending.plugin_id };
     } catch (error) {
@@ -196,46 +269,50 @@ export class PluginService {
   async disconnect(connectionID: string): Promise<{ error?: { code: string; message: string } }> {
     const row = getConnection(this.deps.db, connectionID);
     if (!row) return { error: { code: "unknown_connection", message: `no connection ${connectionID}` } };
-    const tokens = readTokens(row);
+
+    const entry = this.authFor(row.plugin_id);
+    const tokens = entry?.auth;
     try {
-      const target = tokens.refresh_token ?? tokens.access_token;
+      const target = tokens?.refresh_token ?? tokens?.access_token;
       if (target) await oauth.revoke(this.oauthDeps(), target);
     } catch {
-      // A Google-side failure must not strand the credential locally: the
-      // row delete below is what actually destroys it server-side.
+      // A Google-side failure must not strand the credential locally.
     }
     deleteConnection(this.deps.db, row.id);
+    // Clear tokens from plugins.json.
+    if (entry) {
+      entry.auth = { kind: "oauth" };
+      entry.label = undefined;
+      entry.connectedAt = undefined;
+      this.save();
+    }
     this.emitState();
     return {};
   }
 
   /** A stored, still-valid access token for API clients (PS3+). */
   async accessTokenFor(pluginID: string, account: PluginAccount): Promise<string> {
-    const row = getConnectionFor(this.deps.db, pluginID, account);
-    if (!row || row.status !== "connected") throw new Error(`plugin ${pluginID}/${account} is not connected`);
-    const tokens = readTokens(row);
+    const entry = this.authFor(pluginID);
+    if (!entry || entry.auth.kind !== "oauth") throw new Error(`plugin ${pluginID}/${account} is not connected`);
+    const tokens = entry.auth;
     const token = await oauth.ensureAccessToken(this.oauthDeps(), tokens);
     // Persist the fresh access token so the next turn does not redo the exchange.
     if (tokens.access_token !== token) {
-      updateTokens(this.deps.db, row.id, { ...tokens, access_token: token });
+      entry.auth = { ...tokens, access_token: token };
+      this.save();
     }
     return token;
   }
 
-  /** Auto-connect app-password and api-key plugins from .env on daemon start. */
+  /** Auto-connect app-password and api-key plugins from plugins.json on daemon start. */
   autoConnect(): void {
     for (const manifest of CATALOG) {
       if (manifest.authKind !== "app-password" && manifest.authKind !== "api-key") continue;
       for (const role of manifest.roles) {
-        let user = "";
-        let pass = "";
-        if (manifest.authKind === "app-password") {
-          user = this.appPasswordUser(manifest.id, role.account);
-          pass = this.appPassword(manifest.id, role.account);
-        } else if (manifest.authKind === "api-key") {
-          user = this.deps.config.firecrawlURL || "cloud";
-          pass = this.deps.config.firecrawlAPIKey || "self-hosted";
-        }
+        const entry = this.authFor(manifest.id);
+        if (!entry?.enabled) continue;
+        const user = entry.auth.user ?? entry.auth.url ?? "";
+        const pass = entry.auth.pass ?? entry.auth.key ?? "";
         if (!user || !pass) continue;
         const existing = getConnectionFor(this.deps.db, manifest.id, role.account);
         if (existing?.status === "connected") continue;
@@ -259,15 +336,6 @@ export class PluginService {
     this.deps.emit({ type: "plugin.state", plugins: this.list() });
   }
 
-  private appPasswordUser(pluginID: string, account: PluginAccount): string {
-    if (account === "agent") return this.deps.config.gmailUser;
-    return this.deps.config.gmailOwnerUser ?? "";
-  }
-
-  private appPassword(pluginID: string, account: PluginAccount): string {
-    if (account === "agent") return this.deps.config.gmailAppPassword;
-    return this.deps.config.gmailOwnerAppPassword ?? "";
-  }
 }
 
 function readTokens(row: PluginConnectionRow): TokenBlob {

@@ -64,7 +64,7 @@ export function startServer(config: Config, db: Database, router: Router, starte
     return frame;
   };
 
-  const plugins = new PluginService({ config, db, emit });
+  const plugins = new PluginService({ config, db, emit, pluginsPath: config.pluginsPath });
   plugins.autoConnect();
 
   const server = Bun.serve<Session>({
