@@ -18,7 +18,6 @@ import {
   type ServerFrameBody,
 } from "@agni/protocol";
 import { defaultPersona, getPersona, personaInfo } from "../agent/personas";
-import { runInstantTurn } from "../agent/loop";
 import { runTaskTurn } from "../agent/task-loop";
 import { resolveApprovalWaiter } from "../agent/approval-broker";
 import { verifyToken } from "../auth/tokens";
@@ -191,9 +190,7 @@ function handleMsgSend(deps: DispatchDeps, session: Session, frame: Extract<Clie
   const controller = new AbortController();
   session.aborts.set(turnID, controller);
   const turnSettings = { firstTokenTimeoutMs: deps.config.firstTokenTimeoutMs, turnTimeoutMs: deps.config.turnTimeoutMs };
-  const turn = persona.tier === "task"
-    ? runTaskTurn(deps.db, deps.router, turnSettings, { turnID, threadID: thread.id, text: frame.text, persona, emit: deps.emit, signal: controller.signal })
-    : runInstantTurn(deps.db, deps.router, turnSettings, { threadID: thread.id, text: frame.text, persona, emit: deps.emit, signal: controller.signal });
+  const turn = runTaskTurn(deps.db, deps.router, turnSettings, { turnID, threadID: thread.id, text: frame.text, persona, emit: deps.emit, signal: controller.signal });
 
   void turn
     .catch((error: unknown) => {

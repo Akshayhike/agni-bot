@@ -140,23 +140,21 @@ struct MessageRowView: View {
 struct ProseText: View {
   var text: String
   var isStreaming: Bool
-  var reduceMotion = Environment(\.accessibilityReduceMotion)
 
   var body: some View {
-    HStack(alignment: .lastTextBaseline, spacing: 2) {
-      Text(attributed)
-        .font(Typography.body)
-        .lineSpacing(4)
-        .textSelection(.enabled)
-        .fixedSize(horizontal: false, vertical: true)
-      if isStreaming {
-        Rectangle()
-          .fill(Palette.ember)
-          .frame(width: 2, height: 14)
-          .opacity(reduceMotion.wrappedValue ? 1 : 0.9)
-          .animation(reduceMotion.wrappedValue ? nil : .easeInOut(duration: 0.6).repeatForever(), value: text)
-      }
-    }
+    renderedText
+      .font(Typography.body)
+      .lineSpacing(4)
+      .textSelection(.enabled)
+      .fixedSize(horizontal: false, vertical: true)
+  }
+
+  /// Keep the streaming caret in the text layout so it follows the last
+  /// character across wrapped lines instead of sitting at the end of an HStack.
+  private var renderedText: Text {
+    let prose = Text(attributed)
+    guard isStreaming else { return prose }
+    return prose + Text("|").foregroundColor(Palette.ember)
   }
 
   /// Runtime markdown, inline only: bold, italic, code, links.

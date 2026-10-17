@@ -73,7 +73,6 @@ export async function runInstantTurn(
 
   try {
     const result = await router.route({
-      tier: persona.tier,
       messages,
       signal: controller.signal,
       firstTokenTimeoutMs: settings.firstTokenTimeoutMs,

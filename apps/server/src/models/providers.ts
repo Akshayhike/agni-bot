@@ -4,15 +4,9 @@ import { resolve } from "node:path";
 /**
  * Provider catalog — every source is OpenAI-compatible `chat/completions`,
  * enabled by the presence of its API key (except LM Studio, which is local).
- *
- * Free-first per Blueprint v3 §8: instant lane prefers the very fast free
- * tiers (Groq, Cerebras), task lane prefers NIM, deep lane Gemini/OpenRouter.
- * Ordering here is only the default — the router reorders around health.
+ * Free-first per Blueprint v3 §8: the router orders providers around health,
+ * failover on 429/timeout. Ordering here is only the default.
  */
-
-export type Tier = "instant" | "task" | "deep";
-
-export const TIERS: Tier[] = ["instant", "task", "deep"];
 
 export interface ProviderConfig {
   id: string;
@@ -20,7 +14,6 @@ export interface ProviderConfig {
   baseUrl: string;
   apiKey: string;
   model: string;
-  tiers: Tier[];
 }
 
 interface ProviderSpec {
@@ -33,7 +26,6 @@ interface ProviderSpec {
   envBaseUrl?: string;
   envModel: string;
   model: string;
-  tiers: Tier[];
 }
 
 const SPECS: ProviderSpec[] = [
@@ -45,7 +37,6 @@ const SPECS: ProviderSpec[] = [
     envBaseUrl: "GROQ_BASE_URL",
     envModel: "GROQ_MODEL",
     model: "llama-3.1-8b-instant",
-    tiers: ["instant"],
   },
   {
     id: "cerebras",
@@ -55,7 +46,6 @@ const SPECS: ProviderSpec[] = [
     envBaseUrl: "CEREBRAS_BASE_URL",
     envModel: "CEREBRAS_MODEL",
     model: "llama3.1-8b",
-    tiers: ["instant"],
   },
   {
     id: "nim",
@@ -65,7 +55,6 @@ const SPECS: ProviderSpec[] = [
     envBaseUrl: "NVIDIA_BASE_URL",
     envModel: "NIM_MODEL",
     model: "meta/llama-3.3-70b-instruct",
-    tiers: ["instant", "task", "deep"],
   },
   {
     id: "gemini",
@@ -75,7 +64,6 @@ const SPECS: ProviderSpec[] = [
     envBaseUrl: "GEMINI_BASE_URL",
     envModel: "GEMINI_MODEL",
     model: "gemini-2.0-flash",
-    tiers: ["task", "deep"],
   },
   {
     id: "openrouter",
@@ -85,7 +73,6 @@ const SPECS: ProviderSpec[] = [
     envBaseUrl: "OPENROUTER_BASE_URL",
     envModel: "OPENROUTER_MODEL",
     model: "meta-llama/llama-3.3-70b-instruct:free",
-    tiers: ["deep"],
   },
   {
     id: "lmstudio",
@@ -95,7 +82,6 @@ const SPECS: ProviderSpec[] = [
     envBaseUrl: "LMSTUDIO_BASE_URL",
     envModel: "LMSTUDIO_MODEL",
     model: "",
-    tiers: ["instant", "task", "deep"],
   },
 ];
 
@@ -110,13 +96,6 @@ export function providerModelTarget(id: string): { id: string; envModel: string 
   const spec = SPECS.find((candidate) => candidate.id === id && candidate.envKey !== null);
   return spec ? { id: spec.id, envModel: spec.envModel } : null;
 }
-
-/** Failover preference per lane. Unknown/unlisted providers fall to the end. */
-export const TIER_ORDER: Record<Tier, string[]> = {
-  instant: ["groq", "cerebras", "nim", "lmstudio"],
-  task: ["nim", "gemini", "lmstudio", "groq"],
-  deep: ["gemini", "openrouter", "nim", "lmstudio"],
-};
 
 export function loadProviders(env: Record<string, string | undefined>): ProviderConfig[] {
   const modelConfigPath = resolve(env.AGNI_PROVIDER_CONFIG_PATH?.trim() || "data/providers.json");
@@ -143,7 +122,6 @@ export function loadProviders(env: Record<string, string | undefined>): Provider
         baseUrl: (spec.envBaseUrl && env[spec.envBaseUrl]?.trim()) || spec.baseUrl,
         apiKey: "lm-studio", // LM Studio ignores auth but the header must exist.
         model,
-        tiers: spec.tiers,
       });
       continue;
     }
@@ -155,9 +133,7 @@ export function loadProviders(env: Record<string, string | undefined>): Provider
       baseUrl: (spec.envBaseUrl && env[spec.envBaseUrl]?.trim()) || spec.baseUrl,
       apiKey,
       model: (configuredModels[spec.id] || env[spec.envModel])?.trim() || spec.model,
-      tiers: spec.tiers,
     });
   }
   return providers;
 }
-

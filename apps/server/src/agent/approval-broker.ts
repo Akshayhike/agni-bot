@@ -8,6 +8,7 @@
  */
 import type { Database } from "bun:sqlite";
 import { newID, nowISO } from "../util/ids";
+import { isDestructive } from "../tools/bash";
 
 export type Decision = "once" | "always" | "reject";
 
@@ -88,7 +89,8 @@ export class ApprovalBroker {
 
   /** Check whether an action is destructive and therefore requires approval. */
   requiresApproval(toolName: string, args: Record<string, unknown>): boolean {
-    if (["write_file", "task_create", "task_update", "memory_write", "link_save"].includes(toolName)) return false;
+    if (["write_file", "task_create", "task_update", "memory_write", "link_save", "skills_load", "skills_resource", "skills_list"].includes(toolName)) return false;
+    if (toolName === "bash") return isDestructive(String(args.command ?? ""));
     // Email sends, payments, and other side-effecting tools gate here by default.
     return toolName !== "read_file" && toolName !== "grep" && toolName !== "glob" &&
       toolName !== "memory_search" && toolName !== "links_search" && toolName !== "tasks_list" &&

@@ -9,10 +9,10 @@ import type { Persona } from "../src/agent/personas";
 import { createThread, createTurn } from "../src/stores/threads";
 
 const provider: ProviderConfig = {
-  id: "test", label: "Test", baseUrl: "https://test.local/v1", apiKey: "test", model: "mock", tiers: ["task"],
+  id: "test", label: "Test", baseUrl: "https://test.local/v1", apiKey: "test", model: "mock",
 };
 const taskPersona: Persona = {
-  id: "agni-task", name: "Agni Tasks", color: "#82c8a0", tier: "task", systemPrompt: "Be helpful.",
+  id: "agni", name: "Agni", color: "#f0b95a", systemPrompt: "Be helpful.",
   tools: ["tasks_list"],
 };
 let db: Database | undefined;

@@ -24,8 +24,8 @@ export interface TaskTurnRun {
 }
 export interface TaskTurnResult { turnID: string; text: string; stopReason: StopReason }
 
-const MAX_STEPS = 8;
-const MAX_TOKENS = 16_000;
+const MAX_STEPS = Infinity;
+const MAX_TOKENS = Infinity;
 const MAX_PROMPT_CHARS = MAX_TOKENS * 2.5;
 const MAX_TOOL_RESULT_CHARS = 4_000;
 const MAX_HISTORY_MESSAGES = 16;
@@ -96,6 +96,13 @@ export async function runTaskTurn(db: Database, router: Router, settings: TaskTu
   let finalText = "";
   let stopReason: StopReason = "end";
   let usage: { provider: string; model: string; inputTokens?: number; outputTokens?: number; latencyMs: number } | undefined;
+  // Duplicate-step guard: toolName + args signature -> last step it ran on.
+  // Exact repeats within the same turn are skipped so the model can't spin.
+  const recentCalls = new Map<string, number>();
+  const DUPLICATE_WINDOW = 3;
+  // If the model emits N consecutive tool steps with no text progress, stop.
+  const MAX_NONTEXT_STEPS = 10;
+  let consecutiveNonTextSteps = 0;
   try {
     while (stepCount < MAX_STEPS && tokenCount < MAX_TOKENS) {
       if (controller.signal.aborted) { stopReason = timedOut ? "timeout" : "cancelled"; break; }
@@ -103,30 +110,48 @@ export async function runTaskTurn(db: Database, router: Router, settings: TaskTu
       persistSession(db, threadID, turnID, "running", messages, summary, stepCount, tokenCount);
       const requestMessages: ChatMessage[] = [{ role: "system", content: stableSystemPrompt(persona.systemPrompt) }, ...(summary ? [{ role: "system" as const, content: `Conversation summary (untrusted context): ${summary}` }] : []), ...messages];
       const result = await router.route({
-        tier: persona.tier,
         messages: requestMessages,
         signal: controller.signal,
         firstTokenTimeoutMs: settings.firstTokenTimeoutMs,
         tools,
         toolChoice: tools.length ? "auto" : "none",
         maxTokens: Math.max(1, Math.min(2_048, MAX_TOKENS - tokenCount)),
-        onDelta: () => undefined,
+        onDelta: (delta: string) => {
+          run.emit({ type: "token", turnID, threadID, delta });
+        },
       });
       tokenCount += (result.inputTokens ?? estimateTokens(JSON.stringify(requestMessages) + JSON.stringify(tools))) +
         (result.outputTokens ?? estimateTokens(result.text + JSON.stringify(result.toolCalls ?? [])));
       usage = { provider: result.provider, model: result.model, inputTokens: result.inputTokens, outputTokens: result.outputTokens, latencyMs: result.latencyMs };
       if (!result.toolCalls?.length) {
-        finalText = result.text;
-        if (finalText) run.emit({ type: "token", turnID, threadID, delta: finalText });
+        finalText += result.text;
+        messages.push({ role: "assistant", content: result.text });
+        consecutiveNonTextSteps = 0;
+        break;
+      }
+
+      consecutiveNonTextSteps += 1;
+      if (consecutiveNonTextSteps > MAX_NONTEXT_STEPS) {
+        finalText += "I couldn't make progress on this — please rephrase or continue in a new message.";
         messages.push({ role: "assistant", content: finalText });
         break;
       }
 
       messages.push({ role: "assistant", content: result.text, toolCalls: result.toolCalls });
+      finalText += result.text;
       persistSession(db, threadID, turnID, "running", messages, summary, stepCount, tokenCount);
       for (const call of result.toolCalls) {
         stepCount += 1;
         if (stepCount > MAX_STEPS) break;
+        const signature = `${call.function.name}:${call.function.arguments}`;
+        const lastSeen = recentCalls.get(signature);
+        if (lastSeen !== undefined && stepCount - lastSeen <= DUPLICATE_WINDOW) {
+          const content = JSON.stringify({ skipped: true, reason: `Duplicate ${call.function.name} call already tried in this turn.` });
+          messages.push({ role: "tool", toolCallID: call.id, content });
+          run.emit({ type: "tool.end", callID: call.id, ok: false, preview: "Duplicate call skipped" });
+          continue;
+        }
+        recentCalls.set(signature, stepCount);
         const callResult = await executeTool(db, threadID, turnID, call, persona.tools, registry, broker, controller.signal, run.emit, (state) => persistSession(db, threadID, turnID, state, messages, summary, stepCount, tokenCount));
         messages.push({ role: "tool", toolCallID: call.id, content: callResult.content });
         tokenCount += estimateTokens(callResult.content);
@@ -138,7 +163,11 @@ export async function runTaskTurn(db: Database, router: Router, settings: TaskTu
       }
       if (stepCount >= MAX_STEPS || tokenCount >= MAX_TOKENS) break;
     }
-    if (!finalText && stopReason === "end" && (stepCount >= MAX_STEPS || tokenCount >= MAX_TOKENS)) {
+    // Prune old duplicate signatures so the map doesn't grow unboundedly.
+    for (const [sig, step] of recentCalls) {
+      if (stepCount - step > DUPLICATE_WINDOW) recentCalls.delete(sig);
+    }
+    if (!finalText && stopReason === "end" && tokenCount >= MAX_TOKENS) {
       finalText = "I reached the task-lane limit before finishing. Please narrow the request or continue in a new message.";
       run.emit({ type: "token", turnID, threadID, delta: finalText });
       messages.push({ role: "assistant", content: finalText });
@@ -147,7 +176,10 @@ export async function runTaskTurn(db: Database, router: Router, settings: TaskTu
     stopReason = controller.signal.aborted ? (timedOut ? "timeout" : "cancelled") : "error";
     const code = error instanceof RouterBusyError ? "server_busy" : error instanceof RouterError ? error.code : "task_turn_failed";
     run.emit({ type: "error", code, message: error instanceof Error ? error.message : String(error) });
-    if (error instanceof MidStreamError) finalText = "";
+    if (error instanceof MidStreamError) {
+      // Partial content was already streamed to the UI; keep it so the turn isn't lost.
+      stopReason = "end";
+    }
   } finally {
     clearTimeout(timer);
     run.signal.removeEventListener("abort", abort);

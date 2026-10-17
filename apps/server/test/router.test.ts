@@ -9,7 +9,6 @@ const groq: ProviderConfig = {
   baseUrl: "https://groq.test/v1",
   apiKey: "test-key",
   model: "fast-small",
-  tiers: ["instant"],
 };
 
 const nim: ProviderConfig = {
@@ -18,7 +17,6 @@ const nim: ProviderConfig = {
   baseUrl: "https://nim.test/v1",
   apiKey: "test-key",
   model: "big",
-  tiers: ["instant", "task", "deep"],
 };
 
 const encoder = new TextEncoder();
@@ -90,7 +88,7 @@ describe("router", () => {
     const result = await router.route({ ...baseOptions, onDelta: (delta) => deltas.push(delta) });
 
     expect(result.provider).toBe("nim");
-    expect(result.attempts).toBe(2);
+    expect(result.attempts).toBe(4);
     expect(result.text).toBe("hello world");
     expect(deltas.join("")).toBe("hello world");
     expect(health.isAvailable("groq")).toBe(false);
@@ -112,7 +110,7 @@ describe("router", () => {
     const router = new Router([groq, nim], new HealthTracker(), fetchFn);
     const result = await router.route({ ...baseOptions, firstTokenTimeoutMs: 50, onDelta: () => {} });
     expect(result.provider).toBe("nim");
-    expect(result.attempts).toBe(2);
+    expect(result.attempts).toBe(4);
   });
 
   test("does not fail over after tokens were emitted (no duplicated text)", async () => {
@@ -146,5 +144,5 @@ describe("router", () => {
     await expect(router.route({ ...baseOptions, onDelta: () => {} })).rejects.toMatchObject({
       code: "provider_failed",
     });
-  });
+  }, { timeout: 20000 });
 });

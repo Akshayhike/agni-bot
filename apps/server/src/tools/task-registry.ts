@@ -1,19 +1,27 @@
 /** The model-facing registry for P2 task turns. Generic shell, file, and web
- * tools are deliberately excluded; this runner only exposes durable stores. */
+ * tools are deliberately gated behind the approval broker; destructive bash
+ * commands require a human click before execution. */
 import type { Database } from "bun:sqlite";
 import type { ToolSpec } from "../models/client";
 import { ToolRegistry, type ToolDefinition } from "./registry";
 import {
   linksSearch, linkSave, memorySearch, memoryWrite, taskCreate, tasksList, taskUpdate,
 } from "./stores";
+import { grep, glob } from "./search";
+import { readFile } from "./read-file";
+import { writeFile } from "./write-file";
+import { webSearch, webFetch } from "./web";
+import { runBash } from "./bash";
+import { skillsList, skillsLoad, skillsResource } from "./skills";
 
 const objectSchema = (properties: Record<string, unknown>, required: string[]): Record<string, unknown> => ({
   type: "object", properties, required, additionalProperties: false,
 });
 const stringProp = { type: "string", minLength: 1 };
 const limitProp = { type: "integer", minimum: 1, maximum: 20 };
+const pathProp = { type: "string", minLength: 1 };
 
-export const TASK_TOOL_NAMES = ["memory_search", "memory_write", "links_search", "link_save", "tasks_list", "task_create", "task_update"];
+export const TASK_TOOL_NAMES = ["memory_search", "memory_write", "links_search", "link_save", "tasks_list", "task_create", "task_update", "grep", "glob", "read_file", "write_file", "web_search", "web_fetch", "bash", "skills_list", "skills_load", "skills_resource"];
 
 export function buildTaskToolRegistry(db: Database): ToolRegistry {
   const registry = new ToolRegistry();
@@ -53,6 +61,56 @@ export function buildTaskToolRegistry(db: Database): ToolRegistry {
     schema: objectSchema({ id: stringProp, action: { type: "string", enum: ["done", "reopen", "snooze"] }, until: { type: "string", format: "date-time" } }, ["id", "action"]), timeoutMs: 2_000,
     handler: async (args) => taskUpdate(db, parseObject(args, (v) => ({ id: string(v.id), action: enumValue(v.action, ["done", "reopen", "snooze"] as const), until: v.until === undefined ? undefined : boundedString(v.until, 80) }))),
   });
+  register({
+    name: "grep", description: "Search file contents in the sandbox for a regex pattern.", kind: "static",
+    schema: objectSchema({ pattern: stringProp, path: pathProp, include: { type: "string" }, ignoreCase: { type: "boolean" }, maxResults: limitProp }, ["pattern"]), timeoutMs: 10_000,
+    handler: async (args) => grep(parseObject(args, (v) => ({ pattern: string(v.pattern), path: v.path === undefined ? undefined : string(v.path), include: v.include === undefined ? undefined : string(v.include), ignoreCase: v.ignoreCase === undefined ? undefined : boolean(v.ignoreCase), maxResults: v.maxResults === undefined ? undefined : optionalLimit(v.maxResults) }))),
+  });
+  register({
+    name: "glob", description: "List files in the sandbox matching a glob pattern.", kind: "static",
+    schema: objectSchema({ pattern: stringProp, path: pathProp, maxResults: limitProp }, ["pattern"]), timeoutMs: 10_000,
+    handler: async (args) => glob(parseObject(args, (v) => ({ pattern: string(v.pattern), path: v.path === undefined ? undefined : string(v.path), maxResults: v.maxResults === undefined ? undefined : optionalLimit(v.maxResults) }))),
+  });
+  register({
+    name: "read_file", description: "Read a file from the sandbox directory.", kind: "static",
+    schema: objectSchema({ path: stringProp, offset: { type: "integer", minimum: 0 }, limit: limitProp }, ["path"]), timeoutMs: 5_000,
+    handler: async (args) => readFile(parseObject(args, (v) => ({ path: string(v.path), offset: v.offset === undefined ? undefined : number(v.offset), limit: v.limit === undefined ? undefined : optionalLimit(v.limit) }))),
+  });
+  register({
+    name: "write_file", description: "Write content to a file in the sandbox directory.", kind: "static",
+    schema: objectSchema({ path: stringProp, content: { type: "string", minLength: 1 }, append: { type: "boolean" } }, ["path", "content"]), timeoutMs: 5_000,
+    handler: async (args) => writeFile(parseObject(args, (v) => ({ path: string(v.path), content: string(v.content), append: v.append === undefined ? undefined : boolean(v.append) }))),
+  });
+  register({
+    name: "web_search", description: "Search the web via SearXNG (if configured).", kind: "static",
+    schema: objectSchema({ query: stringProp, count: limitProp }, ["query"]), timeoutMs: 15_000,
+    handler: async (args) => webSearch(parseObject(args, (v) => ({ query: string(v.query), count: v.count === undefined ? undefined : optionalLimit(v.count) }))),
+  });
+  register({
+    name: "web_fetch", description: "Fetch a public web page and extract its title and summary.", kind: "static",
+    schema: objectSchema({ url: { type: "string", format: "uri", maxLength: 2_048 }, maxChars: limitProp }, ["url"]), timeoutMs: 15_000,
+    handler: async (args) => webFetch(parseObject(args, (v) => ({ url: boundedString(v.url, 2_048), maxChars: v.maxChars === undefined ? undefined : optionalLimit(v.maxChars) }))),
+  });
+  register({
+    name: "bash", description: "Run a shell command in the sandbox. Destructive commands require approval.", kind: "static",
+    schema: objectSchema({ command: { type: "string", minLength: 1 }, timeoutMs: { type: "integer", minimum: 1000, maximum: 120_000 }, cwd: pathProp }, ["command"]), timeoutMs: 120_000,
+    handler: async (args) => runBash(parseObject(args, (v) => ({ command: string(v.command), timeoutMs: v.timeoutMs === undefined ? undefined : number(v.timeoutMs), cwd: v.cwd === undefined ? undefined : string(v.cwd) }))),
+  });
+  register({
+    name: "skills_list", description: "List available skills from ~/.agni/skills.", kind: "static",
+    schema: objectSchema({}, []), timeoutMs: 2_000,
+    handler: async () => skillsList(),
+  });
+  register({
+    name: "skills_load", description: "Load the full SKILL.md instructions for a skill listed in <available_skills>. Call this before acting on a skill.", kind: "static",
+    schema: objectSchema({ name: stringProp }, ["name"]), timeoutMs: 2_000,
+    handler: async (args) => skillsLoad(parseObject(args, (v) => ({ name: string(v.name) }))),
+  });
+  register({
+    name: "skills_resource", description: "Read a supplementary resource file (references/, scripts/) inside an already-loaded skill directory.", kind: "static",
+    schema: objectSchema({ skill_name: stringProp, relative_path: pathProp }, ["skill_name", "relative_path"]), timeoutMs: 2_000,
+    handler: async (args) => skillsResource(parseObject(args, (v) => ({ skill_name: string(v.skill_name), relative_path: string(v.relative_path) }))),
+  });
   return registry;
 }
 
@@ -76,7 +134,9 @@ function parseObject<T>(input: unknown, parse: (value: Record<string, unknown>) 
 }
 function string(value: unknown): string { if (typeof value !== "string" || !value.trim()) throw new Error("expected a non-empty string"); return value.trim(); }
 function boundedString(value: unknown, max: number): string { const result = string(value); if (result.length > max) throw new Error(`string exceeds ${max} characters`); return result; }
-function optionalLimit(value: unknown): number | undefined { if (value === undefined) return undefined; if (!Number.isInteger(value) || Number(value) < 1 || Number(value) > 20) throw new Error("limit must be an integer from 1 to 20"); return Number(value); }
-function optionalStrings(value: unknown): string[] | undefined { if (value === undefined) return undefined; if (!Array.isArray(value) || value.length > 20 || value.some((item) => typeof item !== "string" || !item.trim() || item.length > 80)) throw new Error("tags must be up to 20 non-empty strings of at most 80 characters"); return value.map((item) => (item as string).trim()); }
+function number(value: unknown): number { if (typeof value !== "number" || !Number.isFinite(value)) throw new Error("expected a number"); return value; }
+function boolean(value: unknown): boolean { if (typeof value !== "boolean") throw new Error("expected a boolean"); return value; }
+function optionalLimit(value: unknown): number | undefined { if (value === undefined || value === null) return undefined; const n = Number(value); if (!Number.isInteger(n) || n < 1 || n > 20) return undefined; return n; }
+function optionalStrings(value: unknown): string[] | undefined { if (value === undefined) return undefined; if (!Array.isArray(value) || value.length > 20 || value.some((item) => typeof item !== "string" || !item.trim() || item.length > 80)) throw new Error("tags must be up to 20 non-empty strings of at most 80 characters"); return value.map((item: string) => item.trim()); }
 function enumValue<const T extends readonly string[]>(value: unknown, allowed: T): T[number] { if (typeof value !== "string" || !allowed.includes(value)) throw new Error(`expected one of: ${allowed.join(", ")}`); return value as T[number]; }
 function optionalEnum<const T extends readonly string[]>(value: unknown, allowed: T): T[number] | undefined { return value === undefined ? undefined : enumValue(value, allowed); }

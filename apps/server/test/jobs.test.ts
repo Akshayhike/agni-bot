@@ -46,7 +46,6 @@ const testProvider: ProviderConfig = {
   baseUrl: "https://test.local/v1",
   apiKey: "test-key",
   model: "mock-model",
-  tiers: ["instant"],
 };
 
 function makeRouter(fetchFn: typeof fetch): Router {

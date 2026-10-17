@@ -1,11 +1,12 @@
 /**
- * Model router — free-first, failover on 429/timeout, and honest about the
- * one case it cannot fix: a stream that already emitted tokens is not retried
- * on another provider (that would duplicate text into the thread).
+ * Model router — free-first, failover on 429/timeout, with per-provider
+ * retries so a single transient hiccup doesn't kill a turn. Honest about the
+ * one case it cannot fix: a stream that already emitted tokens cannot be
+ * retried on another provider (that would duplicate text into the thread).
  */
 import { ProviderError, streamChat, type ChatMessage, type ToolSpec } from "./client";
+import type { ProviderConfig } from "./providers";
 import type { HealthTracker } from "./health";
-import { TIER_ORDER, type ProviderConfig, type Tier } from "./providers";
 import { log } from "../log";
 
 export class RouterError extends Error {
@@ -37,8 +38,12 @@ export class MidStreamError extends Error {
   }
 }
 
+/** How many times to retry a single provider before moving to the next one. */
+const PROVIDER_RETRIES = 3;
+/** Base backoff between retries of the same provider (ms). */
+const RETRY_BACKOFF_MS = 2_000;
+
 export interface RouteOptions {
-  tier: Tier;
   messages: ChatMessage[];
   signal?: AbortSignal;
   firstTokenTimeoutMs: number;
@@ -68,7 +73,6 @@ export interface ProviderStatus {
   id: string;
   label: string;
   model: string;
-  tiers: Tier[];
   available: boolean;
   cooldownRemainingMs: number;
   lastError?: string;
@@ -109,15 +113,10 @@ export class Router {
     return models.sort((a, b) => a.localeCompare(b));
   }
 
-  /** Configured providers for a tier, healthiest first, cooling ones last. */
-  candidates(tier: Tier): ProviderConfig[] {
-    const order = TIER_ORDER[tier];
-    const rank = new Map(order.map((id, index) => [id, index]));
-    const eligible = this.providers
-      .filter((provider) => provider.tiers.includes(tier))
-      .sort((a, b) => (rank.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b.id) ?? Number.MAX_SAFE_INTEGER));
-    const healthy = eligible.filter((provider) => this.health.isAvailable(provider.id));
-    const cooling = eligible.filter((provider) => !this.health.isAvailable(provider.id));
+  /** Configured providers, healthiest first, cooling ones last. */
+  candidates(): ProviderConfig[] {
+    const healthy = this.providers.filter((provider) => this.health.isAvailable(provider.id));
+    const cooling = this.providers.filter((provider) => !this.health.isAvailable(provider.id));
     // Cooling providers stay in the list as a last resort — a spent cooldown
     // beats a hard failure when nothing else is configured.
     return [...healthy, ...cooling];
@@ -134,72 +133,80 @@ export class Router {
   }
 
   private async routeWithSlot(options: RouteOptions): Promise<RouteResult> {
-    const candidates = this.candidates(options.tier);
+    const candidates = this.candidates();
     if (candidates.length === 0) {
       throw new RouterError(
         "no_provider",
-        "no model providers configured for the instant lane — set GROQ_API_KEY, CEREBRAS_API_KEY, or NVIDIA_API_KEY in .env",
+        "no model providers configured — set GROQ_API_KEY, CEREBRAS_API_KEY, or NVIDIA_API_KEY in .env",
       );
     }
 
     const errors: string[] = [];
     let attempts = 0;
     for (const provider of candidates) {
-      attempts += 1;
-      const beganAt = Date.now();
-      let emitted = false;
-      try {
-        const result = await streamChat({
-          baseUrl: provider.baseUrl,
-          apiKey: provider.apiKey,
-          model: provider.model,
-          messages: options.messages,
-          signal: options.signal,
-          firstTokenTimeoutMs: options.firstTokenTimeoutMs,
-          fetchFn: this.fetchFn,
-          tools: options.tools,
-          toolChoice: options.toolChoice,
-          maxTokens: options.maxTokens,
-          onDelta: (delta) => {
-            emitted = true;
-            options.onDelta(delta);
-          },
-        });
-        this.health.markSuccess(provider.id);
-        return {
-          provider: provider.id,
-          model: provider.model,
-          text: result.text,
-          firstTokenMs: result.firstTokenMs,
-          latencyMs: Date.now() - beganAt,
-          inputTokens: result.inputTokens,
-          outputTokens: result.outputTokens,
-          attempts,
-          ...(result.toolCalls ? { toolCalls: result.toolCalls } : {}),
-        };
-      } catch (error) {
-        const providerError =
-          error instanceof ProviderError ? error : new ProviderError(String(error), { kind: "network" });
-        if (providerError.kind === "aborted" || options.signal?.aborted) throw providerError;
-        if (emitted) throw new MidStreamError(provider.id, providerError);
-        const cooldownMs = this.cooldownFor(providerError);
-        this.health.markFailure(provider.id, cooldownMs, providerError.message);
-        errors.push(`${provider.id}: ${providerError.message}`);
-        log.info(`provider ${provider.id} failed (${providerError.message}) — cooling down ${cooldownMs}ms, trying next`);
+      let lastError: ProviderError | null = null;
+      for (let retry = 0; retry < PROVIDER_RETRIES; retry++) {
+        attempts += 1;
+        const beganAt = Date.now();
+        let emitted = false;
+        try {
+          const result = await streamChat({
+            baseUrl: provider.baseUrl,
+            apiKey: provider.apiKey,
+            model: provider.model,
+            messages: options.messages,
+            signal: options.signal,
+            firstTokenTimeoutMs: options.firstTokenTimeoutMs,
+            fetchFn: this.fetchFn,
+            tools: options.tools,
+            toolChoice: options.toolChoice,
+            maxTokens: options.maxTokens,
+            onDelta: (delta) => {
+              emitted = true;
+              options.onDelta(delta);
+            },
+          });
+          this.health.markSuccess(provider.id);
+          return {
+            provider: provider.id,
+            model: provider.model,
+            text: result.text,
+            firstTokenMs: result.firstTokenMs,
+            latencyMs: Date.now() - beganAt,
+            inputTokens: result.inputTokens,
+            outputTokens: result.outputTokens,
+            attempts,
+            ...(result.toolCalls ? { toolCalls: result.toolCalls } : {}),
+          };
+        } catch (error) {
+          const providerError =
+            error instanceof ProviderError ? error : new ProviderError(String(error), { kind: "network" });
+          if (providerError.kind === "aborted" || options.signal?.aborted) throw providerError;
+          if (emitted) throw new MidStreamError(provider.id, providerError);
+          lastError = providerError;
+          const cooldownMs = this.cooldownFor(providerError);
+          this.health.markFailure(provider.id, cooldownMs, providerError.message);
+          errors.push(`${provider.id}#${retry + 1}: ${providerError.message}`);
+          log.info(`provider ${provider.id} attempt ${retry + 1}/${PROVIDER_RETRIES} failed (${providerError.message}) — retry in ${RETRY_BACKOFF_MS}ms`);
+          if (retry < PROVIDER_RETRIES - 1) {
+            await new Promise((resolve) => setTimeout(resolve, RETRY_BACKOFF_MS));
+          }
+        }
       }
     }
 
-    throw new RouterError("provider_failed", `all providers failed — ${errors.join(" | ")}`);
+    const summary = errors.join(" | ");
+    throw new RouterError("provider_failed", `all providers failed — ${summary}`);
   }
 
   private cooldownFor(error: ProviderError): number {
     // Bad key or revoked access: back off hard, it is not a momentary blip.
     if (error.status === 401 || error.status === 403) return 5 * 60_000;
-    if (error.retryAfterMs !== undefined) return Math.max(error.retryAfterMs, 5_000);
-    if (error.status === 429) return 30_000;
-    if (error.kind === "timeout") return 15_000;
-    if (error.status !== undefined && error.status >= 500) return 30_000;
-    return 20_000;
+    if (error.retryAfterMs !== undefined) return Math.max(error.retryAfterMs, 2_000);
+    if (error.status === 429) return 10_000;
+    if (error.kind === "timeout") return 5_000;
+    if (error.status !== undefined && error.status >= 500) return 10_000;
+    return 10_000;
   }
 
   status(): ProviderStatus[] {
@@ -209,7 +216,6 @@ export class Router {
         id: provider.id,
         label: provider.label,
         model: provider.model,
-        tiers: provider.tiers,
         available: snapshot?.available ?? true,
         cooldownRemainingMs: snapshot?.cooldownRemainingMs ?? 0,
         lastError: snapshot?.lastError,

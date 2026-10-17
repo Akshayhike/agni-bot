@@ -228,7 +228,6 @@ export const ServerFrameSchema = z.discriminatedUnion("type", [
     id: z.string(),
     label: z.string(),
     model: z.string(),
-    tiers: z.array(z.enum(["instant", "task", "deep"])),
     available: z.boolean(),
     cooldownRemainingMs: z.number(),
     lastError: z.string().optional(),

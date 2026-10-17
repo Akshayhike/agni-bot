@@ -6,10 +6,7 @@
  */
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { mkdirSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 
-const SANDBOX_DIR = process.env.AGNI_SANDBOX_DIR ?? join(tmpdir(), "agni-sandbox");
 const MAX_OUTPUT_BYTES = 1024 * 1024;
 const DEFAULT_TIMEOUT_MS = 30_000;
 
@@ -51,7 +48,7 @@ export function isDestructive(command: string): boolean {
 }
 
 export async function runBash(args: BashArgs): Promise<BashResult> {
-  const cwd = args.cwd ?? SANDBOX_DIR;
+  const cwd = args.cwd ?? process.cwd();
   mkdirSync(cwd, { recursive: true });
   const timeoutMs = Math.min(args.timeoutMs ?? DEFAULT_TIMEOUT_MS, 120_000);
   const startedAt = Date.now();
@@ -62,7 +59,7 @@ export async function runBash(args: BashArgs): Promise<BashResult> {
     let timedOut = false;
     const child = spawn("bash", ["-c", args.command], {
       cwd,
-      env: { ...process.env, AGNI_SANDBOX_DIR: SANDBOX_DIR },
+      env: { ...process.env },
     }) as unknown as ChildProcessWithoutNullStreams;
 
     const timer = setTimeout(() => {

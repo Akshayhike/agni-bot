@@ -82,7 +82,7 @@ async function serve(): Promise<void> {
     log.warn("no providers configured — set GROQ_API_KEY / CEREBRAS_API_KEY / NVIDIA_API_KEY in .env (see .env.example)");
   } else {
     for (const provider of router.status()) {
-      log.info(`provider ${provider.id.padEnd(11)} ${provider.model} [${provider.tiers.join(",")}]`);
+      log.info(`provider ${provider.id.padEnd(11)} ${provider.model}`);
     }
   }
 
@@ -191,7 +191,7 @@ function printHealth(health: HealthReport | undefined, config: Config): void {
     const state = provider.available
       ? "ok"
       : `cooling ${Math.ceil(provider.cooldownRemainingMs / 1000)}s${provider.lastError ? `: ${provider.lastError}` : ""}`;
-    console.log(`    ${provider.id.padEnd(11)} ${provider.model} [${provider.tiers.join(",")}] ${state}`);
+    console.log(`    ${provider.id.padEnd(11)} ${provider.model} ${state}`);
   }
   if (health.providers.length === 0) {
     console.log(`    (no providers configured — set a key in .env; server ${config.host}:${config.port} is up)`);

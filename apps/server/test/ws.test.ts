@@ -25,7 +25,6 @@ const provider: ProviderConfig = {
   baseUrl: "https://test.local/v1",
   apiKey: "test-key",
   model: "mock-model",
-  tiers: ["instant"],
 };
 
 const encoder = new TextEncoder();
