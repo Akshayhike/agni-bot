@@ -24,6 +24,7 @@
     "fixtures": "bun run --filter @agni/protocol fixtures",
     "mac": "swift build --package-path apps/mac",
     "mac-app": "apps/mac/scripts/bundle.sh",
+    "landing": "bun --cwd apps/landing dev",
     "test": "bun test",
     "typecheck": "bun run --filter '@agni/*' typecheck"
   },

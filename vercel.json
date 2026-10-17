@@ -1,0 +1,5 @@
+{
+  "version": 2,
+  "buildCommand": "echo 'Landing page ready for static deployment'",
+  "outputDirectory": "apps/landing"
+}

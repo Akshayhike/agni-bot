@@ -1,0 +1,12 @@
+{
+  "name": "@agni/landing",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Landing page for Agni - Speed-first personal assistant",
+  "type": "module",
+  "scripts": {
+    "dev": "bun serve.ts",
+    "serve": "bun serve.ts",
+    "start": "bun serve.ts"
+  }
+}
