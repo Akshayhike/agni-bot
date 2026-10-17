@@ -33,7 +33,7 @@ export const PERSONAS: Persona[] = [
     name: "Agni",
     color: "#f0b95a",
     systemPrompt: AGNI_SYSTEM_PROMPT,
-    tools: ["memory_search", "memory_write", "links_search", "link_save", "tasks_list", "task_create", "task_update", "grep", "glob", "read_file", "write_file", "web_search", "web_fetch", "bash", "skills_list", "skills_load", "skills_resource", "mail_search", "mail_read", "mail_send"],
+    tools: ["memory_search", "memory_write", "links_search", "link_save", "tasks_list", "task_create", "task_update", "grep", "glob", "read_file", "write_file", "web_search", "web_fetch", "deep_research", "bash", "skills_list", "skills_load", "skills_resource", "mail_search", "mail_read", "mail_send"],
   },
 ];
 
