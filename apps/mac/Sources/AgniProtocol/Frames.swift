@@ -1,5 +1,5 @@
 /**
- * Agni wire protocol v1 in Swift — the client half of the contract defined in
+ * Agni wire protocol v2 in Swift — the client half of the contract defined in
  * `packages/protocol/src/frames.ts`.
  *
  * Rules that keep the two languages honest:
@@ -13,7 +13,7 @@
  */
 import Foundation
 
-public let PROTOCOL_VERSION = 1
+public let PROTOCOL_VERSION = 2
 
 // MARK: - shared value types
 
@@ -129,6 +129,8 @@ public struct MessageInfo: Sendable, Equatable, Decodable {
   public var text: String
   public var createdAt: String
   public var turnID: String?
+  /// Session block the message belongs to (conversation model, v2).
+  public var sessionID: String?
 }
 
 public struct JobInfo: Sendable, Equatable, Decodable, Identifiable {
@@ -161,11 +163,28 @@ public struct ProviderInfo: Sendable, Equatable, Decodable, Identifiable {
   public var id: String
   public var label: String
   public var model: String
+  /// The wire omits tiers in v2 — absent means unspecified.
   public var tiers: [String]
   public var available: Bool
   public var cooldownRemainingMs: Double
   public var lastError: String?
   public var lastSuccessAt: Double?
+
+  private enum CodingKeys: String, CodingKey {
+    case id, label, model, tiers, available, cooldownRemainingMs, lastError, lastSuccessAt
+  }
+
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    id = try container.decode(String.self, forKey: .id)
+    label = try container.decode(String.self, forKey: .label)
+    model = try container.decode(String.self, forKey: .model)
+    tiers = try container.decodeIfPresent([String].self, forKey: .tiers) ?? []
+    available = try container.decode(Bool.self, forKey: .available)
+    cooldownRemainingMs = try container.decode(Double.self, forKey: .cooldownRemainingMs)
+    lastError = try container.decodeIfPresent(String.self, forKey: .lastError)
+    lastSuccessAt = try container.decodeIfPresent(Double.self, forKey: .lastSuccessAt)
+  }
 }
 
 // MARK: - client → server
@@ -173,10 +192,13 @@ public struct ProviderInfo: Sendable, Equatable, Decodable, Identifiable {
 public enum ClientFrame: Sendable, Equatable {
   case hello(v: Int, token: String, device: String)
   case resync(lastSeq: Int)
-  case msgSend(threadID: String, text: String, files: [String]?)
+  case msgSend(threadID: String?, text: String, files: [String]?, conversationID: String?)
   case msgCancel(turnID: String)
   case approveReply(requestID: String, decision: Decision)
   case agentSelect(agentID: String)
+  case conversationOpen(conversationID: String, agentID: String?)
+  case sessionNew(conversationID: String)
+  case conversationHistory(conversationID: String, limit: Int?)
   case threadOpen(threadID: String)
   case threadList(limit: Int?)
   case threadHistory(threadID: String, limit: Int?)
@@ -197,6 +219,9 @@ public enum ClientFrame: Sendable, Equatable {
     case .msgCancel: "msg.cancel"
     case .approveReply: "approve.reply"
     case .agentSelect: "agent.select"
+    case .conversationOpen: "conversation.open"
+    case .sessionNew: "session.new"
+    case .conversationHistory: "conversation.history"
     case .threadOpen: "thread.open"
     case .threadList: "thread.list"
     case .threadHistory: "thread.history"
@@ -221,10 +246,11 @@ public enum ClientFrame: Sendable, Equatable {
       object["device"] = device
     case .resync(let lastSeq):
       object["lastSeq"] = lastSeq
-    case .msgSend(let threadID, let text, let files):
-      object["threadID"] = threadID
+    case .msgSend(let threadID, let text, let files, let conversationID):
+      if let threadID { object["threadID"] = threadID }
       object["text"] = text
       if let files, !files.isEmpty { object["files"] = files }
+      if let conversationID { object["conversationID"] = conversationID }
     case .msgCancel(let turnID):
       object["turnID"] = turnID
     case .approveReply(let requestID, let decision):
@@ -232,6 +258,14 @@ public enum ClientFrame: Sendable, Equatable {
       object["decision"] = decision.wire
     case .agentSelect(let agentID):
       object["agentID"] = agentID
+    case .conversationOpen(let conversationID, let agentID):
+      object["conversationID"] = conversationID
+      if let agentID { object["agentID"] = agentID }
+    case .sessionNew(let conversationID):
+      object["conversationID"] = conversationID
+    case .conversationHistory(let conversationID, let limit):
+      object["conversationID"] = conversationID
+      if let limit { object["limit"] = limit }
     case .threadOpen(let threadID):
       object["threadID"] = threadID
     case .threadList(let limit):
@@ -291,9 +325,10 @@ public enum ClientFrame: Sendable, Equatable {
       self = .resync(lastSeq: try Require.int(object, "lastSeq"))
     case "msg.send":
       self = .msgSend(
-        threadID: try Require.string(object, "threadID"),
+        threadID: object["threadID"] as? String,
         text: try Require.string(object, "text"),
-        files: object["files"] as? [String])
+        files: object["files"] as? [String],
+        conversationID: object["conversationID"] as? String)
     case "msg.cancel":
       self = .msgCancel(turnID: try Require.string(object, "turnID"))
     case "approve.reply":
@@ -302,6 +337,14 @@ public enum ClientFrame: Sendable, Equatable {
         decision: Decision(wire: try Require.string(object, "decision")))
     case "agent.select":
       self = .agentSelect(agentID: try Require.string(object, "agentID"))
+    case "conversation.open":
+      self = .conversationOpen(
+        conversationID: try Require.string(object, "conversationID"),
+        agentID: object["agentID"] as? String)
+    case "session.new":
+      self = .sessionNew(conversationID: try Require.string(object, "conversationID"))
+    case "conversation.history":
+      self = .conversationHistory(conversationID: try Require.string(object, "conversationID"), limit: object["limit"] as? Int)
     case "thread.open":
       self = .threadOpen(threadID: try Require.string(object, "threadID"))
     case "thread.list":
@@ -351,6 +394,9 @@ public enum ServerFrame: Sendable, Equatable {
   case agentsUpdate(AgentsUpdate)
   case threadListOK(ThreadListOK)
   case threadHistoryOK(ThreadHistoryOK)
+  case conversationOK(ConversationOK)
+  case sessionStart(SessionStart)
+  case conversationHistoryOK(ConversationHistoryOK)
   case jobListOK(JobListOK)
   case taskListOK(TaskListOK)
   case taskUpdateOK(TaskUpdateOK)
@@ -376,6 +422,9 @@ public enum ServerFrame: Sendable, Equatable {
     case .agentsUpdate(let f): f.seq
     case .threadListOK(let f): f.seq
     case .threadHistoryOK(let f): f.seq
+    case .conversationOK(let f): f.seq
+    case .sessionStart(let f): f.seq
+    case .conversationHistoryOK(let f): f.seq
     case .jobListOK(let f): f.seq
     case .taskListOK(let f): f.seq
     case .taskUpdateOK(let f): f.seq
@@ -402,6 +451,9 @@ public enum ServerFrame: Sendable, Equatable {
     case .agentsUpdate: "agents.update"
     case .threadListOK: "thread.list.ok"
     case .threadHistoryOK: "thread.history.ok"
+    case .conversationOK: "conversation.ok"
+    case .sessionStart: "session.start"
+    case .conversationHistoryOK: "conversation.history.ok"
     case .jobListOK: "job.list.ok"
     case .taskListOK: "task.list.ok"
     case .taskUpdateOK: "task.update.ok"
@@ -432,6 +484,8 @@ public enum ServerFrame: Sendable, Equatable {
     public var turnID: String
     public var threadID: String
     public var agentID: String
+    /// v2: the conversation this turn belongs to (present in both lanes).
+    public var conversationID: String?
   }
 
   public struct TurnEnd: Sendable, Equatable, Decodable {
@@ -439,6 +493,8 @@ public enum ServerFrame: Sendable, Equatable {
     public var turnID: String
     public var threadID: String
     public var stopReason: String
+    /// v2: the conversation the turn belongs to, when the server knows it.
+    public var conversationID: String?
     public var usage: Usage?
 
     public var reason: StopReason { StopReason(wire: stopReason) }
@@ -510,6 +566,31 @@ public enum ServerFrame: Sendable, Equatable {
     public var messages: [MessageInfo]
   }
 
+  /// Answer to `conversation.open`: the agent's one conversation and its
+  /// active session block. `sessionID` is "" while no block exists yet.
+  public struct ConversationOK: Sendable, Equatable, Decodable {
+    public var seq: Int
+    public var conversationID: String
+    public var agentID: String
+    public var sessionID: String
+  }
+
+  /// A session block boundary inside the conversation (`/new` or context
+  /// pressure). Frame `threadID`-shaped ids name blocks; `sessionID` is the
+  /// block opened by this seam.
+  public struct SessionStart: Sendable, Equatable, Decodable {
+    public var seq: Int
+    public var conversationID: String
+    public var sessionID: String
+    public var reason: String
+  }
+
+  public struct ConversationHistoryOK: Sendable, Equatable, Decodable {
+    public var seq: Int
+    public var conversationID: String
+    public var messages: [MessageInfo]
+  }
+
   public struct JobListOK: Sendable, Equatable, Decodable {
     public var seq: Int
     public var jobs: [JobInfo]
@@ -568,6 +649,9 @@ public enum ServerFrame: Sendable, Equatable {
     case "agents.update": self = .agentsUpdate(try Decode.frame(AgentsUpdate.self, object))
     case "thread.list.ok": self = .threadListOK(try Decode.frame(ThreadListOK.self, object))
     case "thread.history.ok": self = .threadHistoryOK(try Decode.frame(ThreadHistoryOK.self, object))
+    case "conversation.ok": self = .conversationOK(try Decode.frame(ConversationOK.self, object))
+    case "session.start": self = .sessionStart(try Decode.frame(SessionStart.self, object))
+    case "conversation.history.ok": self = .conversationHistoryOK(try Decode.frame(ConversationHistoryOK.self, object))
     case "job.list.ok": self = .jobListOK(try Decode.frame(JobListOK.self, object))
     case "task.list.ok": self = .taskListOK(try Decode.frame(TaskListOK.self, object))
     case "task.update.ok": self = .taskUpdateOK(try Decode.frame(TaskUpdateOK.self, object))

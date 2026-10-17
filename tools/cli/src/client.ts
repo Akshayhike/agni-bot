@@ -162,6 +162,35 @@ export class AgniSocket {
     return await pending;
   }
 
+  /** Resolve (or create) an agent's one conversation; answers its active block. */
+  async conversationOpen(
+    conversationID: string,
+    agentID?: string,
+    timeoutMs = 5000,
+  ): Promise<Extract<ServerFrame, { type: "conversation.ok" }>> {
+    const pending = this.once("conversation.ok", timeoutMs);
+    this.send(agentID ? { type: "conversation.open", conversationID, agentID } : { type: "conversation.open", conversationID });
+    return await pending;
+  }
+
+  /** Cut a fresh session block into the conversation (the `/new` seam). */
+  async sessionNew(conversationID: string, timeoutMs = 5000): Promise<void> {
+    // The seam itself arrives as `session.start` on the stream, not as a reply.
+    this.send({ type: "session.new", conversationID });
+    await Bun.sleep(50);
+  }
+
+  /** The conversation transcript across session blocks (seams readable via sessionID). */
+  async conversationHistory(
+    conversationID: string,
+    limit = 50,
+    timeoutMs = 5000,
+  ): Promise<{ conversationID: string; messages: MessageInfo[] }> {
+    const pending = this.once("conversation.history.ok", timeoutMs);
+    this.send({ type: "conversation.history", conversationID, limit });
+    return await pending;
+  }
+
   private once<T extends ServerFrame["type"]>(
     type: T,
     timeoutMs: number,

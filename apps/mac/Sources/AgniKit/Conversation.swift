@@ -47,6 +47,9 @@ public struct ChatMessage: Identifiable, Sendable, Equatable {
   public var createdAt: Date?
   public var turnID: String?
   public var agentID: String?
+  /// The session block this message lives in — the seam key used to render
+  /// session dividers. nil for messages minted before the conversation model.
+  public var sessionID: String?
   public var state: State
   public var usage: Usage?
   public var tools: [ToolActivity]
@@ -60,6 +63,7 @@ public struct ChatMessage: Identifiable, Sendable, Equatable {
     createdAt: Date? = nil,
     turnID: String? = nil,
     agentID: String? = nil,
+    sessionID: String? = nil,
     state: State = .complete,
     usage: Usage? = nil,
     tools: [ToolActivity] = [],
@@ -71,6 +75,7 @@ public struct ChatMessage: Identifiable, Sendable, Equatable {
     self.createdAt = createdAt
     self.turnID = turnID
     self.agentID = agentID
+    self.sessionID = sessionID
     self.state = state
     self.usage = usage
     self.tools = tools
@@ -157,6 +162,9 @@ public enum ConversationEffect: Sendable, Equatable {
 }
 
 public struct Conversation: Sendable, Equatable {
+  /// The open conversation surface (v2): one per agent, never moved.
+  public var conversationID: String?
+  /// The active session block inside that conversation — where our sends land.
   public var threadID: String?
   public var title: String?
   public var agentID: String
@@ -167,6 +175,10 @@ public struct Conversation: Sendable, Equatable {
   /// The turn currently streaming into this thread, if any.
   public var inFlightTurnID: String?
   public var inFlightThreadID: String?
+  /// Turns whose start bound them into this conversation by conversationID;
+  /// their tokens carry only a block id, so attribution survives the seam
+  /// (a background brief streams into its own block — still this surface).
+  private var adoptedTurns: Set<String> = []
 
   private static let noticeCap = 40
   private static let previewCap = 180
@@ -192,11 +204,14 @@ public struct Conversation: Sendable, Equatable {
 
   // MARK: intent from the UI
 
-  /// Local echo: the bubble appears before the socket answers (S6).
+  /// Local echo: the bubble appears before the socket answers (S6). It belongs
+  /// to the conversation's active block — the block our next send lands in.
   @discardableResult
   public mutating func appendLocalUserMessage(text: String, at date: Date = Date()) -> String {
     let id = "local_\(UUID().uuidString)"
-    messages.append(ChatMessage(id: id, role: .user, text: text, createdAt: date, isLocalEcho: true))
+    messages.append(
+      ChatMessage(id: id, role: .user, text: text, createdAt: date, sessionID: threadID, isLocalEcho: true)
+    )
     return id
   }
 
@@ -232,41 +247,80 @@ public struct Conversation: Sendable, Equatable {
     messages = []
   }
 
+  /// Bind the transcript to the one conversation surface (v2). This is where
+  /// the app lives from connect to forget-device; `sessionID` "" means the
+  /// conversation has no blocks yet.
+  public mutating func bind(conversationID: String, agentID: String?, sessionID: String?) {
+    self.conversationID = conversationID
+    if let agentID { self.agentID = agentID }
+    threadID = sessionID?.isEmpty == false ? sessionID : nil
+    title = nil
+    inFlightTurnID = nil
+    inFlightThreadID = nil
+    adoptedTurns.removeAll()
+  }
+
+  /// A session block boundary arrived: everything after this lands in the new
+  /// block. The seam itself shows up as a divider once the new block's first
+  /// message exists.
+  public mutating func startSession(sessionID: String, conversationID: String? = nil) {
+    self.threadID = sessionID
+    if let conversationID { self.conversationID = conversationID }
+  }
+
   // MARK: durable state
 
   public mutating func loadHistory(threadID: String, title: String?, agentID: String?, messages incoming: [MessageInfo]) {
     self.threadID = threadID
     if let title { self.title = title }
     if let agentID { self.agentID = agentID }
+    replaceDurable(incoming)
+  }
 
+  /// The conversation transcript across session blocks (v2). The block id per
+  /// message is the divider key; the red herring title is not part of a surface.
+  public mutating func loadConversationHistory(conversationID: String, agentID: String?, messages incoming: [MessageInfo]) {
+    self.conversationID = conversationID
+    if let agentID { self.agentID = agentID }
+    replaceDurable(incoming)
+  }
+
+  /// Rebuild from the server's copy. Anything still streaming or echoed lives
+  /// only in this process: keep it. Keep a partial answer that has content, but
+  /// discard an empty streaming placeholder when durable history arrives
+  /// before the first token.
+  private mutating func replaceDurable(_ incoming: [MessageInfo]) {
     var rebuilt: [ChatMessage] = incoming.map { info in
       ChatMessage(
         id: info.id,
         role: ChatMessage.Role(rawValue: info.role) ?? .system,
         text: info.text,
         createdAt: AgniFormat.parseISO(info.createdAt),
-        turnID: info.turnID
+        turnID: info.turnID,
+        sessionID: info.sessionID
       )
     }
 
-    // Anything still streaming or echoed lives only in this process: keep it.
-    // Keep a partial answer that has content, but discard an empty streaming
-    // placeholder when durable history arrives before the first token.
     let streaming = messages.filter { $0.isStreaming && !$0.text.isEmpty }
     let echoes = messages.filter { $0.isLocalEcho && $0.state != .failed("") }
     rebuilt.append(contentsOf: streaming)
     for echo in echoes where !rebuilt.contains(where: { $0.role == .user && $0.text == echo.text }) {
       rebuilt.append(echo)
     }
-    self.messages = rebuilt
+    // Survivors predate the blocks they stream into; stamp them with the
+    // active block so a seam renders the instant history reloads.
+    for index in rebuilt.indices where rebuilt[index].sessionID == nil {
+      rebuilt[index].sessionID = threadID
+    }
+    messages = rebuilt
   }
 
   // MARK: frames
 
   public mutating func apply(_ frame: ServerFrame) -> [ConversationEffect] {
     switch frame {
-    case .helloOK, .threadListOK, .threadHistoryOK, .jobListOK, .taskListOK, .taskUpdateOK,
-      .providerAddOK, .providerModelsOK, .unknown:
+    case .helloOK, .conversationOK, .conversationHistoryOK, .threadListOK, .threadHistoryOK,
+      .jobListOK, .taskListOK, .taskUpdateOK, .providerAddOK, .providerModelsOK, .unknown:
       return []
 
     case .presence(let presence):
@@ -275,24 +329,36 @@ public struct Conversation: Sendable, Equatable {
     case .agentsUpdate(let update):
       return [.agentsChanged(update.agents)]
 
+    case .sessionStart(let seam):
+      startSession(sessionID: seam.sessionID, conversationID: seam.conversationID)
+      return []
+
     case .turnStart(let start):
-      let isOurs = belongs(to: start.threadID)
+      let isOurs = belongsTo(threadID: start.threadID, conversationID: start.conversationID)
       guard isOurs else { return [.unread(threadID: start.threadID), .refreshThreadList] }
+      if start.conversationID != nil || threadID == start.threadID {
+        adoptedTurns.insert(start.turnID)
+      }
       adopt(threadID: start.threadID)
       inFlightTurnID = start.turnID
       inFlightThreadID = start.threadID
       let id = Self.assistantID(turnID: start.turnID)
       if let index = messages.firstIndex(where: { $0.id == id }) {
         messages[index].state = .streaming
+        if messages[index].sessionID == nil { messages[index].sessionID = start.threadID }
       } else {
         messages.append(
-          ChatMessage(id: id, role: .assistant, text: "", createdAt: Date(), turnID: start.turnID, agentID: start.agentID, state: .streaming)
+          ChatMessage(
+            id: id, role: .assistant, text: "", createdAt: Date(), turnID: start.turnID,
+            agentID: start.agentID, sessionID: start.threadID, state: .streaming
+          )
         )
       }
       return []
 
     case .token(let token):
-      guard belongs(to: token.threadID) else { return [] }
+      let adopted = adoptedTurns.contains(token.turnID)
+      guard belongsTo(threadID: token.threadID, conversationID: nil) || adopted else { return [] }
       let id = Self.assistantID(turnID: token.turnID)
       if let index = messages.firstIndex(where: { $0.id == id }) {
         messages[index].text += token.delta
@@ -301,13 +367,18 @@ public struct Conversation: Sendable, Equatable {
         inFlightTurnID = token.turnID
         inFlightThreadID = token.threadID
         messages.append(
-          ChatMessage(id: id, role: .assistant, text: token.delta, createdAt: Date(), turnID: token.turnID, agentID: agentID, state: .streaming)
+          ChatMessage(
+            id: id, role: .assistant, text: token.delta, createdAt: Date(), turnID: token.turnID,
+            agentID: agentID, sessionID: token.threadID, state: .streaming
+          )
         )
       }
       return []
 
     case .turnEnd(let end):
-      let isOurs = belongs(to: end.threadID) || inFlightTurnID == end.turnID
+      let adopted = adoptedTurns.remove(end.turnID) != nil
+      let isOurs = adopted || belongsTo(threadID: end.threadID, conversationID: end.conversationID)
+        || inFlightTurnID == end.turnID
       let id = Self.assistantID(turnID: end.turnID)
       if let index = messages.firstIndex(where: { $0.id == id }) {
         messages[index].state = end.reason == .end ? .complete : .stopped(end.reason)
@@ -391,9 +462,11 @@ public struct Conversation: Sendable, Equatable {
 
   // MARK: helpers
 
-  /// A frame belongs to this transcript when it is for the open thread, or for
-  /// the thread being created by our own send (`threadID == nil`).
-  private func belongs(to other: String) -> Bool {
+  /// A frame belongs to this surface when its conversation is the bound one,
+  /// or — legacy lane — when it is for the open block, or for the block being
+  /// created by our own send (`threadID == nil`).
+  private func belongsTo(threadID other: String, conversationID otherConversation: String?) -> Bool {
+    if let otherConversation { return otherConversation == self.conversationID }
     if let mine = threadID { return mine == other }
     return true
   }

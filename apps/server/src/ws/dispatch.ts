@@ -35,7 +35,16 @@ import {
   wakeJob,
   type JobRow,
 } from "../stores/jobs";
-import { appendMessage, createThread, createTurn, finishTurn, getThread, listThreadsWithPreview, recentMessages, titleThreadFromFirstMessage, touchThread } from "../stores/threads";
+import { appendMessage, createThread, createTurn, finishTurn, getThread, listThreadsWithPreview, recentMessages, titleThreadFromFirstMessage, touchThread, type ThreadRow } from "../stores/threads";
+import {
+  activeSession,
+  backgroundSession,
+  conversationTranscript,
+  ensureConversation,
+  getConversation,
+  type ConversationRow,
+} from "../stores/conversations";
+import { rolloverIfNeeded, rotate, rotateById } from "../agent/rollover";
 import type { TurnJobPayload } from "../jobs/turn";
 import { newID, nowISO } from "../util/ids";
 import { createMemory, searchMemories } from "../stores/memories";
@@ -99,6 +108,12 @@ export async function dispatch(deps: DispatchDeps, session: Session, raw: string
       return handleApproveReply(deps, session, frame);
     case "agent.select":
       return handleAgentSelect(deps, session, frame);
+    case "conversation.open":
+      return handleConversationOpen(deps, session, frame);
+    case "session.new":
+      return void handleSessionNew(deps, session, frame);
+    case "conversation.history":
+      return handleConversationHistory(deps, session, frame);
     case "thread.open":
       return handleThreadOpen(deps, session, frame);
     case "thread.list":
@@ -170,27 +185,62 @@ function handleResync(deps: DispatchDeps, session: Session, frame: Extract<Clien
   for (const replay of frames) deps.send(replay);
 }
 
-function handleMsgSend(deps: DispatchDeps, session: Session, frame: Extract<ClientFrame, { type: "msg.send" }>): void {
+async function handleMsgSend(deps: DispatchDeps, session: Session, frame: Extract<ClientFrame, { type: "msg.send" }>): Promise<void> {
   if (!requireAuth(deps, session)) return;
 
   let thread;
-  if (frame.threadID) {
+  let conversationID: string | undefined;
+  let carrySummary: string | null = null;
+  if (frame.conversationID) {
+    // v2 path: send into the conversation's active session block, rolling a
+    // context-pressure block over first when needed.
+    const conversation = getConversation(deps.db, frame.conversationID);
+    if (!conversation) return sendError(deps, session, "unknown_conversation", `no conversation ${frame.conversationID}`);
+    const result = await rolloverIfNeeded(rolloverDeps(deps), conversation);
+    thread = getThread(deps.db, result.threadID);
+    if (!thread) return sendError(deps, session, "internal", "session rotation produced no thread");
+    conversationID = conversation.id;
+    carrySummary = result.carry;
+    if (result.rolledOver && result.reason !== "none") {
+      deps.emit({ type: "session.start", conversationID: conversation.id, sessionID: thread.id, reason: result.reason });
+    }
+  } else if (frame.threadID) {
     thread = getThread(deps.db, frame.threadID);
     if (!thread) return sendError(deps, session, "unknown_thread", `no thread ${frame.threadID}`);
+    // The CLI path still binds: a block carries its conversation along.
+    if (thread.conversation_id) {
+      conversationID = thread.conversation_id;
+      carrySummary = getConversation(deps.db, conversationID)?.summary ?? null;
+    }
   } else {
-    thread = createThread(deps.db, session.agentID);
+    // Empty threadID is the CLI's "/new": rotate the agent's conversation —
+    // same seam the Mac app gets from session.new.
+    const result = await rotate(rolloverDeps(deps), session.agentID, "manual");
+    thread = getThread(deps.db, result.threadID);
+    if (!thread) return sendError(deps, session, "internal", "conversation rotation failed");
+    conversationID = result.conversationID;
+    carrySummary = result.carry;
+    deps.emit({ type: "session.start", conversationID: result.conversationID, sessionID: thread.id, reason: "manual" });
   }
 
   const persona = getPersona(thread.agent_id) ?? defaultPersona();
   if (isCapture(frame.text) || isStoreQuery(frame.text)) {
-    void captureMessage(deps, session, thread.id, persona.id, frame.text);
+    void captureMessage(deps, session, thread, persona.id, frame.text);
     return;
-  }
-  const turnID = newID("trn");
+  }  const turnID = newID("trn");
   const controller = new AbortController();
   session.aborts.set(turnID, controller);
   const turnSettings = { firstTokenTimeoutMs: deps.config.firstTokenTimeoutMs, turnTimeoutMs: deps.config.turnTimeoutMs };
-  const turn = runTaskTurn(deps.db, deps.router, turnSettings, { turnID, threadID: thread.id, text: frame.text, persona, emit: deps.emit, signal: controller.signal });
+  const turn = runTaskTurn(deps.db, deps.router, turnSettings, {
+    turnID,
+    threadID: thread.id,
+    text: frame.text,
+    persona,
+    conversationID,
+    carrySummary,
+    emit: deps.emit,
+    signal: controller.signal,
+  });
 
   void turn
     .catch((error: unknown) => {
@@ -212,13 +262,15 @@ function isStoreQuery(text: string): boolean {
   return /^\s*(search memory|search memories|search links|find saved links|what do you remember|list tasks|what tasks)\s*:?/i.test(text);
 }
 
-async function captureMessage(deps: DispatchDeps, session: Session, threadID: string, agentID: string, text: string): Promise<void> {
+async function captureMessage(deps: DispatchDeps, session: Session, thread: ThreadRow, agentID: string, text: string): Promise<void> {
+  const threadID = thread.id;
+  const conversationID = thread.conversation_id ?? undefined;
   const turnID = newID("trn");
   try {
     createTurn(deps.db, { id: turnID, threadID, agentID });
     appendMessage(deps.db, { threadID, turnID, role: "user", text });
     titleThreadFromFirstMessage(deps.db, threadID, text);
-    deps.emit({ type: "turn.start", turnID, threadID, agentID });
+    deps.emit({ type: "turn.start", turnID, threadID, agentID, ...(conversationID ? { conversationID } : {}) });
     let confirmation: string;
     const memory = text.match(/^\s*remember\s*:\s*([\s\S]+)$/i);
     const task = text.match(/^\s*add task\s*:\s*([\s\S]+)$/i);
@@ -241,11 +293,16 @@ async function captureMessage(deps: DispatchDeps, session: Session, threadID: st
       const body = memory[1]!.trim();
       const parsed = body.match(/^(.*?)(?:\s+#tags?\s+(.+))?$/i);
       const record = createMemory(deps.db, { text: parsed?.[1]?.trim() || body, ...(parsed?.[2] ? { tags: parsed[2].split(/[ ,]+/) } : {}), ownerDeviceID: session.device?.id });
-      confirmation = `Saved memory ${record.id}: ${record.text}`;
+      confirmation = `Noted — ${record.text.replace(/[.!?]+$/, "")}.`;
     } else if (task) {
       const parsed = parseTaskCapture(task[1]!);
       const record = createTask(deps.db, { ...parsed, ownerDeviceID: session.device?.id });
-      confirmation = `Added task ${record.id}: ${record.title}${record.due_at ? ` · due ${record.due_at}` : ""} · ${record.priority} priority`;
+      // Speak like a person confirming, not a database receipt: no ids, no
+      // priority recital unless it deviates from normal.
+      confirmation = `On the list: “${record.title}”`;
+      if (record.due_at) confirmation += ` — due ${record.due_at.slice(0, 10)}`;
+      if (record.priority === "high") confirmation += ", marked high priority";
+      confirmation += ".";
     } else {
       const urlMatch = text.match(/https?:\/\/[^\s<>]+/i);
       if (!urlMatch) throw new Error("no supported capture found");
@@ -256,13 +313,21 @@ async function captureMessage(deps: DispatchDeps, session: Session, threadID: st
       let fetchError: string | undefined;
       try { page = await fetchPage(url); } catch (error) { fetchError = error instanceof Error ? error.message : String(error); }
       const record = saveLink(deps.db, { url, ...page, note, ownerDeviceID: session.device?.id });
-      confirmation = `Saved link ${record.id}: ${record.title ?? record.url}${record.note ? ` · note: ${record.note}` : ""}${fetchError ? ` · page details unavailable (${fetchError}); URL and note were saved` : ""}`;
+      const label = record.title ? `“${record.title}”` : "the link";
+      // The note is the user's own words — kept with the link, recited back
+      // only when it is short enough to read naturally.
+      const notePart = note
+        ? note.length <= 60 ? ` and your note — “${note}”` : " and your note"
+        : "";
+      confirmation = fetchError
+        ? `Saved ${label}${notePart}. I couldn't read the page details this time — the link is kept, so it should still open.`
+        : `Saved ${label}${notePart} for later.`;
     }
     appendMessage(deps.db, { threadID, turnID, role: "assistant", text: confirmation });
     finishTurn(deps.db, { id: turnID, stopReason: "end" });
     touchThread(deps.db, threadID);
     deps.emit({ type: "token", turnID, threadID, delta: confirmation });
-    deps.emit({ type: "turn.end", turnID, threadID, stopReason: "end" });
+    deps.emit({ type: "turn.end", turnID, threadID, stopReason: "end", ...(conversationID ? { conversationID } : {}) });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     try { finishTurn(deps.db, { id: turnID, stopReason: "error" }); } catch { /* turn may not have been created */ }
@@ -313,6 +378,72 @@ function taskSnapshot(task: ReturnType<typeof listTasks>[number]) {
   return { id:task.id,title:task.title,dueAt:task.due_at,priority:task.priority,status:task.status,snoozedUntil:task.snoozed_until,createdAt:task.created_at,updatedAt:task.updated_at };
 }
 
+/** Model-call deps for the conversation seam (summary generation, rollovers). */
+function rolloverDeps(deps: DispatchDeps): { db: Database; router: Router; firstTokenTimeoutMs: number } {
+  return { db: deps.db, router: deps.router, firstTokenTimeoutMs: deps.config.firstTokenTimeoutMs };
+}
+
+/**
+ * Conversation model (v2). `conversationID` empty + `agentID` selects or
+ * creates the agent's one conversation; the answer binds the client to it
+ * for later `msg.send { conversationID }` turns.
+ */
+function handleConversationOpen(
+  deps: DispatchDeps,
+  session: Session,
+  frame: Extract<ClientFrame, { type: "conversation.open" }>,
+): void {
+  if (!requireAuth(deps, session)) return;
+  let conversation: ConversationRow | null;
+  if (frame.conversationID) {
+    conversation = getConversation(deps.db, frame.conversationID);
+    if (!conversation) return sendError(deps, session, "unknown_conversation", `no conversation ${frame.conversationID}`);
+  } else {
+    conversation = ensureConversation(deps.db, frame.agentID ?? session.agentID);
+  }
+  const active = activeSession(deps.db, conversation);
+  deps.reply({
+    type: "conversation.ok",
+    conversationID: conversation.id,
+    agentID: conversation.agent_id,
+    sessionID: active?.id ?? "",
+  });
+}
+
+/** Pressing /new: close the active block into the carry, continue fresh. */
+async function handleSessionNew(
+  deps: DispatchDeps,
+  session: Session,
+  frame: Extract<ClientFrame, { type: "session.new" }>,
+): Promise<void> {
+  if (!requireAuth(deps, session)) return;
+  const conversation = getConversation(deps.db, frame.conversationID);
+  if (!conversation) return sendError(deps, session, "unknown_conversation", `no conversation ${frame.conversationID}`);
+  const result = await rotateById(rolloverDeps(deps), conversation.id, "manual");
+  // Stream state, not a reply: every client renders the same boundary.
+  deps.emit({ type: "session.start", conversationID: result.conversationID, sessionID: result.threadID, reason: "manual" });
+}
+
+/** The durable transcript across session blocks, for the one chat surface. */
+function handleConversationHistory(
+  deps: DispatchDeps,
+  session: Session,
+  frame: Extract<ClientFrame, { type: "conversation.history" }>,
+): void {
+  if (!requireAuth(deps, session)) return;
+  if (!getConversation(deps.db, frame.conversationID)) {
+    return sendError(deps, session, "unknown_conversation", `no conversation ${frame.conversationID}`);
+  }
+  const messages = conversationTranscript(deps.db, frame.conversationID, frame.limit ?? 200).map((message) => ({
+    id: message.id,
+    role: message.role,
+    text: message.text,
+    createdAt: message.created_at,
+    sessionID: message.sessionID,
+  }));
+  deps.reply({ type: "conversation.history.ok", conversationID: frame.conversationID, messages });
+}
+
 function handleMsgCancel(deps: DispatchDeps, session: Session, frame: Extract<ClientFrame, { type: "msg.cancel" }>): void {
   if (!requireAuth(deps, session)) return;
   const controller = session.aborts.get(frame.turnID);
@@ -354,8 +485,7 @@ function handleThreadOpen(
   deps: DispatchDeps,
   session: Session,
   frame: Extract<ClientFrame, { type: "thread.open" }>,
-): void {
-  if (!requireAuth(deps, session)) return;
+): void {  if (!requireAuth(deps, session)) return;
   const thread = getThread(deps.db, frame.threadID);
   if (!thread) return sendError(deps, session, "unknown_thread", `no thread ${frame.threadID}`);
   // No frames in response: history arrives through resync replay, live

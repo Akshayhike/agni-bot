@@ -1,4 +1,6 @@
-/** Searchable conversation roster with compact access to agents and tasks. */
+/** The roster: agents on top, scheduled tasks beneath. Threads are not shown
+ *  — each agent has one enduring conversation surface; sessions are seams in
+ *  it, not list entries (blueprint v3 §5). */
 import SwiftUI
 import AgniKit
 import AgniProtocol
@@ -34,7 +36,7 @@ struct SidebarView: View {
   private var header: some View {
     HStack {
       Spacer()
-      Button { model.newThread() } label: {
+      Button { model.newSession() } label: {
         Image(systemName: "plus")
           .font(.system(size: 16, weight: .medium))
           .foregroundStyle(Palette.inkSecondary)
@@ -42,8 +44,8 @@ struct SidebarView: View {
           .contentShape(Rectangle())
       }
       .buttonStyle(.plain)
-      .help("New conversation for the selected agent")
-      .accessibilityLabel("New conversation")
+      .help("New session — a seam in this conversation, the thread stays")
+      .accessibilityLabel("New session")
       .offset(y: -13)
     }
     .padding(.horizontal, 14)
@@ -60,7 +62,7 @@ struct SidebarView: View {
       TextField("Search", text: model.searchBinding)
         .textFieldStyle(.plain)
         .font(Typography.meta)
-        .accessibilityLabel("Search conversations, agents, and tasks")
+        .accessibilityLabel("Search agents and tasks")
       if !model.searchText.isEmpty {
         Button { model.searchText = "" } label: {
           Image(systemName: "xmark.circle.fill")
@@ -80,14 +82,6 @@ struct SidebarView: View {
   private var sections: some View {
     ScrollView {
       LazyVStack(alignment: .leading, spacing: 14) {
-        VStack(alignment: .leading, spacing: 4) {
-          sectionTitle("Conversations")
-          if model.filteredThreads.isEmpty {
-            sectionEmpty(model.searchText.isEmpty ? "Start a conversation with an agent" : "No matching conversations")
-          } else {
-            ForEach(model.filteredThreads) { thread in threadRow(thread) }
-          }
-        }
         VStack(alignment: .leading, spacing: 4) {
           sectionTitle("Agents")
           if model.filteredAgents.isEmpty {
@@ -123,44 +117,6 @@ struct SidebarView: View {
     .frame(maxHeight: .infinity)
   }
 
-  private func threadRow(_ thread: ThreadInfo) -> some View {
-    let selected = model.conversation.threadID == thread.id
-    let agent = model.agents.first(where: { $0.id == thread.agentID })
-    return Button { model.open(thread: thread) } label: {
-      HStack(spacing: 10) {
-        SidebarAgentBadge(agent: agent, size: 36)
-        VStack(alignment: .leading, spacing: 3) {
-          Text(thread.title?.isEmpty == false ? thread.title! : (agent?.name ?? "Conversation"))
-            .font(Typography.rowTitle)
-            .foregroundStyle(Palette.ink)
-            .lineLimit(1)
-          Text(thread.preview ?? agent?.name ?? "No messages yet")
-            .font(Typography.meta)
-            .foregroundStyle(Palette.inkSecondary)
-            .lineLimit(1)
-        }
-        Spacer(minLength: 0)
-        if model.unread.contains(thread.id) {
-          Circle().fill(Palette.ember).frame(width: 6, height: 6)
-        }
-      }
-      .padding(.horizontal, 10)
-      .padding(.vertical, 9)
-      .frame(maxWidth: .infinity, alignment: .leading)
-      .background(selected ? Palette.surfaceRaised : .clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-      .contentShape(Rectangle())
-    }
-    .buttonStyle(.plain)
-    .accessibilityLabel("Open conversation \(thread.title ?? agent?.name ?? "Conversation")")
-    .contextMenu {
-      Button("Open conversation") { model.open(thread: thread) }
-      Button("New conversation", systemImage: "square.and.pencil") {
-        if let agent { model.selectAgent(agent) }
-        model.newThread()
-      }
-    }
-  }
-
   private func sectionTitle(_ title: String) -> some View {
     Text(title)
       .font(.system(size: 12, weight: .semibold))
@@ -181,6 +137,7 @@ struct SidebarView: View {
 
   private func agentRow(_ agent: AgentInfo) -> some View {
     let selected = model.conversation.agentID == agent.id
+    let unreadBlocks = model.unreadBlocks(for: agent.id)
     return Button { model.selectAgent(agent) } label: {
       HStack(spacing: 10) {
         SidebarAgentBadge(agent: agent, size: 36)
@@ -189,13 +146,13 @@ struct SidebarView: View {
             .font(Typography.rowTitle)
             .foregroundStyle(Palette.ink)
             .lineLimit(1)
-          Text(model.threads.first(where: { $0.agentID == agent.id })?.preview ?? agent.model ?? "Assistant")
+          Text(agent.model ?? "Assistant")
             .font(Typography.meta)
             .foregroundStyle(Palette.inkSecondary)
             .lineLimit(1)
         }
         Spacer(minLength: 0)
-        if selected {
+        if unreadBlocks {
           Circle().fill(Palette.ember).frame(width: 6, height: 6)
         }
       }
@@ -209,9 +166,9 @@ struct SidebarView: View {
     .accessibilityLabel("Open \(agent.name) chat")
     .contextMenu {
       Button("Open chat") { model.selectAgent(agent) }
-      Button("New conversation", systemImage: "square.and.pencil") {
+      Button("New session", systemImage: "square.and.pencil") {
         model.selectAgent(agent)
-        model.newThread()
+        model.newSession()
       }
     }
   }
@@ -239,8 +196,7 @@ struct SidebarView: View {
         .contentShape(Rectangle())
       }
       .buttonStyle(.plain)
-      .disabled(task.threadID == nil)
-      .help(task.threadID == nil ? "This task has no chat yet" : "Open task chat")
+      .help("Its results land in the agent's conversation")
 
       Button { model.runRoutine(task) } label: {
         Image(systemName: "play.fill")

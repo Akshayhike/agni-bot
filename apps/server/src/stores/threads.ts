@@ -7,6 +7,13 @@ export interface ThreadRow {
   title: string | null;
   created_at: string;
   updated_at: string;
+  /** Conversation model (migration 7): the block's conversation, when assigned. */
+  conversation_id: string | null;
+  closed_at: string | null;
+  /** manual (/new) | context (rollover at pressure) | background (job turn). */
+  closed_by: string | null;
+  /** The carried summary this block opened with (debuggability only). */
+  opened_carry: string | null;
 }
 
 export interface MessageRow {
@@ -22,28 +29,47 @@ export interface ThreadListRow extends ThreadRow {
   preview: string | null;
 }
 
-export function createThread(db: Database, agentID: string, title?: string): ThreadRow {
+export function createThread(
+  db: Database,
+  agentID: string,
+  title?: string,
+  options?: { conversationID?: string | null },
+): ThreadRow {
   const row: ThreadRow = {
     id: newID("thr"),
     agent_id: agentID,
     title: title ?? null,
     created_at: nowISO(),
     updated_at: nowISO(),
+    conversation_id: options?.conversationID ?? null,
+    closed_at: null,
+    closed_by: null,
+    opened_carry: null,
   };
-  db.run("INSERT INTO threads (id, agent_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)", [
-    row.id,
-    row.agent_id,
-    row.title,
-    row.created_at,
-    row.updated_at,
-  ]);
+  db.run(
+    "INSERT INTO threads (id, agent_id, title, created_at, updated_at, conversation_id, closed_at, closed_by, opened_carry) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    [
+      row.id,
+      row.agent_id,
+      row.title,
+      row.created_at,
+      row.updated_at,
+      row.conversation_id,
+      row.closed_at,
+      row.closed_by,
+      row.opened_carry,
+    ],
+  );
   return row;
 }
 
 export function getThread(db: Database, id: string): ThreadRow | null {
   return (
     db
-      .query<ThreadRow, [string]>("SELECT id, agent_id, title, created_at, updated_at FROM threads WHERE id = ?")
+      .query<ThreadRow, [string]>(
+        `SELECT id, agent_id, title, created_at, updated_at, conversation_id, closed_at, closed_by, opened_carry
+         FROM threads WHERE id = ?`,
+      )
       .get(id) ?? null
   );
 }
@@ -52,7 +78,7 @@ export function getThread(db: Database, id: string): ThreadRow | null {
 export function listThreads(db: Database, limit = 20): ThreadRow[] {
   return db
     .query<ThreadRow, [number]>(
-      `SELECT id, agent_id, title, created_at, updated_at
+      `SELECT id, agent_id, title, created_at, updated_at, conversation_id, closed_at, closed_by, opened_carry
        FROM threads ORDER BY updated_at DESC LIMIT ?`,
     )
     .all(limit);
@@ -63,6 +89,7 @@ export function listThreadsWithPreview(db: Database, limit = 20): ThreadListRow[
   const rows = db
     .query<ThreadRow & { preview_text: string | null }, [number]>(
       `SELECT t.id, t.agent_id, t.title, t.created_at, t.updated_at,
+              t.conversation_id, t.closed_at, t.closed_by, t.opened_carry,
               (SELECT m.text FROM messages m WHERE m.thread_id = t.id
                ORDER BY m.created_at DESC, m.rowid DESC LIMIT 1) AS preview_text
        FROM threads t ORDER BY t.updated_at DESC LIMIT ?`,

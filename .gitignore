@@ -2,6 +2,7 @@ node_modules/
 dist/
 target/
 
+.context/
 # local state: SQLite database, WAL files, exports
 data/
 *.sqlite

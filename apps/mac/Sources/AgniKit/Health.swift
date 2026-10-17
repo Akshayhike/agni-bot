@@ -19,6 +19,7 @@ public struct ProviderStatus: Sendable, Equatable, Decodable, Identifiable {
   public var id: String
   public var label: String
   public var model: String
+  /// Server snapshot doesn't carry tiers in v2 — absent means unspecified.
   public var tiers: [String]
   public var available: Bool
   public var cooldownRemainingMs: Int
@@ -43,6 +44,22 @@ public struct ProviderStatus: Sendable, Equatable, Decodable, Identifiable {
     self.cooldownRemainingMs = cooldownRemainingMs
     self.lastError = lastError
     self.lastSuccessAt = lastSuccessAt
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case id, label, model, tiers, available, cooldownRemainingMs, lastError, lastSuccessAt
+  }
+
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    id = try container.decode(String.self, forKey: .id)
+    label = try container.decode(String.self, forKey: .label)
+    model = try container.decode(String.self, forKey: .model)
+    tiers = try container.decodeIfPresent([String].self, forKey: .tiers) ?? []
+    available = try container.decode(Bool.self, forKey: .available)
+    cooldownRemainingMs = try container.decode(Int.self, forKey: .cooldownRemainingMs)
+    lastError = try container.decodeIfPresent(String.self, forKey: .lastError)
+    lastSuccessAt = try container.decodeIfPresent(Double.self, forKey: .lastSuccessAt)
   }
 }
 

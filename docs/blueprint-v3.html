@@ -178,10 +178,10 @@ server → client   hello.ok {serverTime, seq}        token {turnID, delta}
 
 <h2 id="agents">5 · Agents, threads, connections</h2>
 <ul>
-<li><b>Agents are personas, not processes.</b> Each has a name, avatar color, one model (or model ladder), a short system prompt, a tool allowlist, and optional memory scope. Grok-Bot-style sidebar: your roster, one chat per thread, switch any time.</li>
+<li><b>Agents are personas, not processes.</b> Each has a name, avatar color, one model (or model ladder), a short system prompt, a tool allowlist, and optional memory scope. The sidebar is the roster only; the chat surface is <b>one conversation per agent</b> — you talk to Agni in one enduring surface, like texting a person, not a wrapper with a sessions list. <code>/new</code> starts a fresh session block inside that same surface: the model's context is cleaned (closed block compacted into a bounded carried summary), while the transcript above stays part of the same conversation. Session blocks auto-roll at context pressure. Background results (briefs, reminders) land as their own session blocks in the same conversation; rich output renders as an HTML artifact page.</li>
 <li><b>Agent-to-agent work is explicit.</b> Any agent can spawn a subagent (task lane) or hand a coding job to an ACP harness (Codex first). Subagents render as nested activity strips inside the thread — you always see who did what.</li>
 <li><b>Connections page.</b> One screen listing Gmail, Calendar, MCP servers (REA is already wired), model providers (with live health), and ACP harnesses (login status, quota hints). Toggling a connection is a tap; broken connections show a fix action.</li>
-<li><b>Threads survive everything.</b> Server restarts, app restarts, phone switches: threads reattach via <code>resync</code> and continue mid-turn streams.</li>
+<li><b>Conversations survive everything.</b> Server restarts, app restarts, phone switches: the stream reattaches via <code>resync</code>, the conversation and its session blocks reattach via SQLite, and mid-turn streams continue. The CLI keeps its thread commands (its blocks are the same rows); the apps don't show them.</li>
 </ul>
 
 <h2 id="stores">6 · Memory, links, tasks — the three stores</h2>

@@ -41,6 +41,9 @@ struct ThreadView: View {
         LazyVStack(alignment: .leading, spacing: 16) {
           Color.clear.frame(height: 1).id(topAnchor)
           ForEach(Array(model.conversation.messages.enumerated()), id: \.element.id) { index, message in
+            if isSessionBoundary(index: index) {
+              SessionDivider()
+            }
             if isNewDay(index: index) {
               DayDivider(label: index == 0 ? AgniFormat.stamp(message.createdAt ?? Date()) : AgniFormat.dayTitle(message.createdAt ?? Date()))
             }
@@ -119,10 +122,19 @@ struct ThreadView: View {
     return !Calendar.current.isDate(previous, inSameDayAs: date)
   }
 
+  /// The seam between session blocks: wherever consecutive messages carry
+  /// different (non-nil) block ids. A boundary from nil → a block id renders
+  /// too — that is where the conversation model begins.
+  private func isSessionBoundary(index: Int) -> Bool {
+    let messages = model.conversation.messages
+    guard index > 0, index < messages.count, let current = messages[index].sessionID else { return false }
+    return messages[index - 1].sessionID != current
+  }
+
   private var emptyState: some View {
     VStack(spacing: 0) {
       Spacer(minLength: 0)
-      Text("Start a conversation with \(model.agent?.name ?? "Agni")")
+      Text("Message \(model.agent?.name ?? "Agni") — one conversation, it never resets")
         .font(Typography.meta)
         .foregroundStyle(Palette.inkTertiary)
       Spacer().frame(height: 28)
@@ -262,5 +274,25 @@ private struct DayDivider: View {
       .frame(maxWidth: .infinity, alignment: .center)
     .padding(.vertical, 4)
     .accessibilityLabel(label)
+  }
+}
+
+/// The invisible seam made visible: a session block boundary. Everything above
+/// the line lives in an earlier context window; the agent still carries the
+/// summary forward, the old prose stays where it was.
+private struct SessionDivider: View {
+  var body: some View {
+    HStack(spacing: 10) {
+      Rectangle().fill(Palette.hairline).frame(height: 1)
+      Image(systemName: "scissors")
+        .font(.system(size: 10, weight: .medium))
+        .foregroundStyle(Palette.inkTertiary)
+      Text("New session")
+        .font(Typography.caption)
+        .foregroundStyle(Palette.inkTertiary)
+      Rectangle().fill(Palette.hairline).frame(height: 1)
+    }
+    .padding(.vertical, 6)
+    .accessibilityLabel("New session — the older messages above stay in place")
   }
 }

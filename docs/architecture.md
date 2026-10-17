@@ -54,6 +54,11 @@ any connected client, and completion raises `notify`. A `turn` job with
 stays one conversation. Failures retry with backoff, then park as `failed` with
 a notification — never silently.
 
+Background results land inside the agent's conversation as a `background`
+session block — born closed, they join the transcript without stealing the
+active chat block — so a reminder or the morning brief reads like the agent
+texted you where you already talk.
+
 Live and background turns share a process-wide model stream limit
 (`AGNI_MAX_CONCURRENT_TURNS`, default 4). This keeps provider usage and local
 memory bounded; chat turns that arrive at capacity receive a `server_busy`
@@ -115,8 +120,16 @@ the approval broker.
 
 One SQLite database (WAL) at `data/agni.sqlite` (dev). Tables are created by
 numbered migrations in `apps/server/src/db/migrations.ts`: `devices`,
-`threads`, `turns`, `messages`, `usage_ledger`, `approvals`, `tasks`, `links`,
-`memories`, `jobs`, plus standalone FTS5 indexes.
+`conversations`, `threads`, `turns`, `messages`, `usage_ledger`, `approvals`,
+`tasks`, `links`, `memories`, `jobs`, plus standalone FTS5 indexes.
+
+A conversation is the one user-facing chat with an agent (blueprint §5): one
+per agent, never reset. Every `threads` row is a session block inside it — an
+invisible context span that opens with the conversation's carried summary and
+closes into it (`closed_by`: `manual` for /new, `context` at pressure,
+`background` for routine results). Compaction is write-time (S4): one bounded
+model call per closing block (`agent/rollover.ts`); a failed summary carries
+the previous summary forward and never blocks a turn.
 
 ## Home
 

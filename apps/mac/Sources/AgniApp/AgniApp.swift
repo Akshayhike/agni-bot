@@ -30,7 +30,7 @@ struct AgniApp: App {
     .windowToolbarStyle(.unifiedCompact)
     .commands {
       CommandGroup(replacing: .newItem) {
-        Button("New thread") { model.newThread() }
+        Button("New session") { model.newSession() }
           .keyboardShortcut("n", modifiers: .command)
       }
       CommandMenu("Agni") {
@@ -44,7 +44,7 @@ struct AgniApp: App {
         Button("Connection settings…") { model.editConnection() }
         Button("Forget this device…") { model.forgetDevice() }
         Divider()
-        Button("Reload thread") { model.openCurrentThreadAgain() }
+        Button("Reload conversation") { model.reloadConversation() }
           .keyboardShortcut("r", modifiers: [.command, .shift])
       }
     }

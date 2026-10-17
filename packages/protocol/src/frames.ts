@@ -1,17 +1,21 @@
 /**
- * Agni wire protocol v1 — the contract between the server and every client
+ * Agni wire protocol v2 — the contract between the server and every client
  * (Mac app, Android app, CLI).
  *
  * Frames are JSON text over a single WebSocket. Client frames carry no
  * sequence number; every server frame carries a positive, monotonically
  * increasing `seq` so clients can replay missed frames via `resync`.
  *
+ * v2 introduces the conversation model: the user-facing chat surface is one
+ * conversation per agent; "threads" become invisible session blocks inside it
+ * (context-window seams). See docs/protocol.md and the §5 blueprint change.
+ *
  * The prose spec lives in docs/protocol.md. This file is the machine version:
  * if the two disagree, this file wins — then fix the doc.
  */
 import { z } from "zod";
 
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
 
 /** Server-assigned monotonic sequence number. */
 const seq = z.number().int().positive();
@@ -61,8 +65,15 @@ export const MessageInfoSchema = z.object({
   text: z.string(),
   createdAt: z.string(),
   turnID: z.string().optional(),
+  /** Session block the message belongs to (conversation model, v2). */
+  sessionID: z.string().optional(),
 });
 export type MessageInfo = z.infer<typeof MessageInfoSchema>;
+
+/** Why a session block boundary exists. */
+export const SESSION_REASONS = ["manual", "context", "background"] as const;
+export const SessionReasonSchema = z.enum(SESSION_REASONS);
+export type SessionReason = z.infer<typeof SessionReasonSchema>;
 
 /** Job lifecycle states; `done` and `failed` are terminal unless recurring. */
 export const JOB_STATES = ["queued", "running", "done", "failed"] as const;
@@ -113,10 +124,18 @@ export const ClientFrameSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("resync"), lastSeq: z.number().int().nonnegative() }),
   z.object({
     type: z.literal("msg.send"),
-    /** Empty string asks the server to create a new thread. */
-    threadID: z.string(),
+    /**
+     * Legacy path: target session block id; "" asks the server to rotate a
+     * fresh block. Conversation clients omit it and use conversationID.
+     */
+    threadID: z.string().optional(),
     text: z.string().min(1),
     files: z.array(z.string()).optional(),
+    /**
+     * v2 conversation model: send into the conversation's active session
+     * block. Takes precedence over threadID.
+     */
+    conversationID: z.string().min(1).optional(),
   }),
   z.object({ type: z.literal("msg.cancel"), turnID: z.string().min(1) }),
   z.object({
@@ -125,6 +144,26 @@ export const ClientFrameSchema = z.discriminatedUnion("type", [
     decision: DecisionSchema,
   }),
   z.object({ type: z.literal("agent.select"), agentID: z.string().min(1) }),
+  /**
+   * Resolve (and create when missing) the agent's one conversation — the
+   * enduring chat surface with that agent. An empty conversationID plus
+   * agentID means "that agent's conversation"; the answer carries the active
+   * session block id.
+   */
+  z.object({
+    type: z.literal("conversation.open"),
+    /** Empty selects by agentID; non-empty must resolve. */
+    conversationID: z.string().max(64),
+    agentID: z.string().min(1).optional(),
+  }),
+  /** Close the active session block and continue in a fresh one (/new). */
+  z.object({ type: z.literal("session.new"), conversationID: z.string().min(1) }),
+  /** The conversation transcript across session blocks, with sessionID per message. */
+  z.object({
+    type: z.literal("conversation.history"),
+    conversationID: z.string().min(1),
+    limit: z.number().int().positive().max(500).optional(),
+  }),
   z.object({ type: z.literal("thread.open"), threadID: z.string().min(1) }),
   /**
    * Durable-state reads. Replies are addressed to the requesting connection
@@ -184,6 +223,8 @@ export const ServerFrameSchema = z.discriminatedUnion("type", [
     turnID: z.string(),
     threadID: z.string(),
     agentID: z.string(),
+    /** v2: the conversation this turn belongs to (present in both lanes). */
+    conversationID: z.string().optional(),
   }),
   z.object({
     type: z.literal("turn.end"),
@@ -192,6 +233,7 @@ export const ServerFrameSchema = z.discriminatedUnion("type", [
     threadID: z.string(),
     stopReason: StopReasonSchema,
     usage: UsageSchema.optional(),
+    conversationID: z.string().optional(),
   }),
   z.object({ type: z.literal("tool.start"), seq, callID: z.string(), name: z.string(), preview: z.string().optional() }),
   z.object({ type: z.literal("tool.update"), seq, callID: z.string(), preview: z.string().optional() }),
@@ -219,6 +261,32 @@ export const ServerFrameSchema = z.discriminatedUnion("type", [
     seq,
     threadID: z.string().min(1),
     title: z.string().optional(),
+    messages: z.array(MessageInfoSchema),
+  }),
+  /**
+   * Answer to `conversation.open`; addressed to the requester, outside the
+   * replay log. sessionID is "" while the conversation has no blocks yet.
+   */
+  z.object({
+    type: z.literal("conversation.ok"),
+    seq,
+    conversationID: z.string(),
+    agentID: z.string(),
+    sessionID: z.string(),
+  }),
+  /** A session block boundary inside the conversation (replayable stream state). */
+  z.object({
+    type: z.literal("session.start"),
+    seq,
+    conversationID: z.string(),
+    sessionID: z.string(),
+    reason: SessionReasonSchema,
+  }),
+  /** Answer to `conversation.history`; addressed to the requester. */
+  z.object({
+    type: z.literal("conversation.history.ok"),
+    seq,
+    conversationID: z.string(),
     messages: z.array(MessageInfoSchema),
   }),
   z.object({ type: z.literal("job.list.ok"), seq, jobs: z.array(JobInfoSchema) }),

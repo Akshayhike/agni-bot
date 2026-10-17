@@ -21,6 +21,10 @@ export interface TaskTurnRun {
   persona: Persona;
   emit: (frame: ServerFrameBody) => void;
   signal: AbortSignal;
+  /** Conversation model (v2): the conversation the turn belongs to. */
+  conversationID?: string;
+  /** Carried summary of the session blocks that closed before this one. */
+  carrySummary?: string | null;
 }
 export interface TaskTurnResult { turnID: string; text: string; stopReason: StopReason }
 
@@ -61,7 +65,13 @@ export async function runTaskTurn(db: Database, router: Router, settings: TaskTu
   appendMessage(db, { threadID, turnID, role: "user", text: run.text });
   titleThreadFromFirstMessage(db, threadID, run.text);
   messages.push({ role: "user", content: run.text });
-  run.emit({ type: "turn.start", turnID, threadID, agentID: persona.id });
+  run.emit({
+    type: "turn.start",
+    turnID,
+    threadID,
+    agentID: persona.id,
+    ...(run.conversationID ? { conversationID: run.conversationID } : {}),
+  });
 
   let summary: string | null = existing?.summary ?? null;
   const registry = buildTaskToolRegistry(db);
@@ -108,7 +118,12 @@ export async function runTaskTurn(db: Database, router: Router, settings: TaskTu
       if (controller.signal.aborted) { stopReason = timedOut ? "timeout" : "cancelled"; break; }
       ({ messages, summary } = compact(messages, summary));
       persistSession(db, threadID, turnID, "running", messages, summary, stepCount, tokenCount);
-      const requestMessages: ChatMessage[] = [{ role: "system", content: stableSystemPrompt(persona.systemPrompt) }, ...(summary ? [{ role: "system" as const, content: `Conversation summary (untrusted context): ${summary}` }] : []), ...messages];
+      const requestMessages: ChatMessage[] = [
+        { role: "system", content: stableSystemPrompt(persona.systemPrompt) },
+        ...(run.carrySummary ? [{ role: "system" as const, content: `Carried summary of earlier session blocks in this conversation (server-written, untrusted): ${run.carrySummary}` }] : []),
+        ...(summary ? [{ role: "system" as const, content: `Conversation summary (untrusted context): ${summary}` }] : []),
+        ...messages,
+      ];
       const result = await router.route({
         messages: requestMessages,
         signal: controller.signal,
@@ -191,7 +206,7 @@ export async function runTaskTurn(db: Database, router: Router, settings: TaskTu
   touchThread(db, threadID);
   persistSession(db, threadID, turnID, stopReason === "end" ? "done" : "failed", messages, summary, stepCount, tokenCount);
   if (usage) recordUsage(db, { turnID, ...usage });
-  run.emit({ type: "turn.end", turnID, threadID, stopReason, ...(usage ? { usage } : {}) });
+  run.emit({ type: "turn.end", turnID, threadID, stopReason, ...(usage ? { usage } : {}), ...(run.conversationID ? { conversationID: run.conversationID } : {}) });
   return { turnID, text: finalText, stopReason };
 }
 

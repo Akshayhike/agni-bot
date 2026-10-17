@@ -1,8 +1,19 @@
-# Wire protocol v1
+# Wire protocol v2
 
 The contract between the server and every client (Mac app, Android app, CLI).
 Machine version: [`packages/protocol/src/frames.ts`](../packages/protocol/src/frames.ts) —
 if the two disagree, the code wins, then fix this doc.
+
+## The conversation model (v2)
+
+One **conversation** per agent is the user-facing chat: a single enduring
+transcript, like texting a person. A **session block** is an invisible span of
+context inside it — the model's working memory between boundaries. Blocks
+close on `/new` (`manual`), when context pressure says so (`context`), or when
+background work lands as its own block (`background`); each closing block is
+compacted into a bounded carried summary that the next block opens with. The
+`thread` frames stay for the CLI; clients built on the conversation model
+never reason about thread ids.
 
 ## Envelope
 
@@ -30,11 +41,14 @@ if the two disagree, the code wins, then fix this doc.
 | --- | --- | --- |
 | `hello` | `{v, token, device}` | First frame. `v` is the protocol version. |
 | `resync` | `{lastSeq}` | Replay everything after `lastSeq`. |
-| `msg.send` | `{threadID, text, files?}` | `threadID: ""` creates a new thread; the assigned id arrives in `turn.start`. |
+| `msg.send` | `{threadID?, text, files?, conversationID?}` | With `conversationID`: sends into the conversation's active session block (no thread id needed). Otherwise `threadID` targets a session block (CLI); empty/omitted opens a fresh block in the connection's agent conversation. |
 | `msg.cancel` | `{turnID}` | Interrupts the turn: providers abort, partial output is kept. |
 | `approve.reply` | `{requestID, decision}` | `decision`: `once \| always \| reject`. |
 | `agent.select` | `{agentID}` | Sets the persona for subsequent `msg.send` on this connection. |
-| `thread.open` | `{threadID}` | Pins the session's active thread. Silent; history comes via `resync`. |
+| `conversation.open` | `{conversationID, agentID?}` | Resolves (creating when missing) the agent's conversation. Empty `conversationID` + `agentID` selects that agent's. Answer: `conversation.ok`. |
+| `session.new` | `{conversationID}` | Closes the active session block (`manual`), compacts it into the carried summary, continues in a fresh block; emits `session.start`. |
+| `conversation.history` | `{conversationID, limit?}` | The full transcript across blocks, last N chronological (default 50, max 500); each message carries its `sessionID`. |
+| `thread.open` | `{threadID}` | Pins the session's active thread (CLI). Silent; history comes via `resync`. |
 | `thread.list` | `{limit?}` | Recent threads, newest first (default 20, max 200). |
 | `thread.history` | `{threadID, limit?}` | Durable messages, last N chronological (default 50, max 500). |
 | `job.list` | `{limit?}` | Tasks and routines, newest/next due first. |
@@ -51,8 +65,8 @@ if the two disagree, the code wins, then fix this doc.
 | --- | --- | --- |
 | `hello.ok` | `{v, serverTime, lastSeq}` | `lastSeq` = seq of this frame. |
 | `token` | `{turnID, threadID, delta}` | One streaming chunk. |
-| `turn.start` | `{turnID, threadID, agentID}` | Turn accepted; called before any `token`. |
-| `turn.end` | `{turnID, threadID, stopReason, usage?}` | `stopReason`: `end \| cancelled \| error \| timeout \| budget`; `usage`: `{provider, model, inputTokens?, outputTokens?, latencyMs?}` (latencyMs is server-measured model call time). |
+| `turn.start` | `{turnID, threadID, agentID, conversationID?}` | Turn accepted; called before any `token`. |
+| `turn.end` | `{turnID, threadID, stopReason, usage?, conversationID?}` | `stopReason`: `end \| cancelled \| error \| timeout \| budget`; `usage`: `{provider, model, inputTokens?, outputTokens?, latencyMs?}` (latencyMs is server-measured model call time). |
 | `tool.start` | `{callID, name, preview?}` | Tool activity strip. |
 | `tool.update` | `{callID, preview?}` | |
 | `tool.end` | `{callID, ok, preview?}` | |
@@ -62,6 +76,9 @@ if the two disagree, the code wins, then fix this doc.
 | `agents.update` | `{agents: [{id, name, color?, model?, tools?}]}` | Roster snapshot. |
 | `thread.list.ok` | `{threads: [{id, agentID, title?, updatedAt}]}` | Answer to `thread.list`; addressed to the requester. |
 | `thread.history.ok` | `{threadID, title?, messages: [{id, role, text, createdAt, turnID?}]}` | Answer to `thread.history`; addressed to the requester. |
+| `conversation.ok` | `{conversationID, agentID, sessionID}` | Answer to `conversation.open`; `sessionID`: the active block, `""` before the first block. Addressed, not replayed. |
+| `session.start` | `{conversationID, sessionID, reason}` | A block boundary inside the conversation; `reason`: `manual \| context \| background`. Replayable. |
+| `conversation.history.ok` | `{conversationID, messages: [{id, role, text, createdAt, turnID?, sessionID?}]}` | Answer to `conversation.history`; addressed to the requester. Clients render a session divider wherever consecutive `sessionID`s differ. |
 | `job.list.ok` | `{jobs: [...]}` | Answer to `job.list`, `job.set`, or `job.delete`; addressed to the requester. |
 | `task.list.ok` | `{tasks: [...]}` | Task snapshots, including due date, priority, status, and snooze time. |
 | `task.update.ok` | `{task: {...}}` | Updated task snapshot after a persisted state change. |
@@ -69,9 +86,9 @@ if the two disagree, the code wins, then fix this doc.
 | `presence` | `{state}` | `online \| offline`. |
 | `error` | `{code, message, retryAfter?}` | See codes below. |
 
-## Error codes (v1)
+## Error codes (v2)
 
-`bad_frame`, `unauthorized`, `version_mismatch`, `unknown_thread`,
+`bad_frame`, `unauthorized`, `version_mismatch`, `unknown_thread`, `unknown_conversation`,
 `unknown_agent`, `unknown_request`, `unknown_job`, `unknown_task`,
 `bad_task_action`, `capture_failed`, `job_running`, `no_provider`, `provider_failed`,
 `unknown_provider`, `invalid_key`, `provider_exists`, `provider_storage`,

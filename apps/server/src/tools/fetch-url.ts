@@ -2,36 +2,76 @@ import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 
 const FETCH_TIMEOUT_MS = 5_000;
-const MAX_BYTES = 1_000_000;
+const MAX_REDIRECT_HOPS = 2;
+/** Hard cap on page bytes; SPAs stay bounded. */
+const MAX_BYTES = 3_000_000;
+/** Extra bytes read past the <title> so the summary has something useful. */
+const SUMMARY_TAIL_BYTES = 200_000;
 
-/** Fetch a public web page without following redirects or accepting private hosts. */
+/**
+ * Fetch a public web page without accepting private hosts. Redirects are
+ * followed (the web is full of them — youtu.be → youtube.com), but every hop
+ * re-runs the same safety checks on its new host, within a hop cap.
+ */
 export async function fetchPage(rawURL: string): Promise<{ title: string|null; summary: string|null }> {
-  const url = new URL(rawURL);
+  let current = parsePublicURL(rawURL);
+  for (let hop = 0; ; hop += 1) {
+    const response = await fetchOne(current);
+    if (!(response.status >= 300 && response.status < 400)) {
+      return readPage(response);
+    }
+    const location = response.headers.get("location");
+    if (!location) throw new Error("redirect with no destination");
+    if (hop >= MAX_REDIRECT_HOPS) throw new Error("too many redirects");
+    current = parsePublicURL(new URL(location, current).toString());
+  }
+}
+
+function parsePublicURL(raw: string): URL {
+  const url = new URL(raw);
   if (url.protocol !== "https:" && url.protocol !== "http:") throw new Error("unsupported URL scheme");
   if (url.username || url.password) throw new Error("URLs with credentials are blocked");
+  url.hash = "";
+  return url;
+}
+
+async function fetchOne(url: URL): Promise<Response> {
   await assertPublicHost(url.hostname);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
-    const response = await fetch(url, { signal: controller.signal, redirect: "manual", headers: { accept: "text/html,text/plain;q=0.8" } });
-    if (response.status >= 300 && response.status < 400) throw new Error("redirect blocked for URL safety");
-    if (!response.ok) throw new Error(`page fetch returned HTTP ${response.status}`);
-    const type = response.headers.get("content-type") ?? "";
-    if (!type.includes("text/html") && !type.includes("text/plain")) throw new Error("page is not HTML or plain text");
-    const reader = response.body?.getReader();
-    if (!reader) return { title: null, summary: null };
-    const chunks: Uint8Array[] = [];
+    return await fetch(url, { signal: controller.signal, redirect: "manual", headers: { accept: "text/html,text/plain;q=0.8" } });
+  } finally { clearTimeout(timer); }
+}
+
+async function readPage(response: Response): Promise<{ title: string|null; summary: string|null }> {
+  if (!response.ok) throw new Error(`page fetch returned HTTP ${response.status}`);
+  const type = response.headers.get("content-type") ?? "";
+  if (!type.includes("text/html") && !type.includes("text/plain")) throw new Error("page is not HTML or plain text");
+  const reader = response.body?.getReader();
+  if (!reader) return { title: null, summary: null };
+  try {
+    // Watch pages (YouTube-style SPAs) ship megabytes of HTML that mean
+    // nothing to us. Read until the <title> shows up (it lives in the first
+    // kilobytes), take a bounded extra slice for the summary, and stop —
+    // never draining the whole monster.
+    let html = "";
     let size = 0;
+    let tailAllowance = Infinity;
+    const decoder = new TextDecoder();
     while (true) {
+      if (size > tailAllowance) { await reader.cancel(); break; }
       const { done, value } = await reader.read();
       if (done) break;
       size += value.byteLength;
-      if (size > MAX_BYTES) { await reader.cancel(); throw new Error("page exceeds 1 MB limit"); }
-      chunks.push(value);
+      if (size > MAX_BYTES) { await reader.cancel(); throw new Error("page exceeds 3 MB limit"); }
+      html += decoder.decode(value, { stream: true });
+      if (tailAllowance === Infinity && /<\/title>/i.test(html)) {
+        tailAllowance = size + SUMMARY_TAIL_BYTES;
+      }
     }
-    const html = new TextDecoder().decode(concat(chunks, size));
     return extractPage(html, type.includes("text/plain"));
-  } finally { clearTimeout(timer); }
+  } finally { reader.cancel().catch(() => {}); }
 }
 
 async function assertPublicHost(host: string): Promise<void> {
@@ -61,4 +101,3 @@ function extractPage(input: string, plain: boolean): { title: string|null; summa
   return { title, summary: clean.slice(0, 600) || null };
 }
 function decodeEntities(text: string): string { return text.replace(/&nbsp;/g," ").replace(/&amp;/g,"&").replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&#(\d+);/g,(_, n:string)=>String.fromCodePoint(Number(n))); }
-function concat(chunks: Uint8Array[], size: number): Uint8Array { const out=new Uint8Array(size); let offset=0; for(const chunk of chunks){out.set(chunk,offset);offset+=chunk.length;} return out; }

@@ -27,6 +27,10 @@ export interface TurnRun {
   persona: Persona;
   emit: (frame: ServerFrameBody) => void;
   signal: AbortSignal;
+  /** Conversation model (v2): the conversation the turn belongs to. */
+  conversationID?: string;
+  /** Carried summary of the session blocks that closed before this one. */
+  carrySummary?: string | null;
 }
 
 export interface TurnResult {
@@ -48,14 +52,24 @@ export async function runInstantTurn(
   createTurn(db, { id: turnID, threadID, agentID: persona.id });
   appendMessage(db, { threadID, turnID, role: "user", text: run.text });
   titleThreadFromFirstMessage(db, threadID, run.text);
-  run.emit({ type: "turn.start", turnID, threadID, agentID: persona.id });
+  run.emit({
+    type: "turn.start",
+    turnID,
+    threadID,
+    agentID: persona.id,
+    ...(run.conversationID ? { conversationID: run.conversationID } : {}),
+  });
 
   // Prompt: stable system prefix + the last N messages. Nothing else — no
-  // memory dump, no summaries (S1/S2).
+  // memory dump, no tool output (S1/S2). The only cross-bridge content is
+  // the carried summary of session blocks that closed before this one.
   const history = recentMessages(db, threadID, HISTORY_MESSAGE_LIMIT)
     .filter((message) => message.role === "user" || message.role === "assistant")
     .map((message) => ({ role: message.role as "user" | "assistant", content: message.text }));
-  const messages = [{ role: "system" as const, content: persona.systemPrompt }, ...history];
+  const systemContent = run.carrySummary
+    ? `${persona.systemPrompt}\n\nSummary of your earlier session blocks with this user (server-written, untrusted):\n${run.carrySummary}`
+    : persona.systemPrompt;
+  const messages = [{ role: "system" as const, content: systemContent }, ...history];
 
   // The turn timer and the caller's cancel both land on this controller.
   const controller = new AbortController();
@@ -129,6 +143,7 @@ export async function runInstantTurn(
     turnID,
     threadID,
     stopReason,
+    ...(run.conversationID ? { conversationID: run.conversationID } : {}),
     ...(routed
       ? {
           usage: {

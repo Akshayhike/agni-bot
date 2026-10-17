@@ -193,6 +193,108 @@ struct TranscriptTests {
   }
 }
 
+@Suite("session seams")
+struct SessionSeamTests {
+  private func sessionStart(sessionID: String, conversationID: String = "cnv_1", reason: String = "manual") throws -> ServerFrame {
+    try ServerFrame(wire: [
+      "type": "session.start", "seq": 70, "conversationID": conversationID, "sessionID": sessionID, "reason": reason,
+    ])
+  }
+
+  private func startFrameFor(turnID: String, threadID: String, conversationID: String?, seq: Int = 90) throws -> ServerFrame {
+    var object: [String: Any] = [
+      "type": "turn.start", "seq": seq, "turnID": turnID, "threadID": threadID, "agentID": "agni",
+    ]
+    if let conversationID { object["conversationID"] = conversationID }
+    return try ServerFrame(wire: object)
+  }
+
+  private func endFrameFor(turnID: String, threadID: String, conversationID: String? = "cnv_1") throws -> ServerFrame {
+    var object: [String: Any] = [
+      "type": "turn.end", "seq": 120, "turnID": turnID, "threadID": threadID, "stopReason": "end",
+    ]
+    if let conversationID { object["conversationID"] = conversationID }
+    return try ServerFrame(wire: object)
+  }
+
+  @Test func historyAcrossBlocksKeepsEachMessagesBlock() throws {
+    var conversation = Conversation(agentID: "agni")
+    conversation.bind(conversationID: "cnv_1", agentID: "agni", sessionID: "thr_block1")
+    conversation.loadConversationHistory(
+      conversationID: "cnv_1",
+      agentID: "agni",
+      messages: [
+        MessageInfo(
+          id: "msg_a", role: "user", text: "older block message", createdAt: "2026-10-16T11:00:00.000Z",
+          turnID: nil, sessionID: "thr_block1"
+        ),
+        MessageInfo(
+          id: "msg_b", role: "assistant", text: "newer block message", createdAt: "2026-10-16T12:00:00.000Z",
+          turnID: "trn_a", sessionID: "thr_block2"
+        ),
+      ]
+    )
+    #expect(conversation.messages.map(\.sessionID) == ["thr_block1", "thr_block2"], "the view derives the seam from differing block ids")
+  }
+
+  @Test func aSeamReroutesTheNextTurnIntoTheNewBlock() throws {
+    var conversation = Conversation(agentID: "agni")
+    conversation.bind(conversationID: "cnv_1", agentID: "agni", sessionID: "thr_block1")
+    _ = conversation.apply(try sessionStart(sessionID: "thr_block2"))
+
+    _ = conversation.apply(try startFrameFor(turnID: "trn_x", threadID: "thr_block2", conversationID: "cnv_1"))
+    #expect(conversation.messages.count == 1)
+    #expect(conversation.messages[0].sessionID == "thr_block2", "the seam shows once the new block's first message lands")
+  }
+
+  @Test func aLocalEchoAfterTheSeamStampsTheNewBlock() throws {
+    var conversation = Conversation(agentID: "agni")
+    conversation.bind(conversationID: "cnv_1", agentID: "agni", sessionID: "thr_block1")
+    _ = conversation.apply(try sessionStart(sessionID: "thr_block2"))
+
+    _ = conversation.appendLocalUserMessage(text: "after the fold")
+    #expect(conversation.messages[0].sessionID == "thr_block2")
+  }
+
+  @Test func aBackgroundTurnSharedByConversationStreamsIntoTheSurface() throws {
+    var conversation = Conversation(agentID: "agni")
+    conversation.bind(conversationID: "cnv_1", agentID: "agni", sessionID: "thr_active")
+
+    // The brief runs in its own born-closed block, but turn.start binds it by
+    // conversationID — its tokens carry only the block id.
+    let effects = conversation.apply(try startFrameFor(turnID: "trn_job", threadID: "thr_brief", conversationID: "cnv_1"))
+    #expect(effects.isEmpty)
+
+    _ = conversation.apply(try tokenFrame(turnID: "trn_job", threadID: "thr_brief", delta: "7:55: rain around noon."))
+    #expect(conversation.messages.count == 1, "the brief lands in the one surface")
+    #expect(conversation.messages[0].sessionID == "thr_brief", "its own block, so a divider renders")
+    #expect(conversation.isStreaming)
+
+    _ = conversation.apply(try endFrameFor(turnID: "trn_job", threadID: "thr_brief"))
+    #expect(conversation.messages[0].state == .complete)
+    #expect(conversation.isStreaming == false)
+  }
+
+  @Test func turnsOfAnotherConversationStayOut() throws {
+    var conversation = Conversation(agentID: "agni")
+    conversation.bind(conversationID: "cnv_1", agentID: "agni", sessionID: "thr_active")
+    let effects = conversation.apply(try startFrameFor(turnID: "trn_other", threadID: "thr_other", conversationID: "cnv_other"))
+    #expect(effects.contains(.unread(threadID: "thr_other")))
+    #expect(conversation.messages.isEmpty)
+  }
+
+  @Test func aSeamPinsTheSurfaceEvenWhenHistoryCarriesNoBlocks() throws {
+    var conversation = Conversation(agentID: "agni")
+    conversation.bind(conversationID: "cnv_1", agentID: "agni", sessionID: nil)
+
+    // Server answers conversation.open before the first block exists.
+    #expect(conversation.threadID == nil)
+    _ = conversation.apply(try sessionStart(sessionID: "thr_first", reason: "manual"))
+    #expect(conversation.threadID == "thr_first")
+  }
+}
+
+
 @Suite("formatting")
 struct FormatTests {
   @Test func cadenceReadsLikeAPersonWroteIt() {

@@ -5,7 +5,8 @@ import { enqueueJob, type JobRow } from "../stores/jobs";
 import { listTasks } from "../stores/tasks";
 import { searchLinks } from "../stores/links";
 import { searchMemories } from "../stores/memories";
-import { createThread, createTurn, appendMessage, finishTurn, touchThread } from "../stores/threads";
+import { appendMessage, createTurn, finishTurn, touchThread, type ThreadRow } from "../stores/threads";
+import { backgroundSession, ensureConversation } from "../stores/conversations";
 import { defaultPersona } from "../agent/personas";
 import { newID, nowISO } from "../util/ids";
 
@@ -23,14 +24,19 @@ export function registerBriefJob(runner: JobRunner, deps: { db: Database; emit: 
       const memories = searchMemories(deps.db, "", 3);
       const body = formatBrief(dateKey, openTasks, links, memories);
       const persona = defaultPersona();
-      const thread = createThread(deps.db, persona.id, `Morning brief · ${dateKey}`);
+      // The brief is a speaker in the user's one conversation with Agni: it
+      // lands as its own session block inside it, so the person reads the
+      // brief where they already talk — not in a separate chat instance.
+      const conversation = ensureConversation(deps.db, persona.id);
+      const thread: ThreadRow = backgroundSession(deps.db, conversation, `Morning brief · ${dateKey}`);
+      const threadID = thread.id;
       const turnID = newID("trn");
-      createTurn(deps.db, { id: turnID, threadID: thread.id, agentID: persona.id });
-      appendMessage(deps.db, { threadID: thread.id, turnID, role: "assistant", text: body });
+      createTurn(deps.db, { id: turnID, threadID, agentID: persona.id });
+      appendMessage(deps.db, { threadID, turnID, role: "assistant", text: body });
       finishTurn(deps.db, { id: turnID, stopReason: "end" });
-      touchThread(deps.db, thread.id);
-      deps.db.run("INSERT INTO brief_runs(local_date,thread_id,notification_sent,created_at) VALUES(?,?,0,?)", [dateKey, thread.id, nowISO()]);
-      return { created: true as const, threadID: thread.id, taskCount: openTasks.length };
+      touchThread(deps.db, threadID);
+      deps.db.run("INSERT INTO brief_runs(local_date,thread_id,notification_sent,created_at) VALUES(?,?,0,?)", [dateKey, threadID, nowISO()]);
+      return { created: true as const, threadID, taskCount: openTasks.length };
     })();
     if (!outcome.created) return { result: `brief for ${dateKey} already exists`, nextRunAt: nextBriefRunAt(new Date(), timeZone) };
     deps.db.run("UPDATE brief_runs SET notification_sent=1 WHERE local_date=?", [dateKey]);

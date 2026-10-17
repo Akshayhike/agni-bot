@@ -18,10 +18,10 @@ struct ComposerView: View {
 
   var commands: [Command] {
     [
-      Command(trigger: "new", title: "New conversation", subtitle: "Start a fresh thread") {
-        model.newThread()
+      Command(trigger: "new", title: "New session", subtitle: "A seam here — the thread above stays") {
+        model.newSession()
       },
-      Command(trigger: "agent", title: "Switch agent…", subtitle: "Change this thread's persona") {
+      Command(trigger: "agent", title: "Switch agent…", subtitle: "Another conversation surface") {
         model.isAgentSwitcherPresented = true
       },
     ]
@@ -89,9 +89,9 @@ struct ComposerView: View {
         .accessibilityLabel("Conversation actions")
         .popover(isPresented: isActionsPresented.projectedValue, arrowEdge: .bottom) {
           VStack(alignment: .leading, spacing: 8) {
-            Button("New conversation", systemImage: "square.and.pencil") {
+            Button("New session", systemImage: "square.and.pencil") {
               isActionsPresented.wrappedValue = false
-              model.newThread()
+              model.newSession()
             }
             .buttonStyle(.plain)
             Button("Switch agent…", systemImage: "person.crop.circle") {

@@ -229,4 +229,44 @@ export const MIGRATIONS: Migration[] = [
       ALTER TABLE approvals ADD COLUMN tool_name TEXT;
     `,
   },
+  {
+    id: 7,
+    name: "conversations_and_session_blocks",
+    sql: `
+      -- The conversation model: one conversation per agent is the user-facing
+      -- chat; each row of threads becomes an invisible session block (a
+      -- context span) inside it. active_thread_id is the live block;
+      -- summary is the bounded carried summary text the next block opens
+      -- with. Existing threads backfill into one conversation per agent.
+      CREATE TABLE conversations (
+        id TEXT PRIMARY KEY,
+        agent_id TEXT NOT NULL UNIQUE,
+        active_thread_id TEXT,
+        summary TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      ALTER TABLE threads ADD COLUMN conversation_id TEXT;
+      ALTER TABLE threads ADD COLUMN closed_at TEXT;
+      -- manual (/new) | context (rollover at pressure) | background (job turn)
+      ALTER TABLE threads ADD COLUMN closed_by TEXT;
+      -- The carried summary this block opened with (debuggability only).
+      ALTER TABLE threads ADD COLUMN opened_carry TEXT;
+      CREATE INDEX idx_threads_conversation ON threads(conversation_id, created_at);
+
+      INSERT INTO conversations (id, agent_id, created_at, updated_at)
+        SELECT 'cnv_' || lower(hex(randomblob(8))), agent_id, min(created_at), max(updated_at)
+        FROM threads GROUP BY agent_id;
+
+      UPDATE threads
+        SET conversation_id = (SELECT c.id FROM conversations c WHERE c.agent_id = threads.agent_id);
+
+      UPDATE conversations SET active_thread_id = (
+        SELECT t.id FROM threads t
+        WHERE t.conversation_id = conversations.id
+        ORDER BY t.updated_at DESC, t.created_at DESC LIMIT 1
+      );
+    `,
+  },
 ];

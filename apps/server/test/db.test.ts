@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import { Database } from "bun:sqlite";
 import { mintToken, revokeDevice, verifyToken } from "../src/auth/tokens";
-import { openDatabase, readMeta, writeMeta } from "../src/db";
+import { openDatabase, readMeta, migrate, writeMeta } from "../src/db";
+import { MIGRATIONS } from "../src/db/migrations";
 import {
   appendMessage,
   createThread,
@@ -34,9 +36,56 @@ describe("migrations", () => {
       "jobs",
       "memories_fts",
       "links_fts",
+      "conversations",
     ]) {
       expect(names).toContain(table);
     }
+    db.close();
+  });
+
+  test("migration 7 backfills one conversation per agent from pre-existing threads", () => {
+    // Reproduce a pre-conversation database: apply migrations 1..6, insert
+    // threads the old-fashioned way, then let the pending migration run.
+    const db = new Database(":memory:");
+    db.exec("PRAGMA journal_mode = WAL;");
+    db.exec("CREATE TABLE schema_migrations (id INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at TEXT NOT NULL);");
+    for (const migration of MIGRATIONS.filter((entry) => entry.id <= 6)) {
+      db.transaction(() => db.exec(migration.sql))();
+      db.run("INSERT INTO schema_migrations (id, name, applied_at) VALUES (?, ?, ?)", [
+        migration.id,
+        migration.name,
+        "test",
+      ]);
+    }
+    const insert = (id: string, agentID: string): void => {
+      db.run("INSERT INTO threads (id, agent_id, title, created_at, updated_at) VALUES (?, ?, NULL, ?, ?)", [id, agentID, "2024-01-01T00:00:00.000Z", "2024-01-01T00:00:00.000Z"]);
+    };
+    insert("thr_first", "agni");
+    insert("thr_second", "agni");
+    insert("thr_scout", "scout");
+
+    const ran = migrate(db);
+    expect(ran).toEqual([7]);
+
+    // One conversation per agent; every pre-existing thread assigned; the
+    // newest agni block is the conversation's active one.
+    const conversations = db
+      .query<{ agent_id: string; active_thread_id: string | null }, []>("SELECT agent_id, active_thread_id FROM conversations ORDER BY agent_id")
+      .all();
+    expect(conversations.map((row) => row.agent_id)).toEqual(["agni", "scout"]);
+    const agniConversation = conversations.find((row) => row.agent_id === "agni")!;
+    expect(agniConversation.active_thread_id).not.toBeNull();
+
+    const rows = db
+      .query<{ id: string; conversation_id: string | null }, []>("SELECT id, conversation_id FROM threads ORDER BY id")
+      .all();
+    expect(rows.find((row) => row.id === "thr_first")?.conversation_id).not.toBeNull();
+    expect(rows.find((row) => row.id === "thr_second")?.conversation_id).toBe(
+      rows.find((row) => row.id === "thr_first")?.conversation_id,
+    );
+    expect(rows.find((row) => row.id === "thr_scout")?.conversation_id).not.toBe(
+      rows.find((row) => row.id === "thr_first")?.conversation_id,
+    );
     db.close();
   });
 

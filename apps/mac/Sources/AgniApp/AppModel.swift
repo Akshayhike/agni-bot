@@ -28,12 +28,11 @@ final class AppModel {
   private(set) var isPairing = false
   var pairingError: String?
 
-  // thread + transcript
+  // conversation surface + transcript
   var conversation = Conversation(agentID: "agni")
   private(set) var threads: [ThreadInfo] = []
   private(set) var agents: [AgentInfo] = []
   private(set) var unread: Set<String> = []
-  private(set) var pendingNewThread = false
 
   // daemon health
   private(set) var health: HealthReport?
@@ -186,50 +185,45 @@ final class AppModel {
 
   // MARK: intents
 
-  func newThread() {
-    pendingNewThread = true
-    conversation.watch(threadID: nil)
-    focusComposer()
-  }
-
-  func open(thread: ThreadInfo) {
-    guard thread.id != conversation.threadID else { return }
-    unread.remove(thread.id)
-    pendingNewThread = false
-    conversation.watch(threadID: thread.id, title: thread.title, agentID: thread.agentID)
+  /// Open (or resolve) the bound conversation surface for an agent. Empty
+  /// conversationID + agentID is the server's "this agent's conversation".
+  func openConversation(agentID: String) {
     guard let connection, connectionState.isReady else { return }
     Task {
-      try? await connection.send(.threadOpen(threadID: thread.id))
-      try? await connection.send(.threadHistory(threadID: thread.id, limit: 200))
+      try? await connection.send(.agentSelect(agentID: agentID))
+      try? await connection.send(.conversationOpen(conversationID: "", agentID: agentID))
     }
   }
 
-  func openThreadFromNotification(_ threadID: String) {
-    if let thread = threads.first(where: { $0.id == threadID }) { open(thread: thread) }
-    else { watchThread(id: threadID, title: "Morning brief") }
+  /// Re-request the surface's transcript — after a reconnect, a resync gap,
+  /// or when the user asks.
+  func reloadConversation() {
+    guard let conversationID = conversation.conversationID, let connection, connectionState.isReady else { return }
+    Task {
+      try? await connection.send(.conversationOpen(conversationID: conversationID, agentID: conversation.agentID))
+      try? await connection.send(.conversationHistory(conversationID: conversationID, limit: 400))
+    }
+  }
+
+  /// ⌘N: close the active session block and continue in a fresh one. The
+  /// conversation is untouched — a seam, not a switch.
+  func newSession() {
+    guard let conversationID = conversation.conversationID, let connection, connectionState.isReady else {
+      showToast(
+        NoticeRow(
+          id: "offline_new", kind: .failure, title: "Not connected",
+          body: "A new session needs the conversation open — reconnecting…", createdAt: Date()
+        )
+      )
+      return
+    }
+    Task { try? await connection.send(.sessionNew(conversationID: conversationID)) }
+    focusComposer()
   }
 
   func refreshThreadList() {
     guard let connection, connectionState.isReady else { return }
     Task { try? await connection.send(.threadList(limit: 100)) }
-  }
-
-  /// Open a thread we only know by id (a freshly created one, before the list
-  /// refresh lands) and pull its durable history.
-  func watchThread(id: String, title: String?) {
-    unread.remove(id)
-    conversation.watch(threadID: id, title: title)
-    pendingNewThread = false
-    openCurrentThreadAgain()
-  }
-
-  /// Re-request the open thread's history — after a reconnect, after a resync
-  /// gap, or when the user asks.
-  func openCurrentThreadAgain() {
-    reopenCurrentThreadIfNeeded()
-    if conversation.threadID == nil, let connection, connectionState.isReady {
-      Task { try? await connection.send(.threadOpen(threadID: "")) }
-    }
   }
 
   func refreshJobs() {
@@ -252,15 +246,19 @@ final class AppModel {
     let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmed.isEmpty else { return }
     let localID = conversation.appendLocalUserMessage(text: trimmed)
-    let target = conversation.threadID
     guard let connection, connectionState.isReady else {
       conversation.markLocalFailure(id: localID, reason: "Not connected — this message was not sent.")
       showToast(NoticeRow(id: "offline", kind: .failure, title: "Not connected", body: "Reconnecting. Your message was kept in the list but was not sent.", createdAt: Date()))
       return
     }
+    guard let conversationID = conversation.conversationID else {
+      conversation.markLocalFailure(id: localID, reason: "Still connecting — the conversation is not open yet.")
+      showToast(NoticeRow(id: "opening", kind: .failure, title: "Still connecting", body: "The conversation has not opened yet; try again in a moment.", createdAt: Date()))
+      return
+    }
     Task {
       do {
-        try await connection.send(.msgSend(threadID: target ?? "", text: trimmed, files: nil))
+        try await connection.send(.msgSend(threadID: nil, text: trimmed, files: nil, conversationID: conversationID))
       } catch {
         conversation.markLocalFailure(id: localID, reason: "Send failed: \(error)")
       }
@@ -284,17 +282,28 @@ final class AppModel {
   }
 
   func selectAgent(_ agent: AgentInfo) {
-    conversation.agentID = agent.id
-    pendingNewThread = false
-    if let connection {
-      Task { try? await connection.send(.agentSelect(agentID: agent.id)) }
+    guard agent.id != conversation.agentID || conversation.conversationID == nil else {
+      reloadConversation()
+      return
     }
-    if let thread = threads.first(where: { $0.agentID == agent.id }) {
-      open(thread: thread)
+    // A fresh surface per agent; conversation.ok binds it to the enduring
+    // conversation and history fills it.
+    conversation = Conversation(agentID: agent.id)
+    if let agentThread = threads.first(where: { $0.agentID == agent.id }) {
+      unread.remove(agentThread.id)
+    }
+    openConversation(agentID: agent.id)
+    focusComposer()
+  }
+
+  /// A notification names a session block; the surface is the agent's
+  /// conversation. Map block → agent when the roster cache knows it.
+  func openThreadFromNotification(_ threadID: String) {
+    if let thread = threads.first(where: { $0.id == threadID }),
+      let agent = agents.first(where: { $0.id == thread.agentID }) {
+      selectAgent(agent)
     } else {
-      conversation.watch(threadID: nil, title: nil, agentID: agent.id)
-      pendingNewThread = true
-      focusComposer()
+      reloadConversation()
     }
   }
 
@@ -309,12 +318,10 @@ final class AppModel {
   }
 
   func openTask(_ job: JobInfo) {
-    guard let threadID = job.threadID else { return }
-    if let thread = threads.first(where: { $0.id == threadID }) {
-      open(thread: thread)
-    } else {
-      watchThread(id: threadID, title: job.title)
-    }
+    // The task's results land as session blocks inside the agent's one
+    // conversation — there is no separate chat window to open.
+    reloadConversation()
+    focusComposer()
   }
 
   func deleteTask(_ job: JobInfo) {
@@ -393,20 +400,12 @@ final class AppModel {
     agents.first { $0.id == conversation.agentID } ?? agents.first
   }
 
-  var activeThreadTitle: String? {
-    guard let threadID = conversation.threadID else { return nil }
-    if let title = conversation.title, !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-      return title
-    }
-    return threads.first { $0.id == threadID }?.title
-  }
+  var activeThreadTitle: String? { conversation.title }
 
-  var filteredThreads: [ThreadInfo] {
-    let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-    guard !query.isEmpty else { return threads }
-    return threads.filter { thread in
-      (thread.title ?? "").lowercased().contains(query) || (thread.preview ?? "").lowercased().contains(query)
-    }
+  /// A session block landed unread for an agent if any unread block belongs to
+  /// their conversation (message turns arrive keyed by block id).
+  func unreadBlocks(for agentID: String) -> Bool {
+    unread.contains { id in threads.first { $0.id == id }?.agentID == agentID }
   }
 
   var filteredAgents: [AgentInfo] {
@@ -448,7 +447,7 @@ final class AppModel {
         refreshJobs()
         refreshTasks()
         startHealthPolling()
-        if !wasReady { reopenCurrentThreadIfNeeded() }
+        if !wasReady { openConversation(agentID: conversation.agentID) }
       case .refused:
         if pendingPairing != nil {
           pairingError = refusalBody(state)
@@ -479,12 +478,12 @@ final class AppModel {
           id: "gap_\(UUID().uuidString)",
           kind: .info,
           title: "Reloaded history",
-          body: "The daemon could not replay that far back, so this thread was reloaded from the database.",
+          body: "The daemon could not replay that far back, so this conversation was reloaded from the database.",
           createdAt: Date()
         )
       )
       refreshThreadList()
-      reopenCurrentThreadIfNeeded()
+      reloadConversation()
 
     case .lastSeq(let seq):
       settings.lastSeq = seq
@@ -496,14 +495,34 @@ final class AppModel {
     switch frame {
     case .threadListOK(let list):
       threads = list.threads.sorted { ($0.updatedAt, $0.id) > ($1.updatedAt, $1.id) }
-      if conversation.threadID == nil, !pendingNewThread, let latest = threads.first {
-        open(thread: latest)
+
+    case .conversationOK(let ok):
+      let freshSurface = conversation.conversationID != ok.conversationID
+      if freshSurface {
+        conversation.bind(
+          conversationID: ok.conversationID,
+          agentID: ok.agentID,
+          sessionID: ok.sessionID.isEmpty ? nil : ok.sessionID
+        )
+      } else if !ok.sessionID.isEmpty {
+        // Same conversation after a reconnect: adopt the active block only.
+        conversation.startSession(sessionID: ok.sessionID, conversationID: ok.conversationID)
+      }
+      guard let connection, connectionState.isReady else { return }
+      Task {
+        try? await connection.send(.conversationHistory(conversationID: ok.conversationID, limit: 400))
       }
 
-    case .threadHistoryOK(let history):
-      let agentID = threads.first { $0.id == history.threadID }?.agentID ?? conversation.agentID
-      conversation.loadHistory(threadID: history.threadID, title: history.title, agentID: agentID, messages: history.messages)
-      pendingNewThread = false
+    case .conversationHistoryOK(let history):
+      conversation.loadConversationHistory(
+        conversationID: history.conversationID,
+        agentID: conversation.agentID,
+        messages: history.messages
+      )
+      if conversation.threadID == nil, let connection, connectionState.isReady {
+        // A surfaced block but no seam seen yet: resolve the active block.
+        Task { try? await connection.send(.conversationOpen(conversationID: history.conversationID, agentID: conversation.agentID)) }
+      }
 
     case .jobListOK(let list):
       jobs = list.jobs
@@ -552,6 +571,12 @@ final class AppModel {
       providerModelsError = error.message
       return
 
+    case .error(let error) where error.code == "unknown_conversation":
+      // The conversation is gone (or wrong id): resolve it anew.
+      conversation.conversationID = nil
+      openConversation(agentID: conversation.agentID)
+      return
+
     default:
       let effects = conversation.apply(frame)
       if case .turnEnd = frame { refreshThreadList() }
@@ -567,7 +592,7 @@ final class AppModel {
         refreshThreadList()
       case .reloadDurableState:
         refreshThreadList()
-        reopenCurrentThreadIfNeeded()
+        reloadConversation()
       case .notify(let title, let body, let sound, let threadID):
         notifyUser(title: title, body: body, sound: sound, threadID: threadID)
       case .focusComposer:
@@ -579,14 +604,6 @@ final class AppModel {
       case .presence:
         break
       }
-    }
-  }
-
-  private func reopenCurrentThreadIfNeeded() {
-    guard let threadID = conversation.threadID, let connection else { return }
-    Task {
-      try? await connection.send(.threadOpen(threadID: threadID))
-      try? await connection.send(.threadHistory(threadID: threadID, limit: 200))
     }
   }
 

@@ -24,15 +24,15 @@ export interface ChatOptions extends ChatConnection {
 }
 
 const HELP = `commands
-  /new                start a new thread on the next message
-  /threads [n]        list recent threads
-  /use <n|thr_id>     switch to a thread (n from the last /threads)
-  /history [n]        print the current thread's durable history
+  /new                cut a new session block (a seam; the old prose stays above)
+  /threads [n]        list recent session blocks
+  /use <n|thr_id>     read a past block (sends still go to the active one)
+  /history [n]        print the conversation transcript across blocks
   /agents             list personas
-  /agent <id>         select the persona for new messages
+  /agent <id>         switch conversation surface
   /approve [id] once|always|reject   answer an approval request
   /cancel             stop the running turn
-  /status             connection, thread, and agent state
+  /status             connection, conversation, and agent state
   /quit               exit (Ctrl+C at the prompt does the same)
 anything else is sent to the agent; Ctrl+C while streaming cancels the turn.`;
 
@@ -43,6 +43,7 @@ export async function startChat(options: ChatOptions): Promise<void> {
   let socket = await connectOrExit(options);
   let roster: AgentInfo[] = [];
   let threads: ThreadInfo[] = [];
+  let conversationID = "";
   let threadID = options.threadID ?? "";
   let agentID = options.agentID ?? "";
   let activeTurn: string | null = null;
@@ -75,23 +76,30 @@ export async function startChat(options: ChatOptions): Promise<void> {
       case "agents.update":
         roster = frame.agents;
         break;
+      case "conversation.ok":
+        conversationID = frame.conversationID;
+        if (frame.sessionID) threadID = frame.sessionID;
+        print(color.dim(`conversation ${frame.conversationID} · active block ${frame.sessionID || "(none yet)"}`));
+        break;
+      case "session.start":
+        print(color.dim(`— session seam (${frame.reason}) · now in ${frame.sessionID}`));
+        if (frame.conversationID === conversationID) threadID = frame.sessionID;
+        break;
       case "turn.start": {
-        const ours = threadID === "" || frame.threadID === threadID;
-        if (!ours) return; // a background job turn in another thread
-        if (threadID === "") {
-          // The id we asked for by sending an empty threadID. A job that fires
-          // in this exact window could win the race; vanishingly rare, and the
-          // next message fixes the thread.
-          threadID = frame.threadID;
-          print(color.dim(`→ new thread ${threadID}`));
-        }
+        const ours = conversationID
+          ? frame.conversationID === conversationID
+          : threadID === "" || frame.threadID === threadID;
+        if (!ours) return; // a background job turn in another conversation
+        // The block the turn runs in (a seam may have rotated it just now).
+        threadID = frame.threadID;
         activeTurn = frame.turnID;
         pendingSend = false;
         streamedHeader = false;
         break;
       }
       case "token": {
-        if (frame.threadID !== threadID) return;
+        // Keyed by turn: block ids change at seams, turn ids do not.
+        if (frame.turnID !== activeTurn) return;
         if (!streamedHeader) {
           if (interactive) process.stdout.write("\n");
           process.stdout.write(`${color.gold("agni > ")}`);
@@ -145,6 +153,9 @@ export async function startChat(options: ChatOptions): Promise<void> {
       case "thread.history.ok":
         printHistory(frame.threadID, frame.title, frame.messages, color);
         break;
+      case "conversation.history.ok":
+        printConversationHistory(frame.messages, color);
+        break;
       case "error":
         print(color.yellow(`! ${frame.code}: ${frame.message}`));
         if (pendingSend && activeTurn === null) {
@@ -152,11 +163,11 @@ export async function startChat(options: ChatOptions): Promise<void> {
           pendingSend = false;
           prompt();
         }
-        if (frame.code === "resync_gap" && threadID) {
+        if (frame.code === "resync_gap" && conversationID) {
           print(color.dim("(reloading history from the database)"));
           void socket
-            .threadHistory(threadID, 20)
-            .then((history) => printHistory(history.threadID, history.title, history.messages, color))
+            .conversationHistory(conversationID, 20)
+            .then((history) => printConversationHistory(history.messages, color))
             .catch(() => {});
         }
         break;
@@ -199,6 +210,8 @@ export async function startChat(options: ChatOptions): Promise<void> {
         }
         print(color.dim(`reconnected — resync from seq ${resumeFrom}`));
         reconnecting = false;
+        // Rebind the surface: conversation.ok refreshes the active block.
+        next.conversationOpen(conversationID, agentID || undefined).catch(() => {});
         if (threadID) socket.send({ type: "thread.open", threadID });
         prompt();
         return;
@@ -233,6 +246,12 @@ export async function startChat(options: ChatOptions): Promise<void> {
   // --- input ----------------------------------------------------------------
 
   async function sendMessage(text: string): Promise<void> {
+    if (conversationID) {
+      // The conversation lane: the server picks the active session block.
+      pendingSend = true;
+      socket.send({ type: "msg.send", conversationID, text });
+      return;
+    }
     if (!threadID) print(color.dim("(new thread)"));
     pendingSend = true;
     socket.send({ type: "msg.send", threadID, text });
@@ -260,8 +279,13 @@ export async function startChat(options: ChatOptions): Promise<void> {
         print(HELP);
         break;
       case "new":
-        threadID = "";
-        print(color.dim("(next message starts a new thread)"));
+        if (conversationID) {
+          void socket.sessionNew(conversationID).catch((error: unknown) => print(color.yellow(messageOf(error))));
+          print(color.dim("(seam cut — continuing in a fresh session block)"));
+        } else {
+          threadID = "";
+          print(color.dim("(next message starts a new thread)"));
+        }
         break;
       case "threads": {
         const limit = Number.parseInt(rest[0] ?? "20", 10) || 20;
@@ -279,17 +303,17 @@ export async function startChat(options: ChatOptions): Promise<void> {
         }
         threadID = id;
         socket.send({ type: "thread.open", threadID });
-        print(color.dim(`→ ${id}${chosen?.title ? ` "${chosen.title}"` : ""}`));
+        print(color.dim(`reading ${id}${chosen?.title ? ` "${chosen.title}"` : ""} — sends still land in the active block`));
         void socket.threadHistory(threadID, 20).catch((error: unknown) => print(color.yellow(messageOf(error))));
         break;
       }
       case "history": {
-        if (!threadID) {
-          print("(no thread yet — send a message or /use one)");
+        if (!conversationID) {
+          print("(no conversation yet — connected to a pre-v2 server?)");
           break;
         }
         const limit = Number.parseInt(rest[0] ?? "20", 10) || 20;
-        void socket.threadHistory(threadID, limit).catch((error: unknown) => print(color.yellow(messageOf(error))));
+        void socket.conversationHistory(conversationID, limit).catch((error: unknown) => print(color.yellow(messageOf(error))));
         break;
       }
       case "agents":
@@ -310,7 +334,15 @@ export async function startChat(options: ChatOptions): Promise<void> {
         }
         socket.send({ type: "agent.select", agentID: id });
         agentID = id;
-        print(color.dim(`agent → ${id}`));
+        print(color.dim(`agent → ${id} (switching conversation surface)`));
+        // Each agent has one conversation; resolve it and read its active block.
+        void socket
+          .conversationOpen("", id)
+          .then((ok) => {
+            conversationID = ok.conversationID;
+            if (ok.sessionID) threadID = ok.sessionID;
+          })
+          .catch((error: unknown) => print(color.yellow(messageOf(error))));
         break;
       }
       case "approve": {
@@ -338,11 +370,12 @@ export async function startChat(options: ChatOptions): Promise<void> {
         }
         break;
       case "status":
-        print(`  connection: ${reconnecting ? "reconnecting" : "live"} (${options.url})`);
-        print(`  thread:     ${threadID || "(new on next message)"}`);
-        print(`  agent:      ${agentID || "(server default)"}`);
-        print(`  lastSeq:    ${socket.lastSeq}`);
-        print(`  turn:       ${activeTurn ?? "(idle)"}`);
+        print(`  connection:   ${reconnecting ? "reconnecting" : "live"} (${options.url})`);
+        print(`  conversation: ${conversationID || "(not resolved yet)"}`);
+        print(`  block:        ${threadID || "(assigned on next message)"}`);
+        print(`  agent:        ${agentID || "(server default)"}`);
+        print(`  lastSeq:      ${socket.lastSeq}`);
+        print(`  turn:         ${activeTurn ?? "(idle)"}`);
         break;
       case "quit":
       case "exit":
@@ -367,6 +400,9 @@ export async function startChat(options: ChatOptions): Promise<void> {
 
   bind(socket);
   if (options.agentID) socket.send({ type: "agent.select", agentID: options.agentID });
+  // Resolve the one conversation surface right away; its active block is what
+  // plain messages land in (the legacy thread lane stays for /use reading).
+  socket.conversationOpen(conversationID, agentID || undefined).catch((error: unknown) => print(color.yellow(messageOf(error))));
   if (threadID) {
     socket.send({ type: "thread.open", threadID });
     void socket.threadHistory(threadID, 20).catch(() => {});
@@ -430,7 +466,22 @@ function printThreads(threads: ThreadInfo[], color: Colors): void {
 
 function printHistory(threadID: string, title: string | undefined, messages: MessageInfo[], color: Colors): void {
   console.log(color.dim(`--- ${threadID}${title ? ` "${title}"` : ""} · ${messages.length} messages ---`));
+  printMessages(messages, color);
+}
+
+/** The cross-block transcript: a seam line wherever the block id changes. */
+function printConversationHistory(messages: MessageInfo[], color: Colors): void {
+  console.log(color.dim(`--- conversation · ${messages.length} messages ---`));
+  printMessages(messages, color);
+}
+
+function printMessages(messages: MessageInfo[], color: Colors): void {
+  let previousSession: string | undefined;
   for (const message of messages) {
+    if (message.sessionID && previousSession && previousSession !== message.sessionID) {
+      console.log(color.dim(`   — new session (${message.sessionID}) —`));
+    }
+    if (message.sessionID) previousSession = message.sessionID;
     const label = message.role === "user" ? "you " : message.role === "assistant" ? "agni" : message.role.slice(0, 4);
     const text = message.text.length > 2000 ? `${message.text.slice(0, 2000)}…` : message.text;
     console.log(`${label} > ${text.replace(/\n/g, "\n      ")}`);

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import type { Database } from "bun:sqlite";
 import {
+  PROTOCOL_VERSION,
   parseServerFrame,
   type ClientFrame,
   type ServerFrame,
@@ -79,7 +80,7 @@ class TestClient {
       ws.addEventListener("error", () => reject(new Error(`cannot connect to ${url}`)), { once: true });
     });
     const client = new TestClient(ws);
-    client.send({ type: "hello", v: 1, token, device });
+    client.send({ type: "hello", v: PROTOCOL_VERSION, token, device });
     await client.next("hello.ok");
     await client.next("agents.update");
     return client;
@@ -202,12 +203,19 @@ describe("websocket end-to-end", () => {
     await startTestServer();
     client!.send({ type: "msg.send", threadID: "", text: "remember: the workshop key is in the blue drawer" });
     const capture = await client!.next("turn.start");
+    const memoryReply = (await client!.next("token")).delta;
     await client!.next("turn.end", { match: (frame) => frame.threadID === capture.threadID });
     expect(db!.query<{ count: number }, []>("SELECT count(*) AS count FROM memories WHERE text LIKE '%blue drawer%'").get()?.count).toBe(1);
+    // The confirmation speaks like a person: no record ids, no log lines.
+    expect(memoryReply.startsWith("Noted")).toBe(true);
+    expect(memoryReply).not.toMatch(/mem_/);
 
     client!.send({ type: "msg.send", threadID: capture.threadID, text: "add task: renew insurance by 2027-01-02 priority: high" });
     await client!.next("turn.start");
+    const taskReply = (await client!.next("token")).delta;
     await client!.next("turn.end", { match: (frame) => frame.threadID === capture.threadID });
+    expect(taskReply.startsWith("On the list")).toBe(true);
+    expect(taskReply).not.toMatch(/tsk_/);
     client!.send({ type: "task.list", status: "open" });
     const tasks = await client!.next("task.list.ok");
     const task = tasks.tasks[0];
@@ -217,5 +225,52 @@ describe("websocket end-to-end", () => {
     expect((await client!.next("task.update.ok")).task.status).toBe("snoozed");
     client!.send({ type: "task.update", taskID: task!.id, action: "done" });
     expect((await client!.next("task.update.ok")).task.status).toBe("done");
+  });
+
+  test("the conversation model: one chat surface, session blocks, /new never moves the user", async () => {
+    await startTestServer();
+
+    // Resolve the agent's one conversation; no block exists yet.
+    client!.send({ type: "conversation.open", conversationID: "", agentID: "agni" });
+    const opened = await client!.next("conversation.ok");
+    expect(opened.agentID).toBe("agni");
+
+    // First message: opens the first block in that conversation.
+    client!.send({ type: "msg.send", conversationID: opened.conversationID, text: "what is the plan" });
+    const firstTurn = await client!.next("turn.start");
+    expect(firstTurn.conversationID).toBe(opened.conversationID);
+    await client!.next("turn.end");
+
+    // /new: a session boundary arrives as stream state, the user stays put.
+    client!.send({ type: "session.new", conversationID: opened.conversationID });
+    const boundary = await client!.next("session.start");
+    expect(boundary.conversationID).toBe(opened.conversationID);
+    expect(boundary.reason).toBe("manual");
+    expect(boundary.sessionID).not.toBe(firstTurn.threadID);
+
+    // The next message continues in the new block — same conversation.
+    client!.send({ type: "msg.send", conversationID: opened.conversationID, text: "what were we doing" });
+    const secondTurn = await client!.next("turn.start");
+    expect(secondTurn.conversationID).toBe(opened.conversationID);
+    expect(secondTurn.threadID).toBe(boundary.sessionID);
+    const secondEnd = await client!.next("turn.end");
+    expect(secondEnd.conversationID).toBe(opened.conversationID);
+
+    // The transcript spans both blocks, sessionID per message for dividers.
+    client!.send({ type: "conversation.history", conversationID: opened.conversationID });
+    const history = await client!.next("conversation.history.ok");
+    expect(history.conversationID).toBe(opened.conversationID);
+    const sessionIDs = new Set(history.messages.map((message) => message.sessionID));
+    expect(sessionIDs.has(firstTurn.threadID)).toBe(true);
+    expect(sessionIDs.has(secondTurn.threadID)).toBe(true);
+
+    // The closed blocks live on as conversation rows, openable and answerable.
+    client!.send({ type: "conversation.open", conversationID: opened.conversationID });
+    const reopened = await client!.next("conversation.ok");
+    expect(reopened.sessionID).toBe(secondTurn.threadID);
+
+    // Unknown conversations answer honestly.
+    client!.send({ type: "session.new", conversationID: "cnv_missing" });
+    await client!.next("error", { match: (frame) => frame.code === "unknown_conversation" });
   });
 });
