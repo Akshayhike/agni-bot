@@ -4,7 +4,7 @@ import type { JobRunner, JobOutcome } from "./runner";
 import { enqueueJob, type JobRow } from "../stores/jobs";
 import { listTasks } from "../stores/tasks";
 import { searchLinks } from "../stores/links";
-import { searchMemories } from "../stores/memories";
+import { listAgentMemories } from "../stores/agent-memories";
 import { appendMessage, createTurn, finishTurn, touchThread, type ThreadRow } from "../stores/threads";
 import { backgroundSession, ensureConversation } from "../stores/conversations";
 import { defaultPersona } from "../agent/personas";
@@ -21,7 +21,7 @@ export function registerBriefJob(runner: JobRunner, deps: { db: Database; emit: 
       if (prior) return { created: false as const, threadID: prior.thread_id, taskCount: 0 };
       const openTasks = listTasks(deps.db, { status: "open", limit: 50, includeSnoozed: true });
       const links = searchLinks(deps.db, "", 3);
-      const memories = searchMemories(deps.db, "", 3);
+      const memories = listAgentMemories(deps.db, { scope: "global_user", limit: 3 });
       const body = formatBrief(dateKey, openTasks, links, memories);
       const persona = defaultPersona();
       // The brief is a speaker in the user's one conversation with Agni: it
@@ -45,7 +45,7 @@ export function registerBriefJob(runner: JobRunner, deps: { db: Database; emit: 
   });
 }
 
-function formatBrief(date: string, tasks: ReturnType<typeof listTasks>, links: ReturnType<typeof searchLinks>, memories: ReturnType<typeof searchMemories>): string {
+function formatBrief(date: string, tasks: ReturnType<typeof listTasks>, links: ReturnType<typeof searchLinks>, memories: ReturnType<typeof listAgentMemories>): string {
   const lines = [`Morning brief · ${date}`, ""];
   const due = tasks.filter((task) => task.status === "open" && (!task.snoozed_until || Date.parse(task.snoozed_until) <= Date.now()));
   lines.push("Tasks");
@@ -56,7 +56,7 @@ function formatBrief(date: string, tasks: ReturnType<typeof listTasks>, links: R
   else for (const link of links) lines.push(`• ${link.title ?? link.url}${link.note ? ` — ${link.note}` : ""} (${link.url})`);
   lines.push("", "Recent memories");
   if (!memories.length) lines.push("• No saved memories yet.");
-  else for (const memory of memories) lines.push(`• ${memory.summary ?? memory.text}`);
+  else for (const memory of memories) lines.push(`• ${memory.content}`);
   return lines.join("\n");
 }
 

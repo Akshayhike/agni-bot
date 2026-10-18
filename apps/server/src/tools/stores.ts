@@ -3,7 +3,14 @@
  * bounded and indexed at write time (S2/S4). These run without approval.
  */
 import type { Database } from "bun:sqlite";
-import { searchMemories, createMemory, updateMemory, deleteMemory } from "../stores/memories";
+import {
+  listAgentMemories,
+  putAgentMemory,
+  getAgentMemory,
+  deleteAgentMemory,
+  normalizeTags,
+  type AgentMemoryRow,
+} from "../stores/agent-memories";
 import { searchLinks, saveLink, updateLink, deleteLink } from "../stores/links";
 import { listTasks, createTask, setTaskStatus, snoozeTask, getTask } from "../stores/tasks";
 import { fetchPage } from "./fetch-url";
@@ -18,8 +25,14 @@ export interface MemorySearchResult {
 }
 
 export function memorySearch(db: Database, args: MemorySearchArgs): MemorySearchResult {
-  const rows = searchMemories(db, args.query, args.limit ?? 8);
-  return { memories: rows.map((row) => ({ id: row.id, text: row.text, summary: row.summary, tags: row.tags })) };
+  const rows = listAgentMemories(db, { scope: "global_user", limit: 200 });
+  const query = args.query.trim().toLocaleLowerCase();
+  const matching = query
+    ? rows.filter((row) => `${row.content} ${row.tags ?? ""}`.toLocaleLowerCase().includes(query))
+    : rows;
+  return {
+    memories: matching.slice(0, args.limit ?? 8).map((row) => ({ id: row.id, text: row.content, summary: null, tags: row.tags })),
+  };
 }
 
 export interface MemoryWriteArgs {
@@ -33,8 +46,15 @@ export interface MemoryWriteResult {
 }
 
 export function memoryWrite(db: Database, args: MemoryWriteArgs): MemoryWriteResult {
-  const row = createMemory(db, { text: args.text, tags: args.tags });
-  return { id: row.id, text: row.text };
+  const row = putAgentMemory(db, {
+    scope: "global_user",
+    agentID: null,
+    keySlug: slugForMemory(args.text),
+    type: "fact",
+    content: args.text,
+    tags: args.tags,
+  });
+  return { id: row.id, text: row.content };
 }
 
 export interface MemoryUpdateArgs {
@@ -44,8 +64,18 @@ export interface MemoryUpdateArgs {
 }
 
 export function memoryUpdate(db: Database, args: MemoryUpdateArgs): MemoryWriteResult | null {
-  const row = updateMemory(db, args.id, { text: args.text, tags: args.tags });
-  return row ? { id: row.id, text: row.text } : null;
+  const current = getAgentMemory(db, args.id);
+  if (!current) return null;
+  const row = putAgentMemory(db, {
+    scope: current.scope,
+    agentID: current.agent_id,
+    keySlug: current.key_slug,
+    type: current.type,
+    content: args.text ?? current.content,
+    tags: args.tags,
+    importance: current.importance,
+  });
+  return { id: row.id, text: row.content };
 }
 
 export interface MemoryDeleteArgs {
@@ -53,7 +83,7 @@ export interface MemoryDeleteArgs {
 }
 
 export function memoryDelete(db: Database, args: MemoryDeleteArgs): boolean {
-  return deleteMemory(db, args.id);
+  return deleteAgentMemory(db, args.id);
 }
 
 export interface LinksSearchArgs {
@@ -139,4 +169,8 @@ export function taskUpdate(db: Database, args: TaskUpdateArgs): TaskCreateResult
     updated = snoozeTask(db, old.id, args.until);
   } else throw new Error("unknown task action");
   return updated ? { id: updated.id, title: updated.title, dueAt: updated.due_at, priority: updated.priority } : null;
+}
+
+function slugForMemory(text: string): string {
+  return text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 96) || "saved-memory";
 }

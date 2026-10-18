@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-17T05:14:58.694Z",
+  "generatedAt": "2026-10-17T14:32:40.561Z",
   "protocolVersion": 2,
   "client": [
     {
@@ -123,6 +123,16 @@
     {
       "type": "plugin.disconnect",
       "connectionID": "plc_01hq"
+    },
+    {
+      "type": "user.typing",
+      "channelId": "ch_01hq",
+      "isTyping": true
+    },
+    {
+      "type": "agent.rename",
+      "agentId": "agni",
+      "name": "Agni Prime"
     }
   ],
   "server": [
@@ -554,6 +564,34 @@
       "code": "no_provider",
       "message": "no provider in tier instant",
       "retryAfter": 2
+    },
+    {
+      "type": "status.update",
+      "seq": 69,
+      "channelId": "ch_01hq",
+      "agentId": "agni",
+      "text": "Nachiketh is typing…",
+      "transient": true
+    },
+    {
+      "type": "msg.new",
+      "seq": 70,
+      "id": "msg_01ht",
+      "channelId": "ch_01hq",
+      "fromType": "user",
+      "fromId": "usr_1",
+      "senderName": "Nachiketh",
+      "senderColor": "#f0b95a",
+      "text": "hello channel",
+      "internal": false,
+      "createdAt": "2026-10-17T10:00:00.000Z"
+    },
+    {
+      "type": "agent.updated",
+      "seq": 71,
+      "agentId": "agni",
+      "displayName": "Agni Prime",
+      "onboarded": true
     }
   ]
 }

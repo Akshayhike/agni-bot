@@ -175,10 +175,11 @@ describe("websocket end-to-end", () => {
     const started = await client!.next("turn.start");
     await client!.next("turn.end");
     expect(started.conversationID).toBeTruthy();
-    const stored = db!.query<{ role: string; text: string }, [string]>(
-      "SELECT role, text FROM channel_messages WHERE id = ?",
+    const stored = db!.query<{ from_id: string; text: string }, [string]>(
+      "SELECT from_id, text FROM channel_messages WHERE id = ?",
     ).get(userMessage.id);
-    expect(stored).toEqual({ role: "user", text: "say hi" });
+    expect(stored?.text).toBe("say hi");
+    expect(stored?.from_id).toBe(userMessage.fromId);
   });
 
   test("opens a direct channel for a specialist", async () => {
@@ -240,7 +241,7 @@ describe("websocket end-to-end", () => {
     const capture = await client!.next("turn.start");
     const memoryReply = (await client!.next("token")).delta;
     await client!.next("turn.end", { match: (frame) => frame.threadID === capture.threadID });
-    expect(db!.query<{ count: number }, []>("SELECT count(*) AS count FROM memories WHERE text LIKE '%blue drawer%'").get()?.count).toBe(1);
+    expect(db!.query<{ count: number }, []>("SELECT count(*) AS count FROM agent_memories WHERE content LIKE '%blue drawer%'").get()?.count).toBe(1);
     // The confirmation speaks like a person: no record ids, no log lines.
     expect(memoryReply.startsWith("Noted")).toBe(true);
     expect(memoryReply).not.toMatch(/mem_/);

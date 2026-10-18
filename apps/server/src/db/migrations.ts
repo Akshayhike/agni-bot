@@ -485,4 +485,14 @@ export const MIGRATIONS: Migration[] = [
     name: "channel_message_ui_hint",
     sql: `ALTER TABLE channel_messages ADD COLUMN ui_hint TEXT;`,
   },
+  {
+    id: 14,
+    name: "channel_messages_drop_legacy_columns",
+    sql: `
+      -- The finalized channel message row carries sender identity in
+      -- from_type/from_id and no longer needs the legacy role/status pair.
+      ALTER TABLE channel_messages DROP COLUMN role;
+      ALTER TABLE channel_messages DROP COLUMN status;
+    `,
+  },
 ];

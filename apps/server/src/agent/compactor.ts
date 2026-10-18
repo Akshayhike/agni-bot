@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
 import type { Router } from "../models/router";
-import { addChannelSummary, getChannelSummary, markMessagesCompacted, uncompactedMessages } from "../stores/channels";
+import { upsertChannelSummary, getChannelSummary, markMessagesCompacted, uncompactedMessages, type ChannelMessageRow } from "../stores/channels";
 import { putAgentMemory } from "../stores/agent-memories";
 
 const COMPACT_AT = 36;
@@ -11,7 +11,7 @@ const COMPACT_BATCH = 24;
 /** Compact older channel messages in the background; failures never block a turn. */
 export async function compactChannelHistory(db: Database, router: Router, channelID: string, agentID: string): Promise<void> {
   const messages = uncompactedMessages(db, channelID, 200);
-  const tokenEstimate = messages.reduce((sum, message) => sum + Math.ceil(message.text.length / 4), 0);
+  const tokenEstimate = messages.reduce((sum, message: ChannelMessageRow) => sum + Math.ceil(message.text.length / 4), 0);
   if (messages.length <= COMPACT_AT && tokenEstimate <= COMPACT_TOKEN_AT) return;
   const compactCount = Math.min(COMPACT_BATCH, messages.length - KEEP_RECENT);
   if (compactCount < 1) return;
@@ -26,7 +26,7 @@ export async function compactChannelHistory(db: Database, router: Router, channe
     'upserted_facts items use {scope:"global_user"|"agent", type:"fact"|"preference"|"style"|"entity"|"decision", key_slug, content, importance}.',
     `Existing summary:\n${prior || "(empty)"}`,
     `Known facts (avoid duplicates; emit only new or updated):\n${JSON.stringify(known)}`,
-    `Messages:\n${chunk.map((m) => `${m.from_type}/${m.from_id}: ${m.text}`).join("\n")}`,
+    `Messages:\n${chunk.map((m: ChannelMessageRow) => `${m.from_type}/${m.from_id}: ${m.text}`).join("\n")}`,
   ].join("\n\n");
   try {
     const result = await router.route({
@@ -44,7 +44,7 @@ export async function compactChannelHistory(db: Database, router: Router, channe
     const updatedSummary = parsed.updated_summary.trim();
     const transaction = db.transaction(() => {
       const last = chunk.at(-1)!;
-      addChannelSummary(db, channelID, updatedSummary, last.id, chunk.reduce((n, m) => n + Math.ceil(m.text.length / 4), 0));
+      upsertChannelSummary(db, channelID, updatedSummary, last.id, chunk.reduce((n, m) => n + Math.ceil(m.text.length / 4), 0));
       for (const fact of parsed.upserted_facts ?? []) {
         if (typeof fact.key_slug !== "string" || typeof fact.content !== "string") continue;
         const scope = fact.scope === "agent" ? "agent" : "global_user";

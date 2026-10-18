@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import type { Database } from "bun:sqlite";
 import { openDatabase } from "../src/db";
-import { createMemory, deleteMemory, searchMemories, updateMemory } from "../src/stores/memories";
+import { putAgentMemory, listAgentMemories, deleteAgentMemory } from "../src/stores/agent-memories";
 import { saveLink, searchLinks, updateLink, deleteLink } from "../src/stores/links";
 import { createTask, listTasks, setTaskStatus, snoozeTask } from "../src/stores/tasks";
 import { fetchPage } from "../src/tools/fetch-url";
@@ -12,22 +12,19 @@ let db: Database | undefined;
 afterEach(() => { db?.close(); db = undefined; });
 
 describe("P2 stores", () => {
-  test("memory writes and FTS updates/deletes stay in sync", () => {
+  test("memory writes and deletes stay queryable", () => {
     db = openDatabase(":memory:");
-    const memory = createMemory(db, { text: "Passport renewal in March", tags: ["travel"] });
-    expect(searchMemories(db, "passport renewal").map((row) => row.id)).toEqual([memory.id]);
-    updateMemory(db, memory.id, { text: "Passport expires in March", summary: "Renew passport", tags: ["travel", "identity"] });
-    expect(searchMemories(db, "passport renewal")).toEqual([]);
-    expect(searchMemories(db, "renew passport")[0]?.id).toBe(memory.id);
-    expect(deleteMemory(db, memory.id)).toBe(true);
-    expect(searchMemories(db, "passport")).toEqual([]);
+    const memory = putAgentMemory(db!, { scope: "global_user", agentID: null, keySlug: "passport-renewal", content: "Passport renewal in March", tags: ["travel"] });
+    const rows = listAgentMemories(db!, { scope: "global_user", limit: 50 });
+    expect(rows.some((row) => row.content.includes("Passport") && row.id === memory.id)).toBe(true);
+    expect(deleteAgentMemory(db!, memory.id)).toBe(true);
+    expect(listAgentMemories(db!, { scope: "global_user", limit: 50 })).toEqual([]);
   });
 
-  test("memory and FTS changes roll back together when the index write fails", () => {
+  test("memory writes roll back together when the insert fails", () => {
     db = openDatabase(":memory:");
-    db.exec("DROP TABLE memories_fts");
-    expect(() => createMemory(db!, { text: "Do not persist without its index" })).toThrow();
-    expect(db.query<{ count: number }, []>("SELECT count(*) AS count FROM memories").get()?.count).toBe(0);
+    expect(() => putAgentMemory(db!, { scope: "global_user", agentID: null, keySlug: "x", content: "a".repeat(20_001) })).toThrow();
+    expect(db!.query<{ count: number }, []>("SELECT count(*) AS count FROM agent_memories").get()?.count).toBe(0);
   });
 
   test("links canonicalize and merge duplicate notes while indexing updates", () => {

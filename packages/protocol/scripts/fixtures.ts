@@ -48,6 +48,8 @@ const CLIENT_FRAMES: ClientFrame[] = [
   { type: "plugin.list" },
   { type: "plugin.connect", pluginID: "gmail", account: "agent" },
   { type: "plugin.disconnect", connectionID: "plc_01hq" },
+  { type: "user.typing", channelId: "ch_01hq", isTyping: true },
+  { type: "agent.rename", agentId: "agni", name: "Agni Prime" },
 ];
 
 /** A representative plugins snapshot: one connected agent row, one disconnected owner row. */
@@ -208,6 +210,21 @@ const SERVER_FRAMES: ServerFrame[] = [
   },
   { type: "presence", seq: 57, state: "offline" },
   { type: "error", seq: 58, code: "no_provider", message: "no provider in tier instant", retryAfter: 2 },
+  { type: "status.update", seq: 69, channelId: "ch_01hq", agentId: "agni", text: "Nachiketh is typing…", transient: true },
+  {
+    type: "msg.new",
+    seq: 70,
+    id: "msg_01ht",
+    channelId: "ch_01hq",
+    fromType: "user",
+    fromId: "usr_1",
+    senderName: "Nachiketh",
+    senderColor: "#f0b95a",
+    text: "hello channel",
+    internal: false,
+    createdAt: "2026-10-17T10:00:00.000Z",
+  },
+  { type: "agent.updated", seq: 71, agentId: "agni", displayName: "Agni Prime", onboarded: true },
 ];
 
 /** Every frame must survive its own schema before it is a fixture. */

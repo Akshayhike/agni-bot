@@ -47,7 +47,7 @@ import {
 import { rolloverIfNeeded, rotate, rotateById } from "../agent/rollover";
 import type { TurnJobPayload } from "../jobs/turn";
 import { newID, nowISO } from "../util/ids";
-import { createMemory, searchMemories } from "../stores/memories";
+import { putAgentMemory, listAgentMemories, type AgentMemoryRow } from "../stores/agent-memories";
 import { addChannelMember, appendChannelMessage, createChannel, getChannel } from "../stores/channels";
 import { canonicalURL, saveLink, searchLinks } from "../stores/links";
 import { createTask, getTask, listTasks, setTaskStatus, snoozeTask } from "../stores/tasks";
@@ -293,8 +293,8 @@ async function runUserMessage(
     // Keep the protocol-facing DM id stable and explicit.
     deps.db.run("UPDATE channels SET id = ? WHERE id = ?", [channelID, channel.id]);
     channel = getChannel(deps.db, channelID);
-    addChannelMember(deps.db, channelID, frame.toAgentId, "agent", "member");
-    addChannelMember(deps.db, channelID, "user", "user", "member");
+    addChannelMember(deps.db, channelID, "agent", frame.toAgentId);
+    addChannelMember(deps.db, channelID, "user", "user");
   }
   if (frame.channelId && !channel) return sendError(deps, session, "unknown_channel", `no channel ${frame.channelId}`);
   const requestedAgentID = frame.toAgentId ?? (frame.channelId ? channel?.agent_id : session.agentID) ?? session.agentID;
@@ -433,15 +433,23 @@ async function captureMessage(deps: DispatchDeps, session: Session, thread: Thre
           const rows = searchLinks(deps.db, query, 8);
           confirmation = rows.length ? `Saved links:\n${rows.map((row) => `• ${row.title ?? row.url} — ${row.url}${row.note ? ` · ${row.note}` : ""} [${row.id}]`).join("\n")}` : `No saved links matched${query ? ` “${query}”` : ""}.`;
         } else {
-          const rows = searchMemories(deps.db, query, 8);
-          confirmation = rows.length ? `Saved memories:\n${rows.map((row) => `• ${row.summary ?? row.text} [${row.id}]`).join("\n")}` : `No saved memories matched${query ? ` “${query}”` : ""}.`;
+          const rows = listAgentMemories(deps.db, { scope: "global_user", limit: 50 });
+          const matching = query ? rows.filter((row) => `${row.content} ${row.tags ?? ""}`.toLowerCase().includes(query.toLowerCase())) : rows;
+          confirmation = matching.length ? `Saved memories:\n${matching.slice(0, 8).map((row) => `• ${row.content} [${row.id}]`).join("\n")}` : `No saved memories matched${query ? ` “${query}”` : ""}.`;
         }
       }
     } else if (memory) {
       const body = memory[1]!.trim();
       const parsed = body.match(/^(.*?)(?:\s+#tags?\s+(.+))?$/i);
-      const record = createMemory(deps.db, { text: parsed?.[1]?.trim() || body, ...(parsed?.[2] ? { tags: parsed[2].split(/[ ,]+/) } : {}), ownerDeviceID: session.device?.id });
-      confirmation = `Noted — ${record.text.replace(/[.!?]+$/, "")}.`;
+      const record = putAgentMemory(deps.db, {
+        scope: "global_user",
+        agentID: null,
+        keySlug: `memory-${parsed?.[1]?.trim().slice(0, 40) || body.slice(0, 40)}`,
+        type: "fact",
+        content: parsed?.[1]?.trim() || body,
+        tags: parsed?.[2] ? parsed[2].split(/[ ,]+/) : undefined,
+      });
+      confirmation = `Noted — ${record.content.replace(/[.!?]+$/, "")}.`;
     } else if (task) {
       const parsed = parseTaskCapture(task[1]!);
       const record = createTask(deps.db, { ...parsed, ownerDeviceID: session.device?.id });
@@ -596,14 +604,14 @@ function handleConversationHistory(
   {
     const channelID = conversation.agent_id === "ea" ? "main" : `dm:${conversation.agent_id}`;
     const channelRows = deps.db.query<{
-      id: string; role: string; text: string; created_at: string; turn_id: string | null;
+      id: string; text: string; created_at: string; turn_id: string | null;
       from_id: string; sender_name: string | null; sender_color: string | null; ui_hint: string | null;
-    }, [string]>(`SELECT cm.id, cm.role, cm.text, cm.created_at, cm.turn_id, cm.from_id,
+    }, [string]>(`SELECT cm.id, cm.text, cm.created_at, cm.turn_id, cm.from_id,
       a.display_name AS sender_name, a.avatar_color AS sender_color, cm.ui_hint
       FROM channel_messages cm LEFT JOIN agents a ON a.id = cm.from_id
       WHERE cm.channel_id = ? AND cm.internal = 0 ORDER BY cm.created_at, cm.rowid`).all(channelID);
     for (const row of channelRows) {
-      const role = row.role === "assistant" ? "assistant" : row.role;
+      const role = row.from_id === "user" ? "user" : "assistant";
       const messageData = {
         id: row.id, role, text: row.text, createdAt: row.created_at, turnID: row.turn_id ?? undefined,
         senderName: row.sender_name ?? (role === "user" ? "You" : row.from_id),

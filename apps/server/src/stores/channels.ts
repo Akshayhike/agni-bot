@@ -26,10 +26,10 @@ export interface ChannelMessageRow {
   from_id: string;
   to_agent_id: string | null;
   text: string;
-  ui_hint: string | null;
   internal: number;
   compacted: number;
   turn_id: string | null;
+  ui_hint: string | null;
   created_at: string;
 }
 
@@ -42,14 +42,21 @@ export interface ChannelSummaryRow {
   updated_at: string;
 }
 
+// --- channels ---------------------------------------------------------------
+
 export function createChannel(
   db: Database,
   input: { type: string; visibility: string; name: string; agentID: string; parentTurnID?: string },
 ): ChannelRow {
-  const created = nowISO();
   const row: ChannelRow = {
-    id: newID("chn"), type: input.type, visibility: input.visibility, name: input.name,
-    agent_id: input.agentID, parent_turn_id: input.parentTurnID ?? null, created_at: created, updated_at: created,
+    id: newID("chn"),
+    type: input.type,
+    visibility: input.visibility,
+    name: input.name,
+    agent_id: input.agentID,
+    parent_turn_id: input.parentTurnID ?? null,
+    created_at: nowISO(),
+    updated_at: nowISO(),
   };
   db.run(
     `INSERT INTO channels (id, type, visibility, name, agent_id, parent_turn_id, created_at, updated_at)
@@ -60,105 +67,182 @@ export function createChannel(
 }
 
 export function listChannels(db: Database, agentID?: string): ChannelRow[] {
-  const sql = `SELECT id, type, visibility, name, agent_id, parent_turn_id, created_at, updated_at FROM channels`;
-  return agentID
-    ? db.query<ChannelRow, [string]>(`${sql} WHERE agent_id = ? ORDER BY created_at`).all(agentID)
-    : db.query<ChannelRow, []>(`${sql} ORDER BY created_at`).all();
+  if (agentID)
+    return db
+      .query<ChannelRow, [string]>(
+        "SELECT id, type, visibility, name, agent_id, parent_turn_id, created_at, updated_at FROM channels WHERE agent_id = ? ORDER BY created_at",
+      )
+      .all(agentID);
+  return db
+    .query<ChannelRow, []>(
+      "SELECT id, type, visibility, name, agent_id, parent_turn_id, created_at, updated_at FROM channels ORDER BY created_at",
+    )
+    .all();
 }
 
 export function getChannel(db: Database, id: string): ChannelRow | null {
-  return db.query<ChannelRow, [string]>(
-    `SELECT id, type, visibility, name, agent_id, parent_turn_id, created_at, updated_at FROM channels WHERE id = ?`,
-  ).get(id) ?? null;
+  return (
+    db
+      .query<ChannelRow, [string]>(
+        "SELECT id, type, visibility, name, agent_id, parent_turn_id, created_at, updated_at FROM channels WHERE id = ?",
+      )
+      .get(id) ?? null
+  );
 }
 
 export function renameChannel(db: Database, id: string, name: string): void {
   db.run("UPDATE channels SET name = ?, updated_at = ? WHERE id = ?", [name, nowISO(), id]);
 }
 
-export function addChannelMember(db: Database, channelID: string, participantID: string, participantType = "agent", role = "member"): void {
+// --- members ----------------------------------------------------------------
+
+export function addChannelMember(
+  db: Database,
+  channelID: string,
+  participantType: string,
+  participantID: string,
+  role = "member",
+): ChannelMemberRow {
+  const row: ChannelMemberRow = {
+    channel_id: channelID,
+    participant_type: participantType,
+    participant_id: participantID,
+    role,
+  };
   db.run(
     "INSERT OR IGNORE INTO channel_members (channel_id, participant_type, participant_id, role) VALUES (?, ?, ?, ?)",
-    [channelID, participantType, participantID, role],
+    [row.channel_id, row.participant_type, row.participant_id, row.role],
   );
+  return row;
 }
 
 export function listChannelMembers(db: Database, channelID: string): ChannelMemberRow[] {
-  return db.query<ChannelMemberRow, [string]>(
-    "SELECT channel_id, participant_type, participant_id, role FROM channel_members WHERE channel_id = ? ORDER BY participant_type, participant_id",
-  ).all(channelID);
+  return db
+    .query<ChannelMemberRow, [string]>(
+      "SELECT channel_id, participant_type, participant_id, role FROM channel_members WHERE channel_id = ?",
+    )
+    .all(channelID);
 }
+
+// --- messages ---------------------------------------------------------------
 
 export function appendChannelMessage(
   db: Database,
   input: {
-    channelID: string; fromType: string; fromID: string; toAgentID?: string | null; text: string;
-    internal?: boolean; turnID?: string | null; uiHint?: string;
+    channelID: string;
+    fromType: string;
+    fromID: string;
+    toAgentID?: string | null;
+    text: string;
+    internal?: boolean;
+    turnID?: string | null;
+    uiHint?: string | null;
   },
 ): ChannelMessageRow {
   const row: ChannelMessageRow = {
-    id: newID("chm"), channel_id: input.channelID, from_type: input.fromType, from_id: input.fromID,
-    to_agent_id: input.toAgentID ?? null, text: input.text, ui_hint: input.uiHint ?? null,
-    internal: input.internal ? 1 : 0, compacted: 0, turn_id: input.turnID ?? null, created_at: nowISO(),
+    id: newID("chm"),
+    channel_id: input.channelID,
+    from_type: input.fromType,
+    from_id: input.fromID,
+    to_agent_id: input.toAgentID ?? null,
+    text: input.text,
+    internal: input.internal ? 1 : 0,
+    compacted: 0,
+    turn_id: input.turnID ?? null,
+    ui_hint: input.uiHint ?? null,
+    created_at: nowISO(),
   };
   db.run(
-    `INSERT INTO channel_messages (id, channel_id, role, text, status, turn_id, created_at, from_type, from_id, to_agent_id, ui_hint, internal, compacted)
-     VALUES (?, ?, ?, ?, 'sent', ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [row.id, row.channel_id, input.fromType === "agent" ? "assistant" : input.fromType, row.text,
-      row.turn_id, row.created_at, row.from_type, row.from_id, row.to_agent_id, row.ui_hint,
-      row.internal, row.compacted],
+    `INSERT INTO channel_messages (id, channel_id, from_type, from_id, to_agent_id, text, internal, compacted, turn_id, ui_hint, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      row.id,
+      row.channel_id,
+      row.from_type,
+      row.from_id,
+      row.to_agent_id,
+      row.text,
+      row.internal,
+      row.compacted,
+      row.turn_id,
+      row.ui_hint,
+      row.created_at,
+    ],
   );
   return row;
 }
 
 export function listChannelMessages(db: Database, channelID: string, limit = 200): ChannelMessageRow[] {
-  return db.query<ChannelMessageRow, [string, number]>(
-    `SELECT id, channel_id, from_type, from_id, to_agent_id, text, ui_hint, internal, compacted, turn_id, created_at
-     FROM channel_messages WHERE channel_id = ? ORDER BY created_at DESC, rowid DESC LIMIT ?`,
-  ).all(channelID, limit).reverse();
+  return db
+    .query<ChannelMessageRow, [string, number]>(
+      `SELECT id, channel_id, from_type, from_id, to_agent_id, text, internal, compacted, turn_id, ui_hint, created_at
+       FROM channel_messages WHERE channel_id = ? ORDER BY created_at, rowid DESC LIMIT ?`,
+    )
+    .all(channelID, limit);
 }
 
-export function uncompactedMessages(db: Database, channelID: string, limit = 100): ChannelMessageRow[] {
-  return db.query<ChannelMessageRow, [string, number]>(
-    `SELECT id, channel_id, from_type, from_id, to_agent_id, text, ui_hint, internal, compacted, turn_id, created_at
-     FROM channel_messages WHERE channel_id = ? AND compacted = 0 ORDER BY created_at, rowid LIMIT ?`,
-  ).all(channelID, limit);
+export function uncompactedMessages(db: Database, channelID: string, limit = 200): ChannelMessageRow[] {
+  return db
+    .query<ChannelMessageRow, [string, number]>(
+      `SELECT id, channel_id, from_type, from_id, to_agent_id, text, internal, compacted, turn_id, ui_hint, created_at
+       FROM channel_messages WHERE channel_id = ? AND compacted = 0 ORDER BY created_at, rowid DESC LIMIT ?`,
+    )
+    .all(channelID, limit);
 }
 
 export function markMessagesCompacted(db: Database, ids: string[]): void {
-  if (!ids.length) return;
-  db.run(`UPDATE channel_messages SET compacted = 1 WHERE id IN (${ids.map(() => "?").join(",")})`, ids);
+  if (ids.length === 0) return;
+  const placeholders = ids.map(() => "?").join(",");
+  db.run(`UPDATE channel_messages SET compacted = 1 WHERE id IN (${placeholders})`, ids);
 }
 
-export function updateChannelMessageStatus(_db: Database, _id: string, _status: string): void {
-  // Message delivery status is intentionally not part of this schema.
-}
+// --- summaries --------------------------------------------------------------
 
-export function getChannelSummary(db: Database, channelID: string): ChannelSummaryRow | null {
-  return db.query<ChannelSummaryRow, [string]>(
-    "SELECT id, channel_id, summary, last_compacted_message_id, token_estimate, updated_at FROM channel_summaries WHERE channel_id = ?",
-  ).get(channelID) ?? null;
-}
-
-export function addChannelSummary(
+export function upsertChannelSummary(
   db: Database,
   channelID: string,
   summary: string,
-  lastCompactedMessageID: string | null,
-  tokenEstimate: number,
+  lastCompactedMessageID?: string | null,
+  tokenEstimate = 0,
 ): ChannelSummaryRow {
-  const row = { id: newID("chs"), channel_id: channelID, summary, last_compacted_message_id: lastCompactedMessageID,
-    token_estimate: Math.max(0, Math.floor(tokenEstimate)), updated_at: nowISO() };
-  db.run(
-    `INSERT INTO channel_summaries (id, channel_id, summary, last_compacted_message_id, token_estimate, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(channel_id) DO UPDATE SET summary=excluded.summary,
-       last_compacted_message_id=excluded.last_compacted_message_id, token_estimate=excluded.token_estimate, updated_at=excluded.updated_at`,
-    [row.id, row.channel_id, row.summary, row.last_compacted_message_id, row.token_estimate, row.updated_at],
-  );
-  return getChannelSummary(db, channelID)!;
+  const existing = db
+    .query<ChannelSummaryRow, [string]>(
+      "SELECT id, channel_id, summary, last_compacted_message_id, token_estimate, updated_at FROM channel_summaries WHERE channel_id = ?",
+    )
+    .get(channelID);
+  const now = nowISO();
+  if (existing) {
+    db.run(
+      "UPDATE channel_summaries SET summary = ?, last_compacted_message_id = ?, token_estimate = ?, updated_at = ? WHERE channel_id = ?",
+      [summary, lastCompactedMessageID ?? null, tokenEstimate, now, channelID],
+    );
+    return { ...existing, summary, last_compacted_message_id: lastCompactedMessageID ?? null, token_estimate: tokenEstimate, updated_at: now };
+  }
+  const row: ChannelSummaryRow = {
+    id: newID("chs"),
+    channel_id: channelID,
+    summary,
+    last_compacted_message_id: lastCompactedMessageID ?? null,
+    token_estimate: tokenEstimate,
+    updated_at: now,
+  };
+  db.run("INSERT INTO channel_summaries (id, channel_id, summary, last_compacted_message_id, token_estimate, updated_at) VALUES (?, ?, ?, ?, ?, ?)", [
+    row.id,
+    row.channel_id,
+    row.summary,
+    row.last_compacted_message_id,
+    row.token_estimate,
+    row.updated_at,
+  ]);
+  return row;
 }
 
-export function listChannelSummaries(db: Database, channelID: string, limit = 1): ChannelSummaryRow[] {
-  const row = getChannelSummary(db, channelID);
-  return row && limit > 0 ? [row] : [];
+export function getChannelSummary(db: Database, channelID: string): ChannelSummaryRow | null {
+  return (
+    db
+      .query<ChannelSummaryRow, [string]>(
+        "SELECT id, channel_id, summary, last_compacted_message_id, token_estimate, updated_at FROM channel_summaries WHERE channel_id = ?",
+      )
+      .get(channelID) ?? null
+  );
 }
