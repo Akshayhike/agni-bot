@@ -603,19 +603,29 @@ function handleConversationHistory(
   }));
   const conversation = getConversation(deps.db, frame.conversationID)!;
   {
-    const channelID = conversation.agent_id === "ea" ? "main" : `dm:${conversation.agent_id}`;
+    // `agni` is the legacy id for the same assistant as `ea`; both read and
+    // write the main channel, so normalize before choosing the surface.
+    const channelID = canonicalAgentID(conversation.agent_id) === "ea" ? "main" : `dm:${conversation.agent_id}`;
     const channelRows = deps.db.query<{
       id: string; text: string; created_at: string; turn_id: string | null;
-      from_id: string; sender_name: string | null; sender_color: string | null; ui_hint: string | null;
-    }, [string]>(`SELECT cm.id, cm.text, cm.created_at, cm.turn_id, cm.from_id,
-      a.display_name AS sender_name, a.avatar_color AS sender_color, cm.ui_hint
-      FROM channel_messages cm LEFT JOIN agents a ON a.id = cm.from_id
+      from_id: string; from_type: string; sender_name: string | null; sender_color: string | null;
+      device_name: string | null; ui_hint: string | null;
+    }, [string]>(`SELECT cm.id, cm.text, cm.created_at, cm.turn_id, cm.from_id, cm.from_type,
+      a.display_name AS sender_name, a.avatar_color AS sender_color, d.name AS device_name, cm.ui_hint
+      FROM channel_messages cm
+      LEFT JOIN agents a ON a.id = cm.from_id
+      LEFT JOIN devices d ON d.id = cm.from_id
       WHERE cm.channel_id = ? AND cm.internal = 0 ORDER BY cm.created_at, cm.rowid`).all(channelID);
     for (const row of channelRows) {
-      const role = row.from_id === "user" ? "user" : "assistant";
+      // Role comes from `from_type`, not from comparing `from_id` to "user":
+      // a client message stores the *device* id, which made reloaded user
+      // messages render as agent messages named after the device.
+      const role = row.from_type === "user" ? "user" : row.from_type === "system" ? "system" : "assistant";
       const messageData = {
         id: row.id, role, text: row.text, createdAt: row.created_at, turnID: row.turn_id ?? undefined,
-        senderName: row.sender_name ?? (role === "user" ? "You" : row.from_id),
+        senderName: role === "user"
+          ? row.device_name ?? "You"
+          : row.sender_name ?? row.from_id,
         senderColor: row.sender_color ?? undefined, uiHint: row.ui_hint ?? undefined,
       };
       const duplicateIndex = messages.findIndex((message) =>

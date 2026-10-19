@@ -263,6 +263,27 @@ describe("websocket end-to-end", () => {
     expect((await client!.next("task.update.ok")).task.status).toBe("done");
   });
 
+  test("reloaded history keeps the user's own messages on the user side", async () => {
+    await startTestServer();
+
+    client!.send({ type: "conversation.open", conversationID: "", agentID: "agni" });
+    const opened = await client!.next("conversation.ok");
+
+    client!.send({ type: "msg.send", conversationID: opened.conversationID, text: "what is your name" });
+    await client!.next("turn.start");
+    await client!.next("turn.end");
+
+    // A client message stores the device id in `from_id`, so history must take
+    // the role from `from_type` and the label from the device — not from `from_id`.
+    client!.send({ type: "conversation.history", conversationID: opened.conversationID });
+    const history = await client!.next("conversation.history.ok");
+    const mine = history.messages.filter((message) => message.text === "what is your name");
+    expect(mine).toHaveLength(1);
+    expect(mine[0]?.role).toBe("user");
+    expect(mine[0]?.senderName).toBe("test-device");
+    expect(history.messages.some((message) => message.senderName?.startsWith("dev_"))).toBe(false);
+  });
+
   test("the conversation model: one chat surface, session blocks, /new never moves the user", async () => {
     await startTestServer();
 
