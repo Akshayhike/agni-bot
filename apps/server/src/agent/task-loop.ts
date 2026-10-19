@@ -4,7 +4,7 @@ import type { Database } from "bun:sqlite";
 import type { ServerFrameBody, StopReason } from "@agni/protocol";
 import { ApprovalBroker, waitForApprovalDecision } from "./approval-broker";
 import type { Decision } from "./approval-broker";
-import type { Persona } from "./personas";
+import type { Persona, ResolvedPersona } from "./personas";
 import type { ChatMessage, ToolCall } from "../models/client";
 import { Router, RouterBusyError, RouterError } from "../models/router";
 import { appendMessage, createTurn, finishTurn, recentMessages, titleThreadFromFirstMessage, touchThread } from "../stores/threads";
@@ -12,6 +12,7 @@ import { recordUsage } from "../stores/usage";
 import { newID, nowISO } from "../util/ids";
 import { buildTaskToolRegistry, taskToolHints, taskToolSpecs } from "../tools/task-registry";
 import { registerHandoffTool } from "../tools/handoff-tool";
+import { registerRenameTool } from "../tools/rename-tool";
 import { recallFact } from "../tools/facts";
 import { buildDelegationPrefix } from "./prompts";
 import { appendChannelMessage, getChannelSummary } from "../stores/channels";
@@ -23,7 +24,7 @@ export interface TaskTurnRun {
   turnID?: string;
   threadID: string;
   text: string;
-  persona: Persona;
+  persona: ResolvedPersona;
   emit: (frame: ServerFrameBody) => void;
   signal: AbortSignal;
   /** Conversation model (v2): the conversation the turn belongs to. */
@@ -132,7 +133,10 @@ export async function runTaskTurn(db: Database, router: Router, settings: TaskTu
     threadID, channelID: run.channelID, currentAgentID: persona.id,
     conversationID: run.conversationID, carrySummary: run.carrySummary, guardrail,
   });
-  const tools = taskToolSpecs(registry, persona.tools, "static"); // includes handoff once registered above
+  // Renaming is an action, not a sentence: this persists the new name and
+  // pushes `agent.updated` so every client's roster follows in the same turn.
+  registerRenameTool(registry, { db, emit: run.emit, currentAgentID: persona.id });
+  const tools = taskToolSpecs(registry, persona.tools, "static"); // includes the per-turn tools registered above
   let timedOut = false;
   const timer = setTimeout(() => { timedOut = true; controller.abort(); }, settings.turnTimeoutMs);
   const abort = (): void => controller.abort();
@@ -413,6 +417,7 @@ function truncate(text: string, max: number): string { return text.length > max 
 function describePreview(toolName: string, args: Record<string, unknown>): string {
   switch (toolName) {
     case "handoff": return `hand off to ${String(args.toAgentID ?? "?")}: ${String(args.task ?? "").slice(0, 80)}`;
+    case "rename_agent": return `rename to ${String(args.name ?? "?")}`;
     case "bash": return String(args.command ?? "").slice(0, 120);
     case "write_file": return `write ${args.path ?? "?"}`;
     case "read_file": return `read ${args.path ?? "?"}`;

@@ -16,7 +16,7 @@
 import type { Database } from "bun:sqlite";
 import type { ServerFrameBody } from "@agni/protocol";
 import { GuardrailError, enterDelegation, rootGuardrail, type GuardrailState } from "./guardrails";
-import { defaultPersona, getPersona, type Persona } from "./personas";
+import { defaultResolvedPersona, getPersona, resolvePersona, type ResolvedPersona } from "./personas";
 import type { Router } from "../models/router";
 import type { TaskTurnSettings, TaskTurnRun, TaskTurnResult } from "./task-loop";
 import { runTaskTurn } from "./task-loop";
@@ -59,7 +59,7 @@ export interface HandoffDeps {
   /** The parent's guardrail state. */
   guardrail: GuardrailState;
   /** Optional persona override for the child (defaults to the target agent's persona). */
-  persona?: Persona;
+  persona?: ResolvedPersona;
 }
 
 /**
@@ -68,7 +68,7 @@ export interface HandoffDeps {
  * parent can report to the user instead of spinning.
  */
 export async function handoff(deps: HandoffDeps, request: HandoffRequest): Promise<HandoffResult> {
-  const persona = deps.persona ?? getPersona(request.toAgentID) ?? defaultPersona();
+  const persona = deps.persona ?? resolvePersona(deps.db, request.toAgentID) ?? defaultResolvedPersona(deps.db);
   const child = enterDelegation(deps.guardrail, persona.id, request.context ?? null);
   const childThread = createThread(deps.db, persona.id, request.task);
   const childThreadID = childThread.id;

@@ -111,6 +111,7 @@ function describeAction(toolName: string, args: Record<string, unknown>): string
     case "task_create": return `add task: ${args.title ?? "?"}`;
     case "task_update": return `update task ${args.id ?? "?"}`;
     case "mail_send": return `send email to ${Array.isArray(args.to) ? args.to.join(", ") : args.to}: ${String(args.subject ?? "").slice(0, 80)}`;
+    case "rename_agent": return args.agentId ? `rename ${args.agentId} to ${args.name}` : `rename the assistant to ${args.name}`;
     default: return `${toolName}(${JSON.stringify(args).slice(0, 120)})`;
   }
 }

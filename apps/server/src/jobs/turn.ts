@@ -13,7 +13,7 @@ import type { Database } from "bun:sqlite";
 import type { ServerFrameBody } from "@agni/protocol";
 import { runInstantTurn, type TurnSettings } from "../agent/loop";
 import { runTaskTurn } from "../agent/task-loop";
-import { defaultPersona, getPersona } from "../agent/personas";
+import { defaultResolvedPersona, getPersona, resolvePersona, type ResolvedPersona } from "../agent/personas";
 import { rootGuardrail } from "../agent/guardrails";
 import type { Router } from "../models/router";
 import { getThread } from "../stores/threads";
@@ -54,7 +54,7 @@ export function registerTurnJob(runner: JobRunner, deps: TurnJobDeps): void {
     const text = payload.text?.trim();
     if (!text) throw new Error("turn job payload has no text");
 
-    const persona = (payload.agentID ? getPersona(payload.agentID) : undefined) ?? defaultPersona();
+    const persona = (payload.agentID ? resolvePersona(deps.db, payload.agentID) : undefined) ?? defaultResolvedPersona(deps.db);
 
     let threadID = payload.threadID?.trim();
     let conversation: ConversationRow | undefined;
@@ -120,7 +120,7 @@ function truncate(text: string, max: number): string {
 async function runTurn(
   deps: TurnJobDeps,
   payload: TurnJobPayload,
-  persona: ReturnType<typeof getPersona> & { systemPrompt: string },
+  persona: ResolvedPersona,
   threadID: string,
   conversation: ConversationRow | undefined,
   text: string,

@@ -5,14 +5,15 @@ import { HealthTracker } from "../src/models/health";
 import type { ProviderConfig } from "../src/models/providers";
 import { Router } from "../src/models/router";
 import { runTaskTurn } from "../src/agent/task-loop";
-import type { Persona } from "../src/agent/personas";
+import { resolveApprovalWaiter } from "../src/agent/approval-broker";
+import type { ResolvedPersona } from "../src/agent/personas";
 import { createThread, createTurn } from "../src/stores/threads";
 
 const provider: ProviderConfig = {
   id: "test", label: "Test", baseUrl: "https://test.local/v1", apiKey: "test", model: "mock",
 };
-const taskPersona: Persona = {
-  id: "agni", name: "Agni", color: "#f0b95a", systemPrompt: "Be helpful.",
+const taskPersona: ResolvedPersona = {
+  id: "agni", name: "Agni", color: "#f0b95a", systemPromptTemplate: "Be helpful.", systemPrompt: "Be helpful.",
   tools: ["tasks_list"],
 };
 let db: Database | undefined;
@@ -26,6 +27,43 @@ function streamResponse(events: unknown[]): Response {
 }
 
 describe("task lane loop", () => {
+  test("the model renaming the agent persists it and pushes agent.updated", async () => {
+    db = openDatabase(":memory:");
+    const persona = { ...taskPersona, tools: ["rename_agent"] };
+    const thread = createThread(db, persona.id);
+    let request = 0;
+    const fetchMock = (async () => {
+      request += 1;
+      return request === 1
+        ? streamResponse([{ choices: [{ delta: { tool_calls: [{ index: 0, id: "call-1", type: "function", function: { name: "rename_agent", arguments: "{\"name\":\"Baahu\"}" } }] } }] }])
+        : streamResponse([{ choices: [{ delta: { content: "Renamed to Baahu." } }] }]);
+    }) as unknown as typeof fetch;
+    const router = new Router([provider], new HealthTracker(), fetchMock);
+    const emitted: Array<{ type: string; [key: string]: unknown }> = [];
+    const result = await runTaskTurn(db, router, { firstTokenTimeoutMs: 1000, turnTimeoutMs: 5000 }, {
+      threadID: thread.id, text: "I want to call you Baahu", persona,
+      emit: (frame) => {
+        emitted.push(frame as { type: string; [key: string]: unknown });
+        // Renaming is approval-gated; answer the card the way the app does:
+        // record the decision durably, then wake the waiter.
+        if (frame.type === "approval.request") {
+          db!.run("UPDATE approvals SET status = 'decided', decision = 'once', decided_at = ? WHERE id = ?", [
+            new Date().toISOString(), String(frame.requestID),
+          ]);
+          resolveApprovalWaiter(String(frame.requestID), "once");
+        }
+      },
+      signal: new AbortController().signal,
+    });
+
+    expect(result.text).toBe("Renamed to Baahu.");
+    expect(db.query<{ display_name: string }, []>("SELECT display_name FROM agents WHERE id = 'ea'").get()?.display_name).toBe("Baahu");
+    expect(db.query("SELECT tool_name, ok FROM tool_calls WHERE turn_id = ?").get(result.turnID)).toEqual({ tool_name: "rename_agent", ok: 1 });
+    const updated = emitted.find((frame) => frame.type === "agent.updated");
+    expect(updated).toMatchObject({ agentId: "ea", displayName: "Baahu", onboarded: true });
+    expect(emitted.find((frame) => frame.type === "approval.request")).toMatchObject({ action: "rename the assistant to Baahu" });
+  });
+
   test("executes a store tool, observes its result, and returns a final response", async () => {
     db = openDatabase(":memory:");
     const thread = createThread(db, taskPersona.id);

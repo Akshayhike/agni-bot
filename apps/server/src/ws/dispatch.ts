@@ -17,7 +17,8 @@ import {
   type ServerFrame,
   type ServerFrameBody,
 } from "@agni/protocol";
-import { defaultPersona, getPersona, personaInfo } from "../agent/personas";
+import { defaultPersona, getPersona, personaInfo, defaultResolvedPersona, resolvePersona, canonicalAgentID } from "../agent/personas";
+import { renameAgent } from "../agent/identity";
 import { runTaskTurn } from "../agent/task-loop";
 import { resolveApprovalWaiter } from "../agent/approval-broker";
 import { verifyToken } from "../auth/tokens";
@@ -185,7 +186,7 @@ function handleHello(deps: DispatchDeps, session: Session, frame: Extract<Client
       serverTime: nowISO(),
       lastSeq: deps.frameLog.seq + 1,
     });
-    deps.emit({ type: "agents.update", agents: personaInfo() });
+    deps.emit({ type: "agents.update", agents: personaInfo(deps.db) });
     emitOnboardingIfNeeded(deps);
   });
 }
@@ -355,7 +356,7 @@ async function runUserMessage(
     deps.emit({ type: "session.start", conversationID: result.conversationID, sessionID: thread.id, reason: "manual" });
   }
 
-  const persona = getPersona(requestedAgentID) ?? getPersona(thread.agent_id) ?? defaultPersona();
+  const persona = resolvePersona(deps.db, requestedAgentID) ?? resolvePersona(deps.db, thread.agent_id) ?? defaultResolvedPersona(deps.db);
   if (channel) {
     const userMessage = appendChannelMessage(deps.db, {
       channelID,
@@ -921,19 +922,15 @@ function handleAgentRename(deps: DispatchDeps, session: Session, frame: Extract<
 }
 
 function completeAgentRename(deps: DispatchDeps, agentID: string, proposedName: string): boolean {
-  const name = proposedName.trim().replace(/\s+/g, " ");
-  if (!name || name.length > 64 || /[\r\n\0]/.test(name)) return false;
-  const exists = deps.db.query<{ id: string }, [string]>("SELECT id FROM agents WHERE id = ?").get(agentID);
-  if (!exists) return false;
-  const now = nowISO();
-  deps.db.run("UPDATE agents SET display_name = ?, onboarded = 1, updated_at = ? WHERE id = ?", [name, now, agentID]);
-  deps.emit({ type: "agent.updated", agentId: agentID, displayName: name, onboarded: true });
-  if (agentID === "ea") {
+  const result = renameAgent(deps.db, agentID, proposedName);
+  if (!result.ok) return false;
+  deps.emit({ type: "agent.updated", agentId: result.agentID, displayName: result.name, onboarded: true });
+  if (result.agentID === "ea") {
     emitOnboardingMessage(
       deps,
       "main",
       "ea",
-      `${name}. Nice to meet you. I can research, analyze, and summarize information; coordinate specialist agents; and keep you updated while I work.`,
+      `${result.name}. Nice to meet you. I can research, analyze, and summarize information; coordinate specialist agents; and keep you updated while I work.`,
       "normal",
     );
   }

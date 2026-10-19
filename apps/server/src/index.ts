@@ -28,6 +28,7 @@ import {
   tailLog,
 } from "./daemon";
 import { openDatabase } from "./db";
+import { seedAgentPromptTemplates, setOwnerName } from "./agent/personas";
 import { JobRunner } from "./jobs/runner";
 import { registerTurnJob, type TurnJobPayload } from "./jobs/turn";
 import { registerBriefJob } from "./jobs/brief";
@@ -54,6 +55,9 @@ else usage();
 async function serve(): Promise<void> {
   const config = loadConfig();
   const db = openDatabase(config.dbPath);
+  setOwnerName(config.userFirstName);
+  const seeded = seedAgentPromptTemplates(db);
+  if (seeded > 0) log.info(`agents: seeded ${seeded} prompt template(s)`);
   const router = new Router(config.providers, new HealthTracker(), fetch, config.maxConcurrentTurns);
 
   const requeued = requeueStuckJobs(db);

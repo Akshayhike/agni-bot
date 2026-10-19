@@ -11,7 +11,7 @@
  * history (S1/S3). The delegation prompt adds the lane header, the tool
  * catalog, and the carried summary — but the stable head is still first.
  */
-import type { Persona } from "./personas";
+import type { ResolvedPersona } from "./personas";
 import { clampFactPrefix, MAX_FACT_PREFIX_CHARS } from "./guardrails";
 
 /** Stable lane header — kept identical across turns in the same lane. */
@@ -28,7 +28,7 @@ export function laneHeader(lane: "instant" | "task" | "deep"): string {
 
 /** Build the stable system prefix for a lane. Facts ride in the prefix. */
 export function buildSystemPrefix(params: {
-  persona: Persona;
+  persona: ResolvedPersona;
   lane: "instant" | "task" | "deep";
   facts: string[];
   extra?: string[];
@@ -51,7 +51,7 @@ export function buildSystemPrefix(params: {
 
 /** Build the fast-path (instant lane) message list: prefix + bounded history. */
 export function buildFastPathMessages(params: {
-  persona: Persona;
+  persona: ResolvedPersona;
   facts: string[];
   history: Array<{ role: "user" | "assistant"; content: string }>;
   carrySummary: string | null;
@@ -76,7 +76,7 @@ export function buildFastPathMessages(params: {
 
 /** Build the delegation (task lane) prefix block, for the loop to prepend. */
 export function buildDelegationPrefix(params: {
-  persona: Persona;
+  persona: ResolvedPersona;
   facts: string[];
   carrySummary: string | null;
   handoffSummary: string | null;

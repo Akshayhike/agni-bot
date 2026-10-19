@@ -11,7 +11,7 @@ import { MidStreamError, Router, RouterBusyError, RouterError } from "../models/
 import { appendMessage, createTurn, finishTurn, recentMessages, titleThreadFromFirstMessage, touchThread } from "../stores/threads";
 import { recordUsage } from "../stores/usage";
 import { newID } from "../util/ids";
-import type { Persona } from "./personas";
+import type { ResolvedPersona } from "./personas";
 import { recallFact } from "../tools/facts";
 import { buildFastPathMessages } from "./prompts";
 
@@ -26,7 +26,7 @@ export interface TurnSettings {
 export interface TurnRun {
   threadID: string;
   text: string;
-  persona: Persona;
+  persona: ResolvedPersona;
   emit: (frame: ServerFrameBody) => void;
   signal: AbortSignal;
   /** Conversation model (v2): the conversation the turn belongs to. */

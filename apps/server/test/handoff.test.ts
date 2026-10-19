@@ -5,7 +5,7 @@ import { HealthTracker } from "../src/models/health";
 import type { ProviderConfig } from "../src/models/providers";
 import { Router } from "../src/models/router";
 import { runTaskTurn } from "../src/agent/task-loop";
-import { defaultPersona } from "../src/agent/personas";
+import { defaultResolvedPersona } from "../src/agent/personas";
 import { createThread } from "../src/stores/threads";
 import { rootGuardrail, enterDelegation, canDelegate, GuardrailError, MAX_DEPTH, MAX_DELEGATED_STEPS } from "../src/agent/guardrails";
 
@@ -61,11 +61,11 @@ describe("guardrails", () => {
 describe("agent-to-agent handoff", () => {
   test("a root turn runs at depth 1 with the delegation prefix", async () => {
     db = openDatabase(":memory:");
-    const thread = createThread(db, defaultPersona().id);
+    const thread = createThread(db, defaultResolvedPersona(db!).id);
     const emitted: Array<{ type: string; [key: string]: unknown }> = [];
     const router = makeRouter(["I don't need to delegate."]);
     const result = await runTaskTurn(db, router, { firstTokenTimeoutMs: 1000, turnTimeoutMs: 5000 }, {
-      threadID: thread.id, text: "hi", persona: defaultPersona(),
+      threadID: thread.id, text: "hi", persona: defaultResolvedPersona(db!),
       emit: (frame) => emitted.push(frame as { type: string; [key: string]: unknown }),
       signal: new AbortController().signal,
       guardrail: rootGuardrail("agni"),
@@ -76,7 +76,7 @@ describe("agent-to-agent handoff", () => {
 
   test("a turn at the depth ceiling still runs but cannot delegate further", async () => {
     db = openDatabase(":memory:");
-    const thread = createThread(db, defaultPersona().id);
+    const thread = createThread(db, defaultResolvedPersona(db!).id);
     // Walk the chain to the published ceiling; the turn can still do its own
     // work, but any handoff attempt from here is refused by enterDelegation.
     let atCeiling = rootGuardrail("agni");
@@ -86,7 +86,7 @@ describe("agent-to-agent handoff", () => {
     expect(canDelegate(atCeiling)).toBe(false);
     const router = makeRouter(["I am at the ceiling and I know it."]);
     const result = await runTaskTurn(db, router, { firstTokenTimeoutMs: 1000, turnTimeoutMs: 5000 }, {
-      threadID: thread.id, text: "hi", persona: defaultPersona(),
+      threadID: thread.id, text: "hi", persona: defaultResolvedPersona(db!),
       emit: () => undefined, signal: new AbortController().signal,
       guardrail: atCeiling,
     });
@@ -98,11 +98,11 @@ describe("agent-to-agent handoff", () => {
 
   test("handoff tool is registered per turn and the turn emits tool frames", async () => {
     db = openDatabase(":memory:");
-    const thread = createThread(db, defaultPersona().id);
+    const thread = createThread(db, defaultResolvedPersona(db!).id);
     const router = makeRouter(["done"]);
     const emitted: Array<{ type: string; [key: string]: unknown }> = [];
     await runTaskTurn(db, router, { firstTokenTimeoutMs: 1000, turnTimeoutMs: 5000 }, {
-      threadID: thread.id, text: "hi", persona: defaultPersona(),
+      threadID: thread.id, text: "hi", persona: defaultResolvedPersona(db!),
       emit: (frame) => emitted.push(frame as { type: string; [key: string]: unknown }),
       signal: new AbortController().signal,
       guardrail: rootGuardrail("agni"),

@@ -16,7 +16,7 @@ import {
 } from "../src/stores/conversations";
 import { rolloverIfNeeded, rotateById, rotate, SESSION_ROLLOVER_CHARS } from "../src/agent/rollover";
 import { runTaskTurn } from "../src/agent/task-loop";
-import { defaultPersona } from "../src/agent/personas";
+import { defaultResolvedPersona } from "../src/agent/personas";
 
 /**
  * The conversation model: one conversation per agent, blocks opening with
@@ -195,7 +195,7 @@ describe("task lane on the conversation model", () => {
     const result = await runTaskTurn(db!, makeRouter("done text"), settings, {
       threadID: block.id,
       text: "do the thing",
-      persona: defaultPersona(),
+      persona: defaultResolvedPersona(db!),
       conversationID: conversation.id,
       carrySummary: "carry text",
       emit: (frame) => {
