@@ -47,7 +47,16 @@ export function keySlug(input: string): string {
 
 export function normalizeTags(tags: string[] | undefined): string | null {
   if (!tags?.length) return null;
-  const clean = [...new Set(tags.map((tag) => tag.trim().replace(/\s+/g, " ")).filter(Boolean))];
+  // Trim, collapse inner whitespace, then de-duplicate case-insensitively while
+  // keeping the first spelling — "A" and "a" are the same tag to a reader.
+  const clean: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of tags) {
+    const tag = raw.trim().replace(/\s+/g, " ");
+    if (!tag || seen.has(tag.toLowerCase())) continue;
+    seen.add(tag.toLowerCase());
+    clean.push(tag);
+  }
   if (clean.some((tag) => tag.length > 64) || clean.length > 20) {
     throw new Error("tags must be at most 20 items of 64 characters");
   }

@@ -176,7 +176,7 @@ export function listChannelMessages(db: Database, channelID: string, limit = 200
   return db
     .query<ChannelMessageRow, [string, number]>(
       `SELECT id, channel_id, from_type, from_id, to_agent_id, text, internal, compacted, turn_id, ui_hint, created_at
-       FROM channel_messages WHERE channel_id = ? ORDER BY created_at, rowid DESC LIMIT ?`,
+       FROM channel_messages WHERE channel_id = ? ORDER BY created_at, rowid LIMIT ?`,
     )
     .all(channelID, limit);
 }
@@ -185,7 +185,7 @@ export function uncompactedMessages(db: Database, channelID: string, limit = 200
   return db
     .query<ChannelMessageRow, [string, number]>(
       `SELECT id, channel_id, from_type, from_id, to_agent_id, text, internal, compacted, turn_id, ui_hint, created_at
-       FROM channel_messages WHERE channel_id = ? AND compacted = 0 ORDER BY created_at, rowid DESC LIMIT ?`,
+       FROM channel_messages WHERE channel_id = ? AND compacted = 0 ORDER BY created_at, rowid LIMIT ?`,
     )
     .all(channelID, limit);
 }

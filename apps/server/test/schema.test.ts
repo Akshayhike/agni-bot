@@ -68,7 +68,8 @@ describe("channel schema", () => {
     const channel = createChannel(db!, { type: "main", visibility: "public", name: "Main", agentID: "ea" });
     const first = upsertChannelSummary(db!, channel.id, "first", "chm_1", 100);
     const second = upsertChannelSummary(db!, channel.id, "second", "chm_2", 200);
-    expect(first.id).not.toBe(second.id);
+    // One summary row per channel: the second call updates in place.
+    expect(second.id).toBe(first.id);
     expect(getChannelSummary(db!, channel.id)?.summary).toBe("second");
     expect(getChannelSummary(db!, channel.id)?.token_estimate).toBe(200);
   });
@@ -96,7 +97,8 @@ describe("agent memories schema", () => {
     const row = putAgentMemory(db!, {
       scope: "global_user", agentID: null, keySlug: "k", content: "c", importance: 99, tags: ["  A ", "a", "B"],
     });
-    expect(row.importance).toBe(10);
+    // Importance is a 0–1 score (schema default 0.5), so 99 clamps to 1.
+    expect(row.importance).toBe(1);
     expect(row.tags).toBe("A, B");
   });
 
