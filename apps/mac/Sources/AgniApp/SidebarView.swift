@@ -1,14 +1,14 @@
-/** The roster: agents on top, scheduled tasks beneath. Threads are not shown
- *  — each agent has one enduring conversation surface; sessions are seams in
- *  it, not list entries (blueprint v3 §5). */
+/** The roster, and nothing else. Scheduled tasks lived beneath the agents;
+ *  they are moving elsewhere in the redesign, so the sidebar is a pure agent
+ *  list again. Threads are not shown — each agent has one enduring
+ *  conversation surface; sessions are seams in it, not list entries
+ *  (blueprint v3 §5). */
 import SwiftUI
 import AgniKit
 import AgniProtocol
 
 struct SidebarView: View {
   var model: AppModel
-  var deleteConfirmation = State(wrappedValue: false)
-  var pendingDeleteTask = State<JobInfo?>(wrappedValue: nil)
 
   var body: some View {
     VStack(spacing: 0) {
@@ -19,19 +19,6 @@ struct SidebarView: View {
       profileButton
     }
     .background(Palette.sidebar)
-    .confirmationDialog(
-      "Delete task?",
-      isPresented: deleteConfirmation.projectedValue,
-      titleVisibility: .visible
-    ) {
-      Button("Delete", role: .destructive) {
-        if let task = pendingDeleteTask.wrappedValue { model.deleteTask(task) }
-        pendingDeleteTask.wrappedValue = nil
-      }
-      Button("Cancel", role: .cancel) { pendingDeleteTask.wrappedValue = nil }
-    } message: {
-      Text("This removes the task from Agni. Running tasks cannot be deleted.")
-    }
   }
 
   private var header: some View {
@@ -52,7 +39,7 @@ struct SidebarView: View {
       TextField("Search", text: model.searchBinding)
         .textFieldStyle(.plain)
         .font(Typography.meta)
-        .accessibilityLabel("Search agents and tasks")
+        .accessibilityLabel("Search agents")
       if !model.searchText.isEmpty {
         Button { model.searchText = "" } label: {
           Image(systemName: "xmark.circle.fill")
@@ -78,25 +65,6 @@ struct SidebarView: View {
             sectionEmpty(model.searchText.isEmpty ? "No agents available" : "No matching agents")
           } else {
             ForEach(model.filteredAgents) { agent in agentRow(agent) }
-          }
-        }
-
-        VStack(alignment: .leading, spacing: 4) {
-          HStack {
-            sectionTitle("Tasks")
-            Spacer()
-            Button { model.refreshJobs() } label: {
-              Image(systemName: "arrow.clockwise")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(Palette.inkTertiary)
-            }
-            .buttonStyle(.plain)
-            .help("Refresh tasks")
-          }
-          if model.filteredJobs.isEmpty {
-            sectionEmpty(model.searchText.isEmpty ? "No tasks scheduled" : "No matching tasks")
-          } else {
-            ForEach(model.filteredJobs) { task in taskRow(task) }
           }
         }
       }
@@ -157,68 +125,6 @@ struct SidebarView: View {
     .contextMenu {
       Button("Open chat") { model.selectAgent(agent) }
     }
-  }
-
-  private func taskRow(_ task: JobInfo) -> some View {
-    HStack(spacing: 9) {
-      Image(systemName: task.everyMs == nil ? "checklist" : "repeat")
-        .font(.system(size: 14, weight: .medium))
-        .foregroundStyle(Palette.amber)
-        .frame(width: 30, height: 30)
-        .background(Palette.surfaceRaised, in: Circle())
-
-      Button { model.openTask(task) } label: {
-        VStack(alignment: .leading, spacing: 3) {
-          Text(task.title?.isEmpty == false ? task.title! : task.kind)
-            .font(Typography.rowTitle)
-            .foregroundStyle(Palette.ink)
-            .lineLimit(1)
-          Text(taskStatus(task))
-            .font(Typography.caption)
-            .foregroundStyle(Palette.inkSecondary)
-            .lineLimit(1)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .contentShape(Rectangle())
-      }
-      .buttonStyle(.plain)
-      .help("Its results land in the agent's conversation")
-
-      Button { model.runRoutine(task) } label: {
-        Image(systemName: "play.fill")
-          .font(.system(size: 10, weight: .semibold))
-          .foregroundStyle(task.state == "running" ? Palette.inkTertiary : Palette.inkSecondary)
-          .frame(width: 26, height: 28)
-          .contentShape(Rectangle())
-      }
-      .buttonStyle(.plain)
-      .disabled(task.state == "running")
-      .help(task.state == "running" ? "Task is running" : "Run task now")
-
-      Button {
-        pendingDeleteTask.wrappedValue = task
-        deleteConfirmation.wrappedValue = true
-      } label: {
-        Image(systemName: "trash")
-          .font(.system(size: 12, weight: .medium))
-          .foregroundStyle(task.state == "running" ? Palette.inkTertiary : Palette.inkSecondary)
-          .frame(width: 28, height: 28)
-          .contentShape(Rectangle())
-      }
-      .buttonStyle(.plain)
-      .disabled(task.state == "running")
-      .help(task.state == "running" ? "Running tasks cannot be deleted" : "Delete task")
-      .accessibilityLabel("Delete \(task.title ?? task.kind)")
-    }
-    .padding(.horizontal, 9)
-    .padding(.vertical, 7)
-  }
-
-  private func taskStatus(_ task: JobInfo) -> String {
-    if task.state == "running" { return "Running" }
-    if !task.enabled { return "Paused" }
-    if task.state == "failed" { return "Failed" }
-    return AgniFormat.cadence(everyMs: task.everyMs, runAt: AgniFormat.parseISO(task.runAt))
   }
 
   private var pluginsButton: some View {

@@ -9,6 +9,7 @@ import AgniProtocol
 struct ThreadHeader: View {
   var model: AppModel
   var isConnectionPopoverPresented = State(wrappedValue: false)
+  var isSharePopoverPresented = State(wrappedValue: false)
 
   var body: some View {
     HStack(spacing: 9) {
@@ -25,6 +26,22 @@ struct ThreadHeader: View {
         }
       }
       Spacer()
+      Button {
+        model.exportConversation()
+        isSharePopoverPresented.wrappedValue = true
+      } label: {
+        Image(systemName: "square.and.arrow.up")
+          .font(.system(size: 14, weight: .regular))
+          .foregroundStyle(Palette.inkSecondary)
+          .frame(width: 30, height: 30)
+          .contentShape(Rectangle())
+      }
+      .buttonStyle(.plain)
+      .help("Share this conversation as a document")
+      .accessibilityLabel("Export this conversation")
+      .popover(isPresented: isSharePopoverPresented.projectedValue, arrowEdge: .top) {
+        SharePopover(model: model) { isSharePopoverPresented.wrappedValue = false }
+      }
       Button { isConnectionPopoverPresented.wrappedValue.toggle() } label: {
         Image(systemName: "desktopcomputer")
           .font(.system(size: 14, weight: .regular))
@@ -47,6 +64,57 @@ struct ThreadHeader: View {
     .overlay(alignment: .bottom) {
       Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1)
     }
+  }
+}
+
+private struct SharePopover: View {
+  var model: AppModel
+  var dismiss: () -> Void
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 12) {
+      Text("Share this conversation").font(Typography.rowTitle)
+      if model.isExporting {
+        HStack(spacing: 8) {
+          ProgressView().controlSize(.small)
+          Text("Rendering the document…").font(Typography.meta).foregroundStyle(Palette.inkSecondary)
+        }
+      } else if let error = model.exportError {
+        Text(error)
+          .font(Typography.meta)
+          .foregroundStyle(.orange)
+          .fixedSize(horizontal: false, vertical: true)
+      } else if let link = model.exportedLink {
+        Text("A single HTML file with everything in this conversation — what was said, what was run, and what was asked for approval.")
+          .font(Typography.meta)
+          .foregroundStyle(Palette.inkSecondary)
+          .fixedSize(horizontal: false, vertical: true)
+        Text(link.url)
+          .font(Typography.machine)
+          .foregroundStyle(Palette.ink)
+          .textSelection(.enabled)
+          .lineLimit(2)
+          .truncationMode(.middle)
+        Text("\(link.records) records")
+          .font(Typography.caption)
+          .foregroundStyle(Palette.inkTertiary)
+        HStack(spacing: 10) {
+          Button("Copy link") {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(link.url, forType: .string)
+          }
+          .buttonStyle(.borderedProminent)
+          Button("Open") {
+            if let url = URL(string: link.url) { NSWorkspace.shared.open(url) }
+          }
+          .buttonStyle(.bordered)
+        }
+        .controlSize(.small)
+      }
+    }
+    .padding(14)
+    .frame(minWidth: 300, alignment: .leading)
+    .background(Palette.surface)
   }
 }
 

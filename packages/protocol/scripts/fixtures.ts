@@ -35,6 +35,7 @@ const CLIENT_FRAMES: ClientFrame[] = [
   { type: "session.new", conversationID: "cnv_01hq" },
   { type: "conversation.history", conversationID: "cnv_01hq", limit: 200 },
   { type: "thread.open", threadID: "thr_01hq" },
+  { type: "thread.export", conversationID: "cnv_01hq", title: "Share with Priya" },
   { type: "thread.list", limit: 20 },
   { type: "thread.history", threadID: "thr_01hq", limit: 50 },
   { type: "job.list", limit: 50 },
@@ -209,6 +210,15 @@ const SERVER_FRAMES: ServerFrame[] = [
     ],
   },
   { type: "presence", seq: 57, state: "offline" },
+  {
+    type: "thread.export.ok",
+    seq: 72,
+    conversationID: "cnv_01hq",
+    url: "http://127.0.0.1:8787/share/0f3a1c9d2e4b4c8a9f1e2d3c4b5a6978",
+    token: "0f3e8b1d4c2a9f6e0d3b7a1c5e9f2b4d",
+    records: 42,
+    createdAt: "2026-10-19T09:12:00.000Z",
+  },
   { type: "error", seq: 58, code: "no_provider", message: "no provider in tier instant", retryAfter: 2 },
   { type: "status.update", seq: 69, channelId: "ch_01hq", agentId: "agni", text: "Nachiketh is typing…", transient: true },
   {

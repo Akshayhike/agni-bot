@@ -1,8 +1,14 @@
 /**
  * One row of the transcript. A person's message is a bubble on the right;
- * Agni's reply is unfilled prose with the flame in the gutter, so long answers
- * read like something written to you rather than a card that was delivered.
- * Tool activity is a quiet strip under the reply it belongs to.
+ * the assistant's reply is unfilled prose with the flame in the gutter, so long
+ * answers read like something written to you rather than a card that was
+ * delivered.
+ *
+ * Tool activity is deliberately not rendered. The transcript answers "what did
+ * I ask and what came back"; the mechanics of a turn (which tool, which
+ * arguments, how long it took) are diagnostics, not conversation, and the app
+ * still carries them in the durable records for anyone debugging. Progress is
+ * shown by the status pill, and a turn that produced nothing says why.
  */
 import SwiftUI
 import AppKit
@@ -28,14 +34,14 @@ struct MessageRowView: View {
       case .system:
         if message.uiHint == "handoff_notice" {
           handoffNotice
-        } else if message.tools.isEmpty {
-          systemNote
+        } else if message.text.isEmpty {
+          // A record with nothing to read — tool activity is kept in the
+          // durable log but deliberately not rendered, so a row that only ever
+          // held tools collapses instead of leaving a blank gap.
+          EmptyView()
         } else {
-          toolGroup(message.tools)
+          systemNote
         }
-      }
-      if !message.tools.isEmpty && message.role != .system {
-        toolGroup(message.tools)
       }
       if message.uiHint == "onboarding_name_prompt" {
         HStack(spacing: 8) {
@@ -127,7 +133,8 @@ struct MessageRowView: View {
           .font(Typography.body)
           .foregroundStyle(Palette.ink)
       } else {
-        Text(message.stopExplanation.map { "Response didn't finish: \($0.lowercased())." } ?? "Agni couldn't complete this response.")
+        // A turn that ends with nothing to read has to account for itself.
+        Text(failureText)
           .font(Typography.body)
           .foregroundStyle(Palette.ink)
       }
@@ -143,12 +150,22 @@ struct MessageRowView: View {
     .background(Palette.incomingBubble, in: RoundedRectangle(cornerRadius: Metrics.bubbleRadius, style: .continuous))
   }
 
+  /// The empty row's account of itself. A stopped turn names its reason; when
+  /// even that is missing, say so plainly and point at the records rather than
+  /// leaving the owner staring at a prompt that never answered.
+  private var failureText: String {
+    if let explanation = message.stopExplanation {
+      return "No reply — \(explanation.lowercased())."
+    }
+    return "\(agent?.name ?? "The assistant") produced no reply, and the daemon recorded no reason. Ask it to share this thread to see the records."
+  }
+
   private var senderColorValue: UInt32 {
     let raw = (message.senderColor ?? agent?.color ?? "#9A9AA0").trimmingCharacters(in: CharacterSet(charactersIn: "#"))
     return UInt32(raw, radix: 16) ?? 0x9A9AA0
   }
 
-  // MARK: system + tools
+  // MARK: system
 
   private var systemNote: some View {
     Text(message.text)
@@ -157,55 +174,33 @@ struct MessageRowView: View {
       .padding(.vertical, 2)
   }
 
+  /// "Bahu → Researcher: <brief>" — the routing is stated plainly and the brief
+  /// sits quieter beside it, so a delegated turn reads as a sequence (who was
+  /// asked, what for, then what came back) rather than a run-on status line.
   private var handoffNotice: some View {
-    Text(message.text)
-      .font(Typography.caption)
-      .foregroundStyle(Palette.inkSecondary)
-      .padding(.horizontal, 11)
-      .padding(.vertical, 6)
-      .background(Palette.surfaceRaised, in: Capsule())
-      .frame(maxWidth: .infinity, alignment: .center)
-  }
-
-  private func toolGroup(_ tools: [ToolActivity]) -> some View {
-    VStack(alignment: .leading, spacing: 4) {
-      ForEach(tools) { tool in
-        HStack(spacing: 7) {
-          toolIcon(tool.state)
-          Text(tool.name)
-            .font(Typography.machine)
-            .foregroundStyle(Palette.inkSecondary)
-          if let preview = tool.preview, !preview.isEmpty {
-            Text(AgniFormat.preview(preview, limit: 90))
-              .font(Typography.machine)
-              .foregroundStyle(Palette.inkTertiary)
-              .lineLimit(1)
-          }
-          Spacer(minLength: 0)
-        }
+    HStack(spacing: 6) {
+      Text(handoffParts.flow)
+        .font(Typography.caption)
+        .foregroundStyle(Palette.inkSecondary)
+        .lineLimit(1)
+      if let brief = handoffParts.brief {
+        Text(brief)
+          .font(Typography.caption)
+          .foregroundStyle(Palette.inkTertiary)
+          .lineLimit(2)
       }
     }
-    .padding(.horizontal, 10)
-    .padding(.vertical, 8)
-    .frame(maxWidth: .infinity, alignment: .leading)
-    .background(Palette.surface, in: RoundedRectangle(cornerRadius: Metrics.rowRadius, style: .continuous))
-    .overlay(
-      RoundedRectangle(cornerRadius: Metrics.rowRadius, style: .continuous).stroke(Palette.hairline, lineWidth: 1)
-    )
-    .accessibilityElement(children: .combine)
-    .accessibilityLabel("Tool activity: \(tools.map(\.name).joined(separator: ", "))")
+    .padding(.horizontal, 11)
+    .padding(.vertical, 6)
+    .background(Palette.surfaceRaised, in: Capsule())
+    .frame(maxWidth: .infinity, alignment: .center)
   }
 
-  @ViewBuilder
-  private func toolIcon(_ state: ToolActivity.State) -> some View {
-    switch state {
-    case .running:
-      ProgressView().controlSize(.small).scaleEffect(0.6).frame(width: 12, height: 12)
-    case .ok:
-      Image(systemName: "checkmark").font(.system(size: 10, weight: .bold)).foregroundStyle(Palette.inkTertiary)
-    case .failed:
-      Image(systemName: "xmark").font(.system(size: 10, weight: .bold)).foregroundStyle(.orange)
-    }
+  private var handoffParts: (flow: String, brief: String?) {
+    guard let colon = message.text.firstIndex(of: ":") else { return (message.text, nil) }
+    let flow = String(message.text[message.text.startIndex..<colon])
+    let brief = message.text[message.text.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+    return (flow, brief.isEmpty ? nil : brief)
   }
 }
 

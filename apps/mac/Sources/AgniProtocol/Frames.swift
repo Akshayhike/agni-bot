@@ -250,6 +250,7 @@ public enum ClientFrame: Sendable, Equatable {
   case sessionNew(conversationID: String)
   case conversationHistory(conversationID: String, limit: Int?)
   case threadOpen(threadID: String)
+  case threadExport(conversationID: String, title: String?)
   case threadList(limit: Int?)
   case threadHistory(threadID: String, limit: Int?)
   case jobList(limit: Int?)
@@ -278,6 +279,7 @@ public enum ClientFrame: Sendable, Equatable {
     case .sessionNew: "session.new"
     case .conversationHistory: "conversation.history"
     case .threadOpen: "thread.open"
+    case .threadExport: "thread.export"
     case .threadList: "thread.list"
     case .threadHistory: "thread.history"
     case .jobList: "job.list"
@@ -331,6 +333,9 @@ public enum ClientFrame: Sendable, Equatable {
       if let limit { object["limit"] = limit }
     case .threadOpen(let threadID):
       object["threadID"] = threadID
+    case .threadExport(let conversationID, let title):
+      object["conversationID"] = conversationID
+      if let title { object["title"] = title }
     case .threadList(let limit):
       if let limit { object["limit"] = limit }
     case .threadHistory(let threadID, let limit):
@@ -426,6 +431,10 @@ public enum ClientFrame: Sendable, Equatable {
       self = .conversationHistory(conversationID: try Require.string(object, "conversationID"), limit: object["limit"] as? Int)
     case "thread.open":
       self = .threadOpen(threadID: try Require.string(object, "threadID"))
+    case "thread.export":
+      self = .threadExport(
+        conversationID: try Require.string(object, "conversationID"),
+        title: object["title"] as? String)
     case "thread.list":
       self = .threadList(limit: object["limit"] as? Int)
     case "thread.history":
@@ -492,6 +501,8 @@ public enum ServerFrame: Sendable, Equatable {
   case conversationOK(ConversationOK)
   case sessionStart(SessionStart)
   case conversationHistoryOK(ConversationHistoryOK)
+  /// Answer to `thread.export`: a link to the rendered document.
+  case threadExportOK(ThreadExportOK)
   case jobListOK(JobListOK)
   case taskListOK(TaskListOK)
   case taskUpdateOK(TaskUpdateOK)
@@ -526,6 +537,7 @@ public enum ServerFrame: Sendable, Equatable {
     case .conversationOK(let f): f.seq
     case .sessionStart(let f): f.seq
     case .conversationHistoryOK(let f): f.seq
+    case .threadExportOK(let f): f.seq
     case .jobListOK(let f): f.seq
     case .taskListOK(let f): f.seq
     case .taskUpdateOK(let f): f.seq
@@ -561,6 +573,7 @@ public enum ServerFrame: Sendable, Equatable {
     case .conversationOK: "conversation.ok"
     case .sessionStart: "session.start"
     case .conversationHistoryOK: "conversation.history.ok"
+    case .threadExportOK: "thread.export.ok"
     case .jobListOK: "job.list.ok"
     case .taskListOK: "task.list.ok"
     case .taskUpdateOK: "task.update.ok"
@@ -704,6 +717,16 @@ public enum ServerFrame: Sendable, Equatable {
     public var messages: [MessageInfo]
   }
 
+  /// A published thread export. `url` is absolute and served by the daemon.
+  public struct ThreadExportOK: Sendable, Equatable, Decodable {
+    public var seq: Int
+    public var conversationID: String
+    public var url: String
+    public var token: String
+    public var records: Int
+    public var createdAt: String
+  }
+
   public struct JobListOK: Sendable, Equatable, Decodable {
     public var seq: Int
     public var jobs: [JobInfo]
@@ -818,6 +841,7 @@ public enum ServerFrame: Sendable, Equatable {
     case "conversation.ok": self = .conversationOK(try Decode.frame(ConversationOK.self, object))
     case "session.start": self = .sessionStart(try Decode.frame(SessionStart.self, object))
     case "conversation.history.ok": self = .conversationHistoryOK(try Decode.frame(ConversationHistoryOK.self, object))
+    case "thread.export.ok": self = .threadExportOK(try Decode.frame(ThreadExportOK.self, object))
     case "job.list.ok": self = .jobListOK(try Decode.frame(JobListOK.self, object))
     case "task.list.ok": self = .taskListOK(try Decode.frame(TaskListOK.self, object))
     case "task.update.ok": self = .taskUpdateOK(try Decode.frame(TaskUpdateOK.self, object))

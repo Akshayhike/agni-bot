@@ -145,4 +145,31 @@ describe("router", () => {
       code: "provider_failed",
     });
   }, { timeout: 20000 });
+
+  test("keeps a provider's streamed reasoning without streaming it into the reply", async () => {
+    const reasoning = (text: string) =>
+      `data: ${JSON.stringify({ choices: [{ delta: { reasoning_content: text } }] })}\n\n`;
+    const body = reasoning("The owner means the operator. ") + reasoning("Not the model.") + sseEvent("It is xAI.");
+    const fetchFn = (async () =>
+      new Response(
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(encoder.encode(body));
+            controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+            controller.close();
+          },
+        }),
+        { status: 200 },
+      )) as unknown as typeof fetch;
+
+    const router = new Router([nim], new HealthTracker(), fetchFn);
+    const deltas: string[] = [];
+    const result = await router.route({ ...baseOptions, onDelta: (delta) => deltas.push(delta) });
+
+    // Kept, so an export can show what the model was thinking…
+    expect(result.reasoning).toBe("The owner means the operator. Not the model.");
+    // …but never presented as if it had been said.
+    expect(result.text).toBe("It is xAI.");
+    expect(deltas.join("")).toBe("It is xAI.");
+  });
 });

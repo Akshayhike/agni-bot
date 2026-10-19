@@ -12,6 +12,12 @@ export interface ChatMessage {
   toolCalls?: ToolCall[];
   /** Required on tool replies so OpenAI-compatible APIs can pair the result. */
   toolCallID?: string;
+  /**
+   * The model's own reasoning for this message, when the provider streamed it.
+   * Kept on the durable message log so an export can show it; never sent back
+   * to the provider and never rendered in the chat.
+   */
+  reasoning?: string;
 }
 
 /** One tool-call fragment, as returned by the provider. */
@@ -72,6 +78,11 @@ export interface ChatResult {
   outputTokens?: number;
   /** Structured tool calls the model emitted, if any. */
   toolCalls?: ToolCall[];
+  /**
+   * The model's own reasoning, when a provider streams it (NIM and DeepSeek
+   * expose `reasoning_content`). Absent for models that do not.
+   */
+  reasoning?: string;
 }
 
 /** Parse an HTTP Retry-After header (seconds or HTTP date) into milliseconds. */
@@ -151,6 +162,7 @@ export async function streamChat(request: ChatRequest): Promise<ChatResult> {
   }, request.firstTokenTimeoutMs);
 
   const startedAt = Date.now();
+  let reasoning = "";
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
@@ -192,6 +204,18 @@ export async function streamChat(request: ChatRequest): Promise<ChatResult> {
           text += content;
           request.onDelta(content);
         }
+        // Reasoning is output too. Counting it as a token keeps a thinking
+        // model from being aborted as "stalled" before it ever writes prose,
+        // and the text is kept so an export can show it when the provider
+        // exposes it. It is never streamed to the chat.
+        const thought = reasoningDelta(delta);
+        if (thought.length > 0) {
+          if (firstTokenMs < 0) {
+            firstTokenMs = Date.now() - startedAt;
+            if (firstTokenTimer !== undefined) clearTimeout(firstTokenTimer);
+          }
+          reasoning += thought;
+        }
         // Accumulate tool-call fragments (OpenAI streaming shape).
         const calls = delta.tool_calls;
         if (Array.isArray(calls)) {
@@ -232,7 +256,23 @@ export async function streamChat(request: ChatRequest): Promise<ChatResult> {
     firstTokenMs = Date.now() - startedAt;
   }
   const toolCalls = buildToolCalls(toolFragments);
-  return { text, firstTokenMs, inputTokens, outputTokens, ...(toolCalls.length ? { toolCalls } : {}) };
+  return {
+    text, firstTokenMs, inputTokens, outputTokens,
+    ...(reasoning.trim().length > 0 ? { reasoning: reasoning.trim() } : {}),
+    ...(toolCalls.length ? { toolCalls } : {}),
+  };
+}
+
+/**
+ * Providers spell streamed reasoning differently — `reasoning_content` on NIM
+ * and DeepSeek, plain `reasoning` on some gateways. Anything else is content.
+ */
+function reasoningDelta(delta: Record<string, unknown>): string {
+  for (const key of ["reasoning_content", "reasoning"]) {
+    const value = delta[key];
+    if (typeof value === "string" && value.length > 0) return value;
+  }
+  return "";
 }
 
 /** Reassemble streaming tool-call fragments into complete ToolCall objects. */

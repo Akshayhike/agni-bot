@@ -51,6 +51,7 @@ import { newID, nowISO } from "../util/ids";
 import { putAgentMemory, listAgentMemories, type AgentMemoryRow } from "../stores/agent-memories";
 import { addChannelMember, appendChannelMessage, createChannel, getChannel } from "../stores/channels";
 import { canonicalURL, saveLink, searchLinks } from "../stores/links";
+import { buildShareDocument, publishShare, shareBaseURL } from "../share/document";
 import { createTask, getTask, listTasks, setTaskStatus, snoozeTask } from "../stores/tasks";
 import { fetchPage } from "../tools/fetch-url";
 import type { PluginService } from "../plugins/service";
@@ -121,6 +122,8 @@ export async function dispatch(deps: DispatchDeps, session: Session, raw: string
       return handleConversationHistory(deps, session, frame);
     case "thread.open":
       return handleThreadOpen(deps, session, frame);
+    case "thread.export":
+      return handleThreadExport(deps, session, frame);
     case "thread.list":
       return handleThreadList(deps, session, frame);
     case "thread.history":
@@ -638,6 +641,44 @@ function handleConversationHistory(
     messages.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   }
   deps.reply({ type: "conversation.history.ok", conversationID: frame.conversationID, messages });
+}
+
+/**
+ * Render the conversation to a shareable HTML file and answer with the link.
+ *
+ * The daemon renders rather than the client so the artifact is the same
+ * everywhere, and so a link can be handed to someone who has never installed
+ * the app. The file is written next to the database; the token in the URL is
+ * the only thing keeping it from being world-readable on this host.
+ */
+function handleThreadExport(
+  deps: DispatchDeps,
+  session: Session,
+  frame: Extract<ClientFrame, { type: "thread.export" }>,
+): void {
+  if (!requireAuth(deps, session)) return;
+  try {
+    const doc = buildShareDocument(deps.db, {
+      conversationID: frame.conversationID,
+      ...(frame.title ? { title: frame.title } : {}),
+    });
+    const published = publishShare(doc, {
+      // Prefer the address the daemon was configured with over a re-read of
+      // the environment — it knows what it bound to.
+      baseURL: shareBaseURL({ AGNI_HOST: deps.config.host, AGNI_PORT: String(deps.config.port) }),
+    });
+    deps.reply({
+      type: "thread.export.ok",
+      conversationID: frame.conversationID,
+      url: published.url,
+      token: published.token,
+      records: doc.records.length,
+      createdAt: doc.createdAt,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    sendError(deps, session, message.startsWith("unknown conversation") ? "unknown_conversation" : "export_failed", message);
+  }
 }
 
 function handleMsgCancel(deps: DispatchDeps, session: Session, frame: Extract<ClientFrame, { type: "msg.cancel" }>): void {

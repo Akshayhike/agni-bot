@@ -51,6 +51,7 @@ never reason about thread ids.
 | `session.new` | `{conversationID}` | Closes the active session block (`manual`), compacts it into the carried summary, continues in a fresh block; emits `session.start`. |
 | `conversation.history` | `{conversationID, limit?}` | The full transcript across blocks, last N chronological (default 50, max 500); each message carries its `sessionID`. |
 | `thread.open` | `{threadID}` | Pins the session's active thread (CLI). Silent; history comes via `resync`. |
+| `thread.export` | `{conversationID, title?}` | Render the conversation to one self-contained HTML file and answer with `thread.export.ok`. The daemon renders, not the client, so the artifact is identical everywhere; the file holds messages, tool calls, model reasoning, and approval decisions. |
 | `thread.list` | `{limit?}` | Recent threads, newest first (default 20, max 200). |
 | `thread.history` | `{threadID, limit?}` | Durable messages, last N chronological (default 50, max 500). |
 | `job.list` | `{limit?}` | Tasks and routines, newest/next due first. |
@@ -105,6 +106,7 @@ accountLabel?, error?, connectedAt?}`.
 | `conversation.ok` | `{conversationID, agentID, sessionID}` | Answer to `conversation.open`; `sessionID`: the active block, `""` before the first block. Addressed, not replayed. |
 | `session.start` | `{conversationID, sessionID, reason}` | A block boundary inside the conversation; `reason`: `manual \| context \| background`. Replayable. |
 | `conversation.history.ok` | `{conversationID, messages: [{id, role, text, createdAt, turnID?, sessionID?}]}` | Answer to `conversation.history`; addressed to the requester. Clients render a session divider wherever consecutive `sessionID`s differ. |
+| `thread.export.ok` | `{conversationID, url, token, records, createdAt}` | Answer to `thread.export`; addressed to the requester, not replayed. `url` is absolute and served by this daemon at `GET /share/<token>`; the token is the only access control on the file, so it is never logged or replayed. |
 | `job.list.ok` | `{jobs: [...]}` | Answer to `job.list`, `job.set`, or `job.delete`; addressed to the requester. |
 | `task.list.ok` | `{tasks: [...]}` | Task snapshots, including due date, priority, status, and snooze time. |
 | `task.update.ok` | `{task: {...}}` | Updated task snapshot after a persisted state change. |

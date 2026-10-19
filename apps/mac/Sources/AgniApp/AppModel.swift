@@ -19,6 +19,14 @@ final class AppModel {
     case chat
   }
 
+  /// A published thread export: the daemon rendered the conversation to an HTML
+  /// file and handed back a link the owner can open, copy, or send on.
+  struct ExportLink: Equatable {
+    var url: String
+    var token: String
+    var records: Int
+  }
+
   // pairing / connection
   private(set) var screen: Screen = .pairing
   private(set) var connectionState: AgniConnection.State = .idle
@@ -47,6 +55,9 @@ final class AppModel {
   private(set) var providerAddSuccess: String?
   private(set) var providerModels: [String] = []
   private(set) var providerModelsError: String?
+  private(set) var isExporting = false
+  private(set) var exportedLink: ExportLink?
+  private(set) var exportError: String?
 
   // chrome
   var isInspectorPresented = false
@@ -227,6 +238,27 @@ final class AppModel {
   func refreshPlugins() {
     guard let connection, connectionState.isReady else { return }
     Task { try? await connection.send(.pluginList) }
+  }
+
+  /// Render the open conversation to a shareable HTML document on the daemon.
+  /// The daemon does the rendering, so the file is identical no matter which
+  /// client asked, and the link works for someone who has never run the app.
+  func exportConversation() {
+    exportedLink = nil
+    exportError = nil
+    guard let conversationID = conversation.conversationID, let connection, connectionState.isReady else {
+      exportError = "Open a conversation first — there is nothing to export yet."
+      return
+    }
+    isExporting = true
+    Task {
+      do {
+        try await connection.send(.threadExport(conversationID: conversationID, title: nil))
+      } catch {
+        isExporting = false
+        exportError = "Could not reach the daemon: \(error.localizedDescription)"
+      }
+    }
   }
 
   func connectPlugin(pluginID: String, account: String) {
@@ -548,6 +580,11 @@ final class AppModel {
         try? await connection.send(.conversationHistory(conversationID: ok.conversationID, limit: 400))
       }
 
+    case .threadExportOK(let ok):
+      isExporting = false
+      exportError = nil
+      exportedLink = ExportLink(url: ok.url, token: ok.token, records: ok.records)
+
     case .conversationHistoryOK(let history):
       conversation.loadConversationHistory(
         conversationID: history.conversationID,
@@ -625,6 +662,11 @@ final class AppModel {
       // The conversation is gone (or wrong id): resolve it anew.
       conversation.conversationID = nil
       openConversation(agentID: conversation.agentID)
+      return
+
+    case .error(let error) where error.code == "export_failed":
+      isExporting = false
+      exportError = error.message
       return
 
     default:

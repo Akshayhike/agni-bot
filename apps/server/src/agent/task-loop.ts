@@ -11,6 +11,7 @@ import { appendMessage, createTurn, finishTurn, recentMessages, titleThreadFromF
 import { recordUsage } from "../stores/usage";
 import { newID, nowISO } from "../util/ids";
 import { buildTaskToolRegistry, taskToolHints, taskToolSpecs } from "../tools/task-registry";
+import { teamRoster } from "./personas";
 import { registerHandoffTool } from "../tools/handoff-tool";
 import { registerRenameTool } from "../tools/rename-tool";
 import { recallFact } from "../tools/facts";
@@ -108,6 +109,8 @@ export async function runTaskTurn(db: Database, router: Router, settings: TaskTu
     depth: guardrail.depth,
     maxDepth: 5,
     toolHints: dynamicHints,
+    // Only an agent that can actually hand off needs to know the roster.
+    team: persona.tools.includes("handoff") ? teamRoster(db, { exclude: persona.id }) : [],
   });
   const broker = new ApprovalBroker({
     db,
@@ -184,7 +187,7 @@ export async function runTaskTurn(db: Database, router: Router, settings: TaskTu
       usage = { provider: result.provider, model: result.model, inputTokens: result.inputTokens, outputTokens: result.outputTokens, latencyMs: result.latencyMs };
       if (!result.toolCalls?.length) {
         finalText += result.text;
-        messages.push({ role: "assistant", content: result.text });
+        messages.push(assistantMessage(result.text, result.reasoning));
         consecutiveNonTextSteps = 0;
         break;
       }
@@ -196,7 +199,7 @@ export async function runTaskTurn(db: Database, router: Router, settings: TaskTu
         break;
       }
 
-      messages.push({ role: "assistant", content: result.text, toolCalls: result.toolCalls });
+      messages.push({ role: "assistant", content: result.text, toolCalls: result.toolCalls, ...(result.reasoning ? { reasoning: result.reasoning } : {}) });
       finalText += result.text;
       persistSession(db, threadID, turnID, "running", messages, summary, stepCount, tokenCount);
       for (const call of result.toolCalls) {
@@ -385,9 +388,19 @@ function recoverToolResults(db: Database, turnID: string, messages: ChatMessage[
     }
   }
 }
+/**
+ * An assistant entry for the session log. `reasoning` rides along when the
+ * provider streamed it; it is stored, never sent back to the provider, and
+ * never shown in the chat — the export is the only reader.
+ */
+function assistantMessage(content: string, reasoning?: string): ChatMessage {
+  return { role: "assistant", content, ...(reasoning ? { reasoning } : {}) };
+}
+
 function persistSession(db: Database, threadID: string, turnID: string, state: string, messages: ChatMessage[], summary: string | null, steps: number, tokens: number): void {
   db.run("UPDATE agent_sessions SET state=?, message_log=?, summary=?, step_count=?, token_count=?, updated_at=? WHERE thread_id=? AND turn_id=?", [state, JSON.stringify(messages), summary, steps, tokens, nowISO(), threadID, turnID]);
 }
+
 function compact(messages: ChatMessage[], previousSummary: string | null): { messages: ChatMessage[]; summary: string | null } {
   let normalized = messages.map((message) => ({
     ...message,

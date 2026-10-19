@@ -50,6 +50,10 @@ private func endFrame(turnID: String, threadID: String, reason: String, usage: [
   return try ServerFrame(wire: object)
 }
 
+private func errorFrame(code: String, message: String) throws -> ServerFrame {
+  try ServerFrame(wire: ["type": "error", "seq": 110, "code": code, "message": message])
+}
+
 @Suite("transcript")
 struct TranscriptTests {
   @Test func aTurnStreamsIntoOneBubbleAndClosesWithItsUsage() throws {
@@ -87,6 +91,43 @@ struct TranscriptTests {
     #expect(conversation.messages[0].text == "half a thought")
     #expect(conversation.messages[0].state == .stopped(.cancelled))
     #expect(conversation.messages[0].stopExplanation == "Stopped")
+  }
+
+  @Test func aTurnThatDiesMidProviderKeepsTheReasonTheDaemonGave() throws {
+    var conversation = Conversation(agentID: "agni", threadID: "thr_1")
+    _ = conversation.apply(try startFrame(turnID: "trn_4", threadID: "thr_1"))
+    _ = conversation.apply(try errorFrame(code: "provider_failed", message: "no provider in tier instant"))
+
+    // Nothing streamed, but the bubble exists so the gap can account for itself.
+    #expect(conversation.messages.count == 1)
+    #expect(conversation.messages[0].text.isEmpty)
+
+    _ = conversation.apply(try endFrame(turnID: "trn_4", threadID: "thr_1", reason: "error"))
+    #expect(conversation.messages[0].state == .failed("no provider in tier instant"))
+  }
+
+  @Test func aFailedTurnShortOnReasonsDoesNotInventOne() throws {
+    var conversation = Conversation(agentID: "agni", threadID: "thr_1")
+    _ = conversation.apply(try startFrame(turnID: "trn_5", threadID: "thr_1"))
+    _ = conversation.apply(try endFrame(turnID: "trn_5", threadID: "thr_1", reason: "error"))
+
+    #expect(conversation.messages[0].state == .stopped(.error))
+    #expect(conversation.messages[0].stopExplanation == "Failed")
+  }
+
+  @Test func oneTurnsFailureDoesNotStainTheNext() throws {
+    var conversation = Conversation(agentID: "agni", threadID: "thr_1")
+    _ = conversation.apply(try startFrame(turnID: "trn_6", threadID: "thr_1"))
+    _ = conversation.apply(try errorFrame(code: "provider_failed", message: "upstream 500"))
+    _ = conversation.apply(try endFrame(turnID: "trn_6", threadID: "thr_1", reason: "error"))
+
+    _ = conversation.apply(try startFrame(turnID: "trn_7", threadID: "thr_1"))
+    _ = conversation.apply(try tokenFrame(turnID: "trn_7", threadID: "thr_1", delta: "second time lucky"))
+    _ = conversation.apply(try endFrame(turnID: "trn_7", threadID: "thr_1", reason: "end"))
+
+    let last = conversation.messages[conversation.messages.count - 1]
+    #expect(last.text == "second time lucky")
+    #expect(last.state == .complete)
   }
 
   @Test func localEchoAppearsImmediatelyAndSurvivesHistoryReload() throws {

@@ -17,6 +17,9 @@ data/
 # generated artifacts / evidence stay local (fleet convention)
 artifacts/
 .evidence/
+# the free-write scratch dir the agent uses by default (published thread
+# exports live beside the database, already covered by data/)
+/scratch/
 apps/mac/.build/
 
 .DS_Store

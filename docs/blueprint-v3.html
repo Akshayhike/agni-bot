@@ -244,7 +244,7 @@ server → client   hello.ok {serverTime, seq}        token {turnID, delta}
 <h2 id="guardrails">11 · Guardrails</h2>
 <ul>
 <li><b>Network:</b> server binds to the Tailscale interface only; per-device tokens; QR pairing; instant revoke. Nothing listens on the public internet.</li>
-<li><b>Approvals:</b> shell, file writes outside the scratch dir, email sends, and payments always ask; approval buttons carry a preview of exactly what will run or send.</li>
+<li><b>Approvals:</b> only irreversible actions ask. Shell commands and file writes inside the scratch dir run free; destructive shell (deletes, force-pushes, history rewrites), writes outside the scratch dir, and sends from any mailbox other than the agent's own still ask, and the approval button carries a preview of exactly what will run or send. Reversible work — research, delegation, renames, reads, memory writes — never stops for a click.</li>
 <li><b>Untrusted input rule:</b> mail, web pages, and tool output are data, never instructions. The agent flags suspected prompt-injection instead of obeying it.</li>
 <li><b>Budgets:</b> per-day token caps per tier; free-first routing; spend ledger visible per thread; global kill switch.</li>
 <li><b>Secrets:</b> provider keys and mail credentials live server-side (keychain on Mac dev, mode-600 file on bb-1); never in the repo, never in the apps.</li>

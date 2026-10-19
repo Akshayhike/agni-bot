@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import type { Database } from "bun:sqlite";
+import { rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { openDatabase } from "../src/db";
 import { HealthTracker } from "../src/models/health";
 import type { ProviderConfig } from "../src/models/providers";
@@ -13,7 +16,8 @@ const provider: ProviderConfig = {
   id: "test", label: "Test", baseUrl: "https://test.local/v1", apiKey: "test", model: "mock",
 };
 const taskPersona: ResolvedPersona = {
-  id: "agni", name: "Agni", color: "#f0b95a", systemPromptTemplate: "Be helpful.", systemPrompt: "Be helpful.",
+  id: "agni", name: "Agni", color: "#f0b95a", role: "front desk",
+  systemPromptTemplate: "Be helpful.", systemPrompt: "Be helpful.",
   tools: ["tasks_list"],
 };
 let db: Database | undefined;
@@ -27,7 +31,7 @@ function streamResponse(events: unknown[]): Response {
 }
 
 describe("task lane loop", () => {
-  test("the model renaming the agent persists it and pushes agent.updated", async () => {
+  test("the model renaming the agent persists it, with no approval card", async () => {
     db = openDatabase(":memory:");
     const persona = { ...taskPersona, tools: ["rename_agent"] };
     const thread = createThread(db, persona.id);
@@ -42,17 +46,7 @@ describe("task lane loop", () => {
     const emitted: Array<{ type: string; [key: string]: unknown }> = [];
     const result = await runTaskTurn(db, router, { firstTokenTimeoutMs: 1000, turnTimeoutMs: 5000 }, {
       threadID: thread.id, text: "I want to call you Baahu", persona,
-      emit: (frame) => {
-        emitted.push(frame as { type: string; [key: string]: unknown });
-        // Renaming is approval-gated; answer the card the way the app does:
-        // record the decision durably, then wake the waiter.
-        if (frame.type === "approval.request") {
-          db!.run("UPDATE approvals SET status = 'decided', decision = 'once', decided_at = ? WHERE id = ?", [
-            new Date().toISOString(), String(frame.requestID),
-          ]);
-          resolveApprovalWaiter(String(frame.requestID), "once");
-        }
-      },
+      emit: (frame) => { emitted.push(frame as { type: string; [key: string]: unknown }); },
       signal: new AbortController().signal,
     });
 
@@ -61,7 +55,45 @@ describe("task lane loop", () => {
     expect(db.query("SELECT tool_name, ok FROM tool_calls WHERE turn_id = ?").get(result.turnID)).toEqual({ tool_name: "rename_agent", ok: 1 });
     const updated = emitted.find((frame) => frame.type === "agent.updated");
     expect(updated).toMatchObject({ agentId: "ea", displayName: "Baahu", onboarded: true });
-    expect(emitted.find((frame) => frame.type === "approval.request")).toMatchObject({ action: "rename the assistant to Baahu" });
+    // Renaming is reversible, so it must not stop the turn for a click.
+    expect(emitted.find((frame) => frame.type === "approval.request")).toBeUndefined();
+  });
+
+  test("a write outside the scratch tree still gates, and the decision resumes it", async () => {
+    db = openDatabase(":memory:");
+    const persona = { ...taskPersona, tools: ["write_file"] };
+    const thread = createThread(db, persona.id);
+    const outside = join(tmpdir(), `agni-policy-${Date.now()}-${Math.random().toString(16).slice(2)}.txt`);
+    let request = 0;
+    const fetchMock = (async () => {
+      request += 1;
+      return request === 1
+        ? streamResponse([{ choices: [{ delta: { tool_calls: [{ index: 0, id: "call-w", type: "function", function: { name: "write_file", arguments: JSON.stringify({ path: outside, content: "hello" }) } }] } }] }])
+        : streamResponse([{ choices: [{ delta: { content: "Wrote it." } }] }]);
+    }) as unknown as typeof fetch;
+    const router = new Router([provider], new HealthTracker(), fetchMock);
+    const emitted: Array<{ type: string; [key: string]: unknown }> = [];
+    try {
+      const result = await runTaskTurn(db, router, { firstTokenTimeoutMs: 1000, turnTimeoutMs: 5000 }, {
+        threadID: thread.id, text: "write a file OUTSIDE scratch", persona,
+        emit: (frame) => {
+          emitted.push(frame as { type: string; [key: string]: unknown });
+          // Answer the card the way the app does: record durably, wake the waiter.
+          if (frame.type === "approval.request") {
+            db!.run("UPDATE approvals SET status = 'decided', decision = 'once', decided_at = ? WHERE id = ?", [
+              new Date().toISOString(), String(frame.requestID),
+            ]);
+            resolveApprovalWaiter(String(frame.requestID), "once");
+          }
+        },
+        signal: new AbortController().signal,
+      });
+      expect(emitted.filter((frame) => frame.type === "approval.request")).toHaveLength(1);
+      expect(emitted.find((frame) => frame.type === "approval.request")).toMatchObject({ action: `write file: ${outside}` });
+      expect(db.query("SELECT tool_name, ok FROM tool_calls WHERE turn_id = ?").get(result.turnID)).toEqual({ tool_name: "write_file", ok: 1 });
+    } finally {
+      rmSync(outside, { force: true });
+    }
   });
 
   test("executes a store tool, observes its result, and returns a final response", async () => {

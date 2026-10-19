@@ -181,6 +181,8 @@ public struct Conversation: Sendable, Equatable {
   public var approvals: [ApprovalRow] = []
   public var forms: [FormRow] = []
   public var notices: [NoticeRow] = []
+  /// Failure text by turn, so a turn that dies explains itself in place.
+  private var failures: [String: String] = [:]
   /// The turn currently streaming into this thread, if any.
   public var inFlightTurnID: String?
   public var inFlightThreadID: String?
@@ -331,7 +333,7 @@ public struct Conversation: Sendable, Equatable {
 
   public mutating func apply(_ frame: ServerFrame) -> [ConversationEffect] {
     switch frame {
-    case .helloOK, .conversationOK, .conversationHistoryOK, .threadListOK, .threadHistoryOK,
+    case .helloOK, .conversationOK, .conversationHistoryOK, .threadExportOK, .threadListOK, .threadHistoryOK,
       .jobListOK, .taskListOK, .taskUpdateOK, .providerAddOK, .providerModelsOK,
       .pluginListOK, .pluginConnectOK, .pluginState, .unknown:
       return []
@@ -426,9 +428,19 @@ public struct Conversation: Sendable, Equatable {
         || inFlightTurnID == end.turnID
       let id = Self.assistantID(turnID: end.turnID)
       if let index = messages.firstIndex(where: { $0.id == id }) {
-        messages[index].state = end.reason == .end ? .complete : .stopped(end.reason)
+        // A turn that ended badly keeps the daemon's own explanation when one
+        // arrived while it was running. "Failed" is not an answer to "why did
+        // nothing come back"; the provider's message is.
+        if end.reason == .end {
+          messages[index].state = .complete
+        } else if let reason = failures.removeValue(forKey: end.turnID) {
+          messages[index].state = .failed(reason)
+        } else {
+          messages[index].state = .stopped(end.reason)
+        }
         messages[index].usage = end.usage
       }
+      failures[end.turnID] = nil
       guard isOurs else { return [.unread(threadID: end.threadID), .refreshThreadList] }
       if inFlightTurnID == end.turnID {
         inFlightTurnID = nil
@@ -484,6 +496,10 @@ public struct Conversation: Sendable, Equatable {
       return [.notify(title: reminder.title, body: reminder.body, sound: reminder.sound ?? false, threadID: reminder.threadID)]
 
     case .error(let error):
+      // A failure that happens mid-turn is the reason that turn will produce
+      // nothing. Hold onto the daemon's own words so the empty row can explain
+      // itself instead of just saying the turn failed.
+      if let turnID = inFlightTurnID { failures[turnID] = error.message }
       note(
         NoticeRow(
           id: "err_\(error.seq)",

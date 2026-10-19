@@ -67,6 +67,8 @@ export interface RouteResult {
   attempts: number;
   /** Structured tool calls the model emitted (task lane). */
   toolCalls?: import("./client").ToolCall[];
+  /** The model's own reasoning, when the provider streams it. */
+  reasoning?: string;
 }
 
 export interface ProviderStatus {
@@ -177,6 +179,7 @@ export class Router {
             outputTokens: result.outputTokens,
             attempts,
             ...(result.toolCalls ? { toolCalls: result.toolCalls } : {}),
+            ...(result.reasoning ? { reasoning: result.reasoning } : {}),
           };
         } catch (error) {
           const providerError =

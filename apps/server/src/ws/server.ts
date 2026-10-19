@@ -2,7 +2,8 @@
  * HTTP + WebSocket entry. Binds to AGNI_HOST only (loopback in dev, the
  * Tailscale interface on bb-1) — nothing listens on the public internet.
  *
- * Routes: GET /health (JSON), GET /ws (WebSocket upgrade).
+ * Routes: GET /health (JSON), GET /ws (WebSocket upgrade), GET /share/<token>
+ * (a published thread export).
  */
 import type { Database } from "bun:sqlite";
 import { PROTOCOL_VERSION, encodeFrame, type ServerFrame, type ServerFrameBody } from "@agni/protocol";
@@ -12,6 +13,7 @@ import { log } from "../log";
 import { PluginService } from "../plugins/service";
 import type { Router, ProviderStatus } from "../models/router";
 import { dayTotals, type DayTotals } from "../stores/usage";
+import { readShareFile } from "../share/document";
 import { dispatch, newSession, type Session } from "./dispatch";
 import { FrameLog } from "./frame-log";
 
@@ -77,6 +79,16 @@ export function startServer(config: Config, db: Database, router: Router, starte
       }
       if (url.pathname === "/oauth/callback") {
         return handleOAuthCallback(plugins, url);
+      }
+      // Exported threads. Tokens are opaque file names, validated by the
+      // reader, so this route can never be walked out of the share directory.
+      const share = /^\/share\/([0-9a-f]{32})(?:\.html)?$/.exec(url.pathname);
+      if (share) {
+        const html = readShareFile(share[1] ?? "");
+        if (html === null) return new Response("This export no longer exists.", { status: 404 });
+        return new Response(html, {
+          headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" },
+        });
       }
       if (url.pathname === "/ws") {
         if (srv.upgrade(request, { data: newSession() })) return undefined;

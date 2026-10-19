@@ -15,6 +15,7 @@ import { webSearch, webFetch, deepResearch } from "./web";
 import { runBash } from "./bash";
 import { skillsList, skillsLoad, skillsResource } from "./skills";
 import { createMailTools } from "./mail";
+import { shareThread } from "../share/document";
 
 const objectSchema = (properties: Record<string, unknown>, required: string[]): Record<string, unknown> => ({
   type: "object", properties, required, additionalProperties: false,
@@ -23,7 +24,7 @@ const stringProp = { type: "string", minLength: 1 };
 const limitProp = { type: "integer", minimum: 1, maximum: 20 };
 const pathProp = { type: "string", minLength: 1 };
 
-export const TASK_TOOL_NAMES = ["memory_search", "memory_write", "links_search", "link_save", "tasks_list", "task_create", "task_update", "grep", "glob", "read_file", "write_file", "web_search", "web_fetch", "deep_research", "bash", "skills_list", "skills_load", "skills_resource", "mail_search", "mail_read", "mail_send", "remember_fact", "recall_fact", "forget_fact", "handoff"];
+export const TASK_TOOL_NAMES = ["memory_search", "memory_write", "links_search", "link_save", "tasks_list", "task_create", "task_update", "grep", "glob", "read_file", "write_file", "web_search", "web_fetch", "deep_research", "bash", "skills_list", "skills_load", "skills_resource", "mail_search", "mail_read", "mail_send", "remember_fact", "recall_fact", "forget_fact", "handoff", "share_thread"];
 
 export function buildTaskToolRegistry(db: Database): ToolRegistry {
   const registry = new ToolRegistry();
@@ -154,6 +155,22 @@ export function buildTaskToolRegistry(db: Database): ToolRegistry {
     name: "skills_resource", description: "Read a supplementary resource file (references/, scripts/) inside an already-loaded skill directory.", kind: "static",
     schema: objectSchema({ skill_name: stringProp, relative_path: pathProp }, ["skill_name", "relative_path"]), timeoutMs: 2_000,
     handler: async (args) => skillsResource(parseObject(args, (v) => ({ skill_name: string(v.skill_name), relative_path: string(v.relative_path) }))),
+  });
+  register({
+    name: "share_thread",
+    description:
+      "Render this conversation as a self-contained HTML document and return a link the owner can open or send to someone. " +
+      "The document contains everything: what was said, every tool call with its arguments and result, any model reasoning, and approval decisions. " +
+      "Use it when asked to export, share, or send a link to this conversation — or when explaining why a turn failed.",
+    kind: "static",
+    schema: objectSchema({ title: { type: "string", minLength: 1, maxLength: 200 } }, []),
+    timeoutMs: 15_000,
+    handler: async (args, ctx) => {
+      const title = typeof args === "object" && args !== null && typeof (args as Record<string, unknown>).title === "string"
+        ? boundedString((args as Record<string, unknown>).title, 200)
+        : undefined;
+      return shareThread(db, { threadID: ctx.threadID, ...(title ? { title } : {}) });
+    },
   });
   // Mail tools (agent's mailbox is ungated; owner's mailbox sends gate via approval broker).
   for (const tool of createMailTools(db)) {

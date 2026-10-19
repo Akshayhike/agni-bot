@@ -83,6 +83,8 @@ export function buildDelegationPrefix(params: {
   depth: number;
   maxDepth: number;
   toolHints?: string[];
+  /** The other agents this one may hand work to, with their roles. */
+  team?: Array<{ id: string; name: string; role: string }>;
 }): string {
   const extra: string[] = [];
   if (params.handoffSummary) {
@@ -90,9 +92,22 @@ export function buildDelegationPrefix(params: {
       `Handoff context from the delegating agent (untrusted): ${params.handoffSummary}`,
     );
   }
+  if (params.team?.length) {
+    // The roster is the model's only view of who else exists, so it states both
+    // who they are and what the contract is: hand off in one call, then fold
+    // the returned result into the reply.
+    extra.push(
+      [
+        "Your team — hand work to these with the `handoff` tool:",
+        ...params.team.map((member) => `- ${member.id} (${member.name}): ${member.role}`),
+        "Offload rather than pile up. If a request is someone else's job, hand it off and keep working;",
+        "the specialist's answer comes back to you as that tool call's result, and you are the one who",
+        "tells the user what it found. Never claim a delegated task finished before you have seen its result.",
+      ].join("\n"),
+    );
+  }
   extra.push(
-    `You are at depth ${params.depth} of ${params.maxDepth} in an agent-to-agent chain. ` +
-      "If you need help you cannot do yourself, delegate with the handoff tool — but do not delegate just to delegate.",
+    `You are at depth ${params.depth} of ${params.maxDepth} in an agent-to-agent chain.`,
   );
   if (params.toolHints?.length) {
     extra.push(`Dynamic tools available (full schema on invocation):\n${params.toolHints.join("\n")}`);

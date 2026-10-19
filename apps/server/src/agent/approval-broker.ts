@@ -1,6 +1,12 @@
 /**
- * HITL approval broker. Destructive actions (rm -rf, git push, email sends,
- * financial transactions) pause the loop until the user clicks Allow/Deny.
+ * HITL approval broker. Only actions that can *destroy* state pause the loop:
+ * destructive shell, writes outside the scratch tree, sends from the owner's
+ * mailbox, and payment-style tools. Everything reversible runs free — reading,
+ * research, memory, links, tasks, renames, and handoffs.
+ *
+ * The default is deliberately "free": a prompt on every reversible step trains
+ * the owner to click Allow without reading, which is worse than no prompt at
+ * all. A new destructive tool must add a case to `requiresApproval`.
  *
  * Approvals are durable: they live in the `approvals` table and are surfaced
  * to the client as `approval.request` frames. The decision is recorded and the
@@ -9,6 +15,7 @@
 import type { Database } from "bun:sqlite";
 import { newID, nowISO } from "../util/ids";
 import { isDestructive } from "../tools/bash";
+import { isOutsideScratch } from "../tools/write-file";
 
 export type Decision = "once" | "always" | "reject";
 
@@ -87,17 +94,28 @@ export class ApprovalBroker {
     return this.deps.waitForDecision(requestID, signal);
   }
 
-  /** Check whether an action is destructive and therefore requires approval. */
+  /**
+   * True only for actions that can destroy state — the owner's rule is "ask me
+   * about destructive things, and nothing else" (2026-10-19). Everything
+   * reversible is free: research, memory, links, tasks, renames, handoffs, and
+   * reads. Renaming in particular is a chat-driven identity change that used to
+   * stop the turn for a click; it no longer does.
+   */
   requiresApproval(toolName: string, args: Record<string, unknown>): boolean {
-    if (["write_file", "task_create", "task_update", "memory_write", "link_save", "skills_load", "skills_resource", "skills_list"].includes(toolName)) return false;
-    if (toolName === "bash") return isDestructive(String(args.command ?? ""));
-    // mail_send from the agent's own mailbox is ungated (AGENTS.md amendment 2026-10-17).
-    if (toolName === "mail_send" && args.account !== "owner") return false;
-    // Email sends, payments, and other side-effecting tools gate here by default.
-    return toolName !== "read_file" && toolName !== "grep" && toolName !== "glob" &&
-      toolName !== "memory_search" && toolName !== "links_search" && toolName !== "tasks_list" &&
-      toolName !== "web_search" && toolName !== "web_fetch" &&
-      toolName !== "mail_search" && toolName !== "mail_read";
+    switch (toolName) {
+      case "bash":
+        return isDestructive(String(args.command ?? ""));
+      case "write_file":
+        // Overwriting a file destroys whatever was there, so writes outside the
+        // owner-declared scratch tree gate. Inside scratch they run free.
+        return isOutsideScratch(String(args.path ?? ""));
+      case "mail_send":
+        // Agni's own mailbox is ungated (AGENTS.md amendment 2026-10-17);
+        // every other account's sends stay approval-gated.
+        return args.account === "owner";
+      default:
+        return false;
+    }
   }
 }
 

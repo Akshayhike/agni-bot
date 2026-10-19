@@ -195,7 +195,7 @@ struct ConnectionTests {
     let transport = FakeTransport()
     let connection = AgniConnection(settings: settings(), token: "t", makeTransport: { transport }, handshakeTimeout: .seconds(5))
     await #expect(throws: TransportError.self) {
-      try await connection.send(.msgSend(threadID: "", text: "hello", files: nil, conversationID: nil))
+      try await connection.send(.msgSend(threadID: "", text: "hello", files: nil, conversationID: nil, channelId: nil, toAgentId: nil, texts: nil))
     }
   }
 }

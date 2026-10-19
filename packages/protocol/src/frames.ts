@@ -223,6 +223,18 @@ export const ClientFrameSchema = z.discriminatedUnion("type", [
   }),
   z.object({ type: z.literal("thread.open"), threadID: z.string().min(1) }),
   /**
+   * Render this conversation — messages, tool calls, model reasoning, and
+   * approval decisions — into one self-contained HTML file and return a link
+   * to it. The daemon does the rendering so the artifact is identical no
+   * matter which client asked for it.
+   */
+  z.object({
+    type: z.literal("thread.export"),
+    conversationID: z.string().min(1),
+    /** Optional label for the document's title. */
+    title: z.string().max(200).optional(),
+  }),
+  /**
    * Durable-state reads. Replies are addressed to the requesting connection
    * and stay out of the replay log (they are answers, not stream state).
    */
@@ -371,6 +383,17 @@ export const ServerFrameSchema = z.discriminatedUnion("type", [
     seq,
     conversationID: z.string(),
     messages: z.array(MessageInfoSchema),
+  }),
+  /** Answer to `thread.export`; addressed to the requester, not replayed. */
+  z.object({
+    type: z.literal("thread.export.ok"),
+    seq,
+    conversationID: z.string(),
+    /** Absolute URL of the rendered document, served by this daemon. */
+    url: z.string(),
+    token: z.string(),
+    records: z.number().int().nonnegative(),
+    createdAt: z.string(),
   }),
   z.object({ type: z.literal("job.list.ok"), seq, jobs: z.array(JobInfoSchema) }),
   z.object({ type: z.literal("task.list.ok"), seq, tasks: z.array(TaskInfoSchema) }),
