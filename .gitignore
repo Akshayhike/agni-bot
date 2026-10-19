@@ -14,12 +14,11 @@ data/
 .env.*
 !.env.example
 
-# generated artifacts / evidence stay local (fleet convention)
-artifacts/
-.evidence/
-# the free-write scratch dir the agent uses by default (published thread
-# exports live beside the database, already covered by data/)
+# published thread exports (beside the database, already covered by data/) and
+# the free-write scratch dir the agent uses by default
 /scratch/
+# build artifacts / evidence stay local
+.evidence/
 apps/mac/.build/
 
 .DS_Store

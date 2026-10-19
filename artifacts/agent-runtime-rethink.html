@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agni · Chat and task runtime plan</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #090909;
+      --panel: #141414;
+      --panel-2: #1b1b1b;
+      --line: #303030;
+      --text: #f2f2f2;
+      --muted: #a1a1a1;
+      --quiet: #777;
+      --ember: #ff6b55;
+      --green: #87d6a0;
+      --amber: #f0c66a;
+      --blue: #8fb9ff;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.55; }
+    main { width: min(100% - 32px, 960px); margin: 0 auto; padding: 28px 0 40px; }
+    h1 { margin: 0 0 8px; font-size: clamp(24px, 5vw, 34px); line-height: 1.12; letter-spacing: -.035em; }
+    h2 { margin: 28px 0 10px; font-size: 18px; letter-spacing: -.015em; }
+    h3 { margin: 0 0 6px; font-size: 14px; }
+    p { margin: 6px 0; }
+    .lede { color: var(--muted); max-width: 72ch; font-size: 15px; }
+    .eyebrow { color: var(--ember); text-transform: uppercase; letter-spacing: .1em; font-size: 10px; font-weight: 700; margin-bottom: 9px; }
+    .panel { border: 1px solid var(--line); background: var(--panel); border-radius: 12px; padding: 16px; }
+    .diagnosis { border-left: 3px solid var(--ember); }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .lane { min-height: 150px; background: var(--panel-2); }
+    .lane.chat { border-top: 2px solid var(--blue); }
+    .lane.task { border-top: 2px solid var(--amber); }
+    .tag { display: inline-block; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 11px; padding: 2px 8px; margin: 0 4px 4px 0; }
+    .tag.blue { color: var(--blue); border-color: #355078; }
+    .tag.amber { color: var(--amber); border-color: #65552b; }
+    .tag.green { color: var(--green); border-color: #31593c; }
+    .state-flow { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+    .state { min-height: 74px; display: flex; flex-direction: column; justify-content: center; background: var(--panel-2); border: 1px solid var(--line); border-radius: 9px; padding: 10px; position: relative; }
+    .state:not(:last-child)::after { content: "→"; color: var(--quiet); position: absolute; right: -9px; top: 24px; z-index: 1; }
+    .state strong { font-size: 12px; }
+    .state small { color: var(--muted); font-size: 10px; margin-top: 3px; }
+    .state.done { border-color: #31593c; }
+    .state.blocked { border-color: #65552b; }
+    .blocked-path { display: flex; align-items: center; gap: 10px; margin-top: 10px; color: var(--muted); font-size: 12px; }
+    .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
+    table { width: 100%; border-collapse: collapse; min-width: 580px; }
+    th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+    th { color: var(--muted); font-size: 11px; font-weight: 600; background: #101010; }
+    tr:last-child td { border-bottom: 0; }
+    td:first-child { font-weight: 600; white-space: nowrap; }
+    ul, ol { margin: 8px 0 0; padding-left: 20px; }
+    li { margin: 5px 0; }
+    .phases { display: grid; grid-template-columns: 60px 1fr; gap: 0 12px; }
+    .phase-num { color: var(--ember); font-family: ui-monospace, monospace; font-size: 12px; padding: 12px 0; border-top: 1px solid var(--line); }
+    .phase { padding: 10px 0 12px; border-top: 1px solid var(--line); }
+    .phase p { color: var(--muted); }
+    .callout { color: var(--green); background: #102016; border: 1px solid #294634; border-radius: 10px; padding: 12px 14px; margin-top: 12px; }
+    .foot { color: var(--quiet); font-size: 11px; margin-top: 24px; }
+    @media (max-width: 640px) {
+      main { width: min(100% - 24px, 960px); padding-top: 20px; }
+      .grid { grid-template-columns: 1fr; }
+      .state-flow { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .state:not(:last-child)::after { display: none; }
+      .panel { padding: 13px; }
+      .phases { grid-template-columns: 42px 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div class="eyebrow">Product and runtime plan</div>
+      <h1>Chat should answer.<br>Tasks should finish.</h1>
+      <p class="lede">Keep Agni’s fast conversational path simple. Give multi-step work its own durable run, visible progress, and a real completion check.</p>
+    </header>
+
+    <section aria-labelledby="diagnosis">
+      <h2 id="diagnosis">What is going wrong now</h2>
+      <div class="panel diagnosis">
+        <p>Every regular chat send enters the same tool-enabled loop. That loop can treat a sentence like “I’ll research this…” as the final answer when the model returns prose without a tool call. It also has a two-minute timeout, unbounded step and token constants, and no required check that the requested result was produced.</p>
+        <p>A mid-stream provider failure was also marked as a successful end. The client then had no honest signal that the work stopped partway through.</p>
+      </div>
+    </section>
+
+    <section aria-labelledby="two-paths">
+      <h2 id="two-paths">Split the work into two paths</h2>
+      <div class="grid">
+        <article class="panel lane chat">
+          <span class="tag blue">CHAT</span>
+          <h3>Ordinary questions</h3>
+          <ul>
+            <li>One bounded model call, no tools by default.</li>
+            <li>Stream the answer immediately; keep the instant lane fast.</li>
+            <li>If the request needs tools or sustained work, offer to run it as a task.</li>
+          </ul>
+        </article>
+        <article class="panel lane task">
+          <span class="tag amber">TASK RUN</span>
+          <h3>Research, creation, and multi-step work</h3>
+          <ul>
+            <li>Create a durable run with a goal, steps, checkpoints, and outputs.</li>
+            <li>Show concise action updates, tool results, approvals, and waits.</li>
+            <li>Verify the requested deliverable before marking the run complete.</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section aria-labelledby="lifecycle">
+      <h2 id="lifecycle">Task lifecycle</h2>
+      <div class="panel">
+        <div class="state-flow" role="img" aria-label="Task lifecycle: queued, planning, running, verifying, completed">
+          <div class="state"><strong>Queued</strong><small>Goal saved</small></div>
+          <div class="state"><strong>Planning</strong><small>Short action outline</small></div>
+          <div class="state"><strong>Running</strong><small>Checkpoint each action</small></div>
+          <div class="state"><strong>Verifying</strong><small>Check output against goal</small></div>
+          <div class="state done"><strong>Completed</strong><small>Result is linked</small></div>
+        </div>
+        <div class="blocked-path"><span class="tag amber">SIDE STATE</span><span>Waiting for input or blocked can happen during execution; explain why and resume from the last checkpoint.</span></div>
+        <p class="foot">Progress reports say what Agni did and what happens next. They do not expose private chain-of-thought.</p>
+      </div>
+    </section>
+
+    <section aria-labelledby="design">
+      <h2 id="design">Runtime rules</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Rule</th><th>Behavior</th></tr></thead>
+          <tbody>
+            <tr><td>Completion is evidence based</td><td>“Create a file” completes only after the file exists and can be opened. Research completes with the requested findings and source links. No “done” state for a promise or partial draft.</td></tr>
+            <tr><td>Runs survive reconnects</td><td>Persist task status, current step, tool call, result, and output references. Resume from the last safe checkpoint after an app or server restart.</td></tr>
+            <tr><td>Limits are explicit</td><td>Use configurable step, time, and spend budgets. Pause safely at a boundary, explain the limit, and let the user resume or narrow the goal.</td></tr>
+            <tr><td>Failures stay honest</td><td>Keep partial output, mark the run failed or waiting, show a useful cause, and offer a safe retry from the last checkpoint.</td></tr>
+            <tr><td>Use the right executor</td><td>Route repository coding to ACP when available. Keep Agni’s coordinator small; do not turn the chat loop into a general coding harness.</td></tr>
+            <tr><td>Progress is protocol data</td><td>Add structured task lifecycle events and render them as a compact, collapsible activity card. Keep user messages and task updates visually distinct.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section aria-labelledby="rollout">
+      <h2 id="rollout">Build order</h2>
+      <div class="phases">
+        <div class="phase-num">P0</div><div class="phase"><h3>Stop lying about turn state</h3><p>Remove the streaming caret, preserve partial output, show failures and timeouts as incomplete. Done in the current working changes; restart the server to activate its part.</p></div>
+        <div class="phase-num">P1</div><div class="phase"><h3>Restore the fast chat lane</h3><p>Route ordinary messages through one call without tools. Add a clear “Run as task” path for work that needs tools or several steps.</p></div>
+        <div class="phase-num">P2</div><div class="phase"><h3>Add durable task runs</h3><p>Store goal, status, checkpoints, progress events, approvals, and output references. Make runs resumable after reconnect or restart.</p></div>
+        <div class="phase-num">P3</div><div class="phase"><h3>Add verification and specialized executors</h3><p>Define a completion check per task, route coding to ACP, and surface incomplete work with resume or retry actions.</p></div>
+      </div>
+      <div class="callout"><strong>First end-to-end proof:</strong> ask Agni to research a question and create an HTML document. The UI should show each meaningful action, link the finished file, and mark it complete only after checking that the file was written.</div>
+    </section>
+
+    <footer class="foot">Plan grounded in the current Agni client and server behavior. No protocol or executor redesign has been implemented yet.</footer>
+  </main>
+</body>
+</html>

@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agni Box Host — UI layer</title>
+<style>
+  :root{
+    --bg:#000;
+    --surface:#0e0e0e;
+    --surface-2:#161616;
+    --hairline:#262626;
+    --ink:#fff;
+    --ink-2:#a3a3a3;
+    --ink-3:#6b6b6b;
+    --ember:#ff3146;
+    --amber:#f0b95a;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0;background:var(--bg);color:var(--ink);
+    font:16px/1.6 var(--sans);
+  }
+  .wrap{max-width:70rem;margin:0 auto;padding:40px 20px 96px}
+  h1{font-size:26px;line-height:1.25;margin:0 0 6px;letter-spacing:-.02em}
+  .sub{color:var(--ink-2);font-size:14px;margin:0 0 32px}
+  h2{font-size:18px;margin:44px 0 12px;letter-spacing:-.01em;padding-top:20px;border-top:1px solid var(--hairline)}
+  h2:first-of-type{border-top:0;padding-top:0}
+  h3{font-size:15px;margin:0 0 8px}
+  p{margin:0 0 14px}
+  ul,ol{margin:0 0 14px;padding-left:22px}
+  li{margin:0 0 8px}
+  a{color:var(--ink)}
+  code,pre{font-family:var(--mono)}
+  code{font-size:.86em;background:var(--surface-2);border:1px solid var(--hairline);padding:1px 5px;border-radius:4px;word-break:break-word}
+  pre{background:var(--surface);border:1px solid var(--hairline);border-radius:8px;padding:16px;overflow-x:auto;font-size:12.5px;line-height:1.55;margin:0 0 16px}
+  pre code{background:none;border:0;padding:0;font-size:inherit}
+  .lede{font-size:17px;color:var(--ink-2);margin-bottom:28px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:0 0 20px}
+  .card{background:var(--surface);border:1px solid var(--hairline);border-radius:10px;padding:18px}
+  .card p{margin:0;font-size:14px;color:var(--ink-2)}
+  .card p+p{margin-top:10px}
+  .card h3{display:flex;align-items:center;gap:8px}
+  .dot{width:8px;height:8px;border-radius:50%;flex:0 0 auto}
+  .dot.ember{background:var(--ember)}
+  .dot.amber{background:var(--amber)}
+  .eyebrow{font:600 11px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3)}
+  .scroller{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 0 8px;border:1px solid var(--hairline);border-radius:10px}
+  table{border-collapse:collapse;width:100%;min-width:620px;font-size:14px}
+  th,td{text-align:left;padding:12px 14px;border-bottom:1px solid var(--hairline);vertical-align:top}
+  tr:last-child td{border-bottom:0}
+  th{font:600 11px/1.4 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);background:var(--surface)}
+  td code{white-space:nowrap}
+  .note{color:var(--ink-2);font-size:14px}
+  .risk{color:var(--amber)}
+  .bad{color:var(--ember)}
+  .k{font:600 11px/1.5 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);margin:0 0 6px}
+  .block{padding:20px 0;border-bottom:1px solid var(--hairline)}
+  .block:last-child{border-bottom:0}
+  .block p:last-child{margin-bottom:0}
+  svg{display:block;width:100%;height:auto;margin:0 0 16px}
+  .caption{color:var(--ink-3);font-size:13px;margin:-8px 0 20px}
+  .callout{border-left:2px solid var(--ember);padding:2px 0 2px 16px;margin:0 0 16px;color:var(--ink-2)}
+  .callout strong{color:var(--ink)}
+  ol.steps{counter-reset:s;list-style:none;padding:0;margin:0 0 16px}
+  ol.steps>li{counter-increment:s;position:relative;padding-left:34px;margin-bottom:14px}
+  ol.steps>li::before{content:counter(s);position:absolute;left:0;top:1px;width:22px;height:22px;border:1px solid var(--hairline);border-radius:50%;color:var(--ink-2);font:600 11px/22px var(--mono);text-align:center}
+  @media (max-width:640px){
+    .grid2{grid-template-columns:1fr}
+    .wrap{padding:28px 16px 72px}
+    h1{font-size:22px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>Agni Box Host — UI layer</h1>
+<p class="sub">How the persistent computer and its screen handoff should be built, and what it costs on each OS. Design memo, Agni-Bot, 17 Oct 2026.</p>
+
+<p class="lede">Three tiers, one handoff UI. All the OS-specific work lives inside the last tier — everything above it is portable, which is why the UI layer can be designed before the platform question is settled.</p>
+
+<h2>1 · Two different products are being conflated</h2>
+
+<div class="grid2">
+  <div class="card">
+    <h3><span class="dot ember"></span>Agni Box</h3>
+    <p><strong>Isolated, disposable, streamable.</strong> Its own X display, its own browser profile, its own Unix user. It cannot reach the host. Lives on bb-1.</p>
+    <p>This is the GrokBot clone. On a Mac you test it by running Linux in a VM — the Mac stays a <em>client</em>, not a host.</p>
+  </div>
+  <div class="card">
+    <h3><span class="dot amber"></span>Agni Screen</h3>
+    <p><strong>Your actual desktop.</strong> Real logins, real apps, real files. No sandbox, no isolation.</p>
+    <p>A different product with a different consent model: TCC grants on macOS, driver signing on Windows. Opt-in, never the default.</p>
+  </div>
+</div>
+
+<p>Every design question below resolves differently depending on which of these you mean, so it is worth naming which one a given piece of work serves. The handoff UI is shared; the trust story is not.</p>
+
+<h2>2 · Three tiers, and only the last one forks</h2>
+
+<div class="scroller">
+<table>
+  <thead>
+    <tr><th>Tier</th><th>What runs</th><th>Handoff transport</th><th>Costs</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>0</strong><br><span class="k">browser host</span></td>
+      <td>Chromium <code>--headless=new</code> + CDP</td>
+      <td>CDP screencast, proxied over the existing socket</td>
+      <td class="bad">Nothing OS-specific. No X11, no VNC, no permissions. Cloudflare scores headless worse.</td>
+    </tr>
+    <tr>
+      <td><strong>1</strong><br><span class="k">windowed box</span></td>
+      <td>Xvfb + openbox + real Chromium</td>
+      <td>x11vnc / RFB, proxied by the server</td>
+      <td class="bad">Linux only. Needs an X stack. Beats headless detection.</td>
+    </tr>
+    <tr>
+      <td><strong>2</strong><br><span class="k">desktop host</span></td>
+      <td>The machine's own desktop</td>
+      <td>SCK → H.264 (mac) · WGC → H.264 (win) · RFB (linux)</td>
+      <td class="bad">Per-OS code, OS consent, no sandbox.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<p class="note">Chromium is the portable layer. Because the browser behaves identically on all three OSes, tiers 0 and 1 give you one handoff UI everywhere. Only tier 2 forks by platform.</p>
+
+<h2>3 · Where the pieces sit</h2>
+
+<svg viewBox="0 0 720 372" role="img" aria-label="Layer diagram: Agni client connects over one WebSocket to apps/server, which holds the screen broker and request_human_handoff tool and proxies over loopback to a CDP endpoint or an isolated box host.">
+  <defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#6b6b6b"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="720" height="54" rx="8" fill="#0e0e0e" stroke="#262626"/>
+  <text x="18" y="24" fill="#fff" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="14" font-weight="600">Agni client</text>
+  <text x="18" y="42" fill="#a3a3a3" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="11">Screen pane — lease-aware: watch / take / release</text>
+  <text x="702" y="32" fill="#6b6b6b" font-family="ui-monospace,Menlo,monospace" font-size="11" text-anchor="end">SwiftUI · Tauri · Android</text>
+
+  <line x1="360" y1="54" x2="360" y2="92" stroke="#6b6b6b" marker-end="url(#ar)"/>
+  <text x="374" y="78" fill="#a3a3a3" font-family="ui-monospace,Menlo,monospace" font-size="11">one WebSocket · hello → token auth · seq'd · resyncable</text>
+
+  <rect x="0" y="92" width="720" height="118" rx="8" fill="#0e0e0e" stroke="#262626"/>
+  <text x="18" y="116" fill="#fff" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="14" font-weight="600">apps/server</text>
+  <text x="18" y="140" fill="#a3a3a3" font-family="ui-monospace,Menlo,monospace" font-size="11">screen broker — lease authority, redaction, audit, rate limit</text>
+  <text x="18" y="160" fill="#a3a3a3" font-family="ui-monospace,Menlo,monospace" font-size="11">request_human_handoff tool — pause the loop on a promise, timeout-safe</text>
+  <text x="18" y="180" fill="#a3a3a3" font-family="ui-monospace,Menlo,monospace" font-size="11">proxy — loopback only, never exposed</text>
+  <text x="702" y="196" fill="#6b6b6b" font-family="ui-monospace,Menlo,monospace" font-size="11" text-anchor="end">Bun + TypeScript</text>
+
+  <line x1="180" y1="210" x2="180" y2="248" stroke="#6b6b6b" marker-end="url(#ar)"/>
+  <line x1="540" y1="210" x2="540" y2="248" stroke="#6b6b6b" marker-end="url(#ar)"/>
+
+  <rect x="0" y="248" width="360" height="60" rx="8" fill="#161616" stroke="#262626"/>
+  <text x="16" y="272" fill="#fff" font-family="ui-monospace,Menlo,monospace" font-size="12">CDP :9222</text>
+  <text x="16" y="292" fill="#a3a3a3" font-family="ui-monospace,Menlo,monospace" font-size="11">tier 0 — no display required</text>
+
+  <rect x="372" y="248" width="348" height="60" rx="8" fill="#161616" stroke="#262626"/>
+  <text x="388" y="272" fill="#fff" font-family="ui-monospace,Menlo,monospace" font-size="12">box host — never exposed</text>
+  <text x="388" y="292" fill="#a3a3a3" font-family="ui-monospace,Menlo,monospace" font-size="11">tier 1 Xvfb :99 · tier 2 SCK / IddCx</text>
+
+  <rect x="0" y="322" width="360" height="46" rx="8" fill="#0e0e0e" stroke="#262626" stroke-dasharray="3 3"/>
+  <text x="16" y="342" fill="#a3a3a3" font-family="ui-monospace,Menlo,monospace" font-size="11">agni-box user · cgroup v2 cap · bubblewrap</text>
+  <text x="16" y="358" fill="#6b6b6b" font-family="ui-monospace,Menlo,monospace" font-size="11">no host home mounted</text>
+
+  <rect x="372" y="322" width="348" height="46" rx="8" fill="#0e0e0e" stroke="#262626" stroke-dasharray="3 3"/>
+  <text x="388" y="342" fill="#a3a3a3" font-family="ui-monospace,Menlo,monospace" font-size="11">persistent volume: browser profile + home</text>
+  <text x="388" y="358" fill="#6b6b6b" font-family="ui-monospace,Menlo,monospace" font-size="11">stays logged in across reboots</text>
+</svg>
+
+<h2>4 · Control is a lease, not a toggle</h2>
+
+<svg viewBox="0 0 720 196" role="img" aria-label="State machine: idle goes to agent, agent to human on a handoff request, human back to agent on resume or release. The server owns the lease and a generation counter drops stale input.">
+  <rect x="14" y="66" width="112" height="44" rx="8" fill="#0e0e0e" stroke="#262626"/>
+  <text x="70" y="93" fill="#a3a3a3" font-family="ui-monospace,Menlo,monospace" font-size="13" text-anchor="middle">idle</text>
+
+  <line x1="126" y1="88" x2="192" y2="88" stroke="#6b6b6b" marker-end="url(#ar)"/>
+
+  <rect x="194" y="66" width="140" height="44" rx="8" fill="#161616" stroke="#ff3146"/>
+  <text x="264" y="93" fill="#fff" font-family="ui-monospace,Menlo,monospace" font-size="13" text-anchor="middle">agent</text>
+
+  <line x1="334" y1="88" x2="404" y2="88" stroke="#6b6b6b" marker-end="url(#ar)"/>
+  <text x="369" y="78" fill="#a3a3a3" font-family="ui-monospace,Menlo,monospace" font-size="10" text-anchor="middle">request</text>
+  <text x="369" y="108" fill="#a3a3a3" font-family="ui-monospace,Menlo,monospace" font-size="10" text-anchor="middle">human</text>
+
+  <rect x="406" y="66" width="140" height="44" rx="8" fill="#161616" stroke="#f0b95a"/>
+  <text x="476" y="93" fill="#fff" font-family="ui-monospace,Menlo,monospace" font-size="13" text-anchor="middle">human</text>
+
+  <path d="M476 110 L476 156 L264 156 L264 112" fill="none" stroke="#6b6b6b" marker-end="url(#ar)"/>
+  <text x="370" y="150" fill="#a3a3a3" font-family="ui-monospace,Menlo,monospace" font-size="10" text-anchor="middle">resume / release</text>
+
+  <text x="580" y="80" fill="#6b6b6b" font-family="ui-monospace,Menlo,monospace" font-size="11">server owns the lease</text>
+  <text x="580" y="100" fill="#6b6b6b" font-family="ui-monospace,Menlo,monospace" font-size="11">generation drops stale</text>
+  <text x="580" y="120" fill="#6b6b6b" font-family="ui-monospace,Menlo,monospace" font-size="11">input</text>
+</svg>
+<p class="caption">Both sides write to the same screen, so input from anyone who is not the current lease owner must be rejected server-side, not merely hidden in the UI.</p>
+
+<p>This is the model T3's own preview tabs already run — <code>control.owner: agent | human | unclaimed</code> with a <code>generation</code> counter — and it is worth copying rather than inventing.</p>
+
+<h2>5 · Protocol additions</h2>
+
+<p>All additive, so no <code>PROTOCOL_VERSION</code> bump and existing clients keep working:</p>
+
+<div class="scroller">
+<table>
+  <thead><tr><th>Direction</th><th>Frame</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td>c→s</td><td><code>screen.watch</code></td><td>Subscribe to a session; carries quality and fps hints.</td></tr>
+    <tr><td>c→s</td><td><code>screen.take</code> / <code>screen.release</code></td><td>Human acquires or returns control.</td></tr>
+    <tr><td>c→s</td><td><code>screen.input</code></td><td>Pointer, key, paste. Rejected unless the sender holds the lease.</td></tr>
+    <tr><td>s→c</td><td><code>human.request</code></td><td>The pause. <code>{requestID, sessionID, reason, url, buttons}</code>.</td></tr>
+    <tr><td>s→c</td><td><code>human.resolved</code></td><td><code>resumed | timeout | cancelled</code>.</td></tr>
+    <tr><td>s→c</td><td><code>screen.state</code></td><td><code>{display:{w,h}, owner, generation}</code>.</td></tr>
+    <tr><td>s→c</td><td><code>screen.frame</code></td><td>The payload. Base64-in-JSON costs +33% — plan a binary channel.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p class="k">Two costs specific to this repo</p>
+<ul>
+  <li><code>apps/mac/Sources/AgniProtocol/Frames.swift</code> mirrors <code>packages/protocol/src/frames.ts</code> by hand, so every frame above is two edits plus tests on each side. Consider generating the Swift mirror — the fixtures script already exists.</li>
+  <li><code>screen.frame</code> must never be persisted to the message store or fed back into model context. Pixels can contain passwords, and a rendered page can carry injected instructions, which the untrusted-input rule forbids. Handoff pixels go to the human, not the model.</li>
+</ul>
+
+<h2>6 · Desktop access, by OS</h2>
+
+<div class="scroller">
+<table>
+  <thead><tr><th></th><th>Linux — target</th><th>macOS — dev host</th><th>Windows</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Virtual display</strong></td><td>Xvfb :99 — native, trivial</td><td>none; <code>CGVirtualDisplay</code> private API, or a VM</td><td>IddCx driver, must be signed</td></tr>
+    <tr><td><strong>Window manager</strong></td><td>openbox / i3 (X11)</td><td>n/a (Aqua)</td><td>n/a (DWM)</td></tr>
+    <tr><td><strong>Capture</strong></td><td>XGetImage / x11grab</td><td>ScreenCaptureKit</td><td>WGC or Desktop Duplication</td></tr>
+    <tr><td><strong>Input</strong></td><td>xdotool / XTEST</td><td><code>CGEventPost</code></td><td><code>SendInput</code></td></tr>
+    <tr><td><strong>Consent</strong></td><td>none — isolated user</td><td>2 TCC grants + re-consent nag</td><td>logon session + driver signing</td></tr>
+    <tr><td><strong>Isolation</strong></td><td>user + cgroup + container</td><td class="bad">none meaningful</td><td class="bad">none meaningful</td></tr>
+    <tr><td><strong>Headless</strong></td><td>yes, fully</td><td>yes, private API</td><td>only with a driver</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2>7 · The three permission stories</h2>
+
+<div class="block">
+  <p class="k">Linux — free, if you isolate</p>
+  <p><code>Xvfb :99 -screen 0 1280x800x24 -dpi 96</code>, then <code>openbox</code>, then Chromium with <code>--user-data-dir</code> on the persistent volume and <code>--remote-debugging-port=9222</code> on loopback. Pin DPI at 96 so capture pixels equal CSS pixels 1:1 — that is the property that stops buttons from shifting under the agent.</p>
+  <p>Drop <code>-ac</code> and use an <code>xauth</code> cookie. Run <code>x11vnc -display :99 -localhost -rfbauth</code>, never <code>-nopw</code> outside a scratch container. Give the box a dedicated <code>agni-box</code> user, a cgroup v2 memory cap, and bubblewrap around Chromium, with no host home mounted. XTEST input is seen by every client on that display — safe on an isolated <code>:99</code>, never on <code>:0</code>.</p>
+  <p class="note">Wayland is a later option (<code>weston --backend=headless</code> + <code>wayvnc</code>, input via <code>ydotool</code> or libei). Do not start there.</p>
+</div>
+
+<div class="block">
+  <p class="k">macOS — two grants and a re-consent nag</p>
+  <p>There is no Xvfb equivalent. XQuartz is an X11 server, but it only hosts X clients — it cannot hold your macOS desktop.</p>
+  <p>Screen Recording covers capture via ScreenCaptureKit; Accessibility covers <code>CGEventPost</code> into other apps. Two separate grants, neither scriptable, and macOS 15 re-prompts for screen recording periodically — hostile to an unattended agent.</p>
+  <p class="bad">The detail that bites: TCC identity binds to a code signature and bundle. A <code>bun run serve</code> daemon inherits the terminal's identity and can silently lose grants after a rebuild. Driving the Mac wants a signed <code>.app</code>, which is a real tension with the current daemon model.</p>
+  <p class="note">Recommendation: for v0 do not build a macOS host. Run the Linux box host inside Lima, OrbStack or UTM and keep the Mac a client. That is the real deployment, and it tests the real thing.</p>
+</div>
+
+<div class="block">
+  <p class="k">Windows — session 0 will fight you</p>
+  <p>A Windows <em>service</em> cannot see or drive the interactive desktop. The host must run as a logged-on user process, so an unattended reboot has no desktop unless you autologon or supply a virtual display.</p>
+  <p>That display is an IddCx indirect display driver, and it needs test-signing or a signed driver — with Secure Boot on, that is the single biggest friction on the platform. Then WGC for capture and <code>SendInput</code> for input, with <code>uiAccess</code> plus a signed binary in Program Files before it can touch an elevated window.</p>
+  <p class="note">Pragmatic shortcut for a personal box: an RDP session creates a desktop, and <code>tscon /dest:console</code> disconnects the viewer while keeping it alive. Hacky but well-trodden. Better still, a WSL2 or Hyper-V Linux guest drops you back onto the Linux path you already have.</p>
+</div>
+
+<h2>8 · The UI answer</h2>
+
+<p>The pane is not an <code>&lt;iframe&gt;</code> pointing at port 6080. That is a second origin with a second auth model outside <code>hello</code> and device tokens, it is not sequence-numbered so it cannot resync, it gives up replay, audit and redaction, and it enforces no lease — the human can click while Agni is mid-click.</p>
+
+<p>Instead: the box host speaks plain RFB or H.264 on <strong>loopback only</strong>, the server proxies it into <code>screen.*</code> frames, and the client renders it as a native pane. One auth model, replay, audit, redaction, and a lease the browser cannot bypass — and the Android client gets handoff for free.</p>
+
+<p>In the Mac app, start with a <code>WKWebView</code> running noVNC's client against the app's local bridge, skinned to the existing design tokens: charcoal canvas, ember while Agni drives, amber while it waits on you, and a sentence rather than a colour saying what is happening.</p>
+
+<h2>9 · Sequencing and open risks</h2>
+
+<p>The order is forced, and it is not the order you would guess. You cannot design <code>screen.*</code> frames until the transport shape is fixed, and the transport shape — server proxy versus direct iframe — is the only decision here that is expensive to reverse. Everything else, including which tier, which OS and which codec, is swappable behind it.</p>
+
+<ol class="steps">
+  <li><strong>Fix the transport shape.</strong> Proxy through <code>apps/server</code>. This is nearly irreversible and it gates the frames.</li>
+  <li><strong>Build tier 0, not tier 1.</strong> Not because it is easier, but because it is the only tier that unblocks the protocol: a headless Chromium over CDP exercises <code>human.request</code> → lease → <code>screen.input</code> → <code>human.resolved</code> end to end, identically on this Mac and on bb-1 later. Xvfb and openbox are an afternoon of work <em>after</em> the loop is proven.</li>
+  <li><strong>Measure the tactile risk before committing to RFB.</strong> Handoff over Tailscale from a phone is a low-frame-rate JPEG stream with a round trip attached. Clearing a CAPTCHA or typing a 2FA code through that may simply feel awful, and no architecture fixes it. Put a real challenge in front of the tier 0 loop and try it from a phone on cellular. Under roughly 5 fps or over roughly 250 ms of input echo means H.264 over WebRTC instead of noVNC, which changes what the server proxies.</li>
+  <li><strong>Add the auth branch.</strong> Turnstile needs pixels and a pointer. Most 2FA prompts need your phone — a TOTP code, an SMS, a passkey tap. Streaming a desktop to type six digits is a lot of machinery for a deeplink and a number field. Branch <code>human.request</code> so the auth case renders a small purpose-built card in the thread and the screen pane is reserved for cases that truly need a screen.</li>
+</ol>
+
+<div class="callout">
+  <p><strong>Keep the box's shell in the box.</strong> If the agent has both a sandboxed desktop and a shell tool, and that shell is the host's shell, then approval-gating <code>bash</code> is undermined by a screen you can click through. Two trust domains, two stories: the box host's shell lives inside <code>agni-box</code>, the host's shell stays approval-gated. Worth writing into <code>AGENTS.md</code> when this lands, because it is the kind of rule that erodes quietly.</p>
+</div>
+
+<h2>10 · Decisions to make now</h2>
+
+<div class="scroller">
+<table>
+  <thead><tr><th>Decision</th><th>Options</th><th>Recommendation</th></tr></thead>
+  <tbody>
+    <tr><td>Transport shape</td><td>Direct iframe to :6080 · server-proxied frames</td><td>Server-proxied — the only expensive to reverse choice</td></tr>
+    <tr><td>First tier</td><td>0 · 1 · 2</td><td>0, because it unblocks the protocol on any OS</td></tr>
+    <tr><td>Handoff media</td><td>JPEG over RFB · H.264 over WebRTC</td><td>Decide after measuring input echo from a phone</td></tr>
+    <tr><td>Auth prompts</td><td>Always stream a screen · branch by prompt type</td><td>Branch — a deeplink card covers most 2FA</td></tr>
+    <tr><td>Mac hosting</td><td>Native SCK provider · Linux VM</td><td>Linux VM for v0; native bridge later as opt-in</td></tr>
+    <tr><td>Windows</td><td>Native IddCx host · VM</td><td>VM, if it ever matters</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p class="note">Two concrete next artefacts, if wanted: the <code>packages/protocol</code> frames plus their Swift mirror as a reviewable diff, and a throwaway tier 0 spike — headless Chromium, CDP screencast, lease enforcement, and <code>request_human_handoff</code> wired to the existing approval broker — so the latency can be felt before the transport is committed.</p>
+
+</div>
+</body>
+</html>

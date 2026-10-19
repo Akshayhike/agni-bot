@@ -407,7 +407,16 @@ async function runUserMessage(
 }
 
 function isCapture(text: string): boolean {
-  return /^\s*(remember\s*:|add task\s*:)/i.test(text) || /https?:\/\/\S+/i.test(text);
+  // `remember:` / `add task:` are explicit capture commands.
+  if (/^\s*(remember\s*:|add task\s*:)/i.test(text)) return true;
+  // A bare URL drop (with at most a short note) is captured for later.
+  // A message that asks to open/fetch/inspect/explain/curl/read a page is
+  // NOT a capture: it must run as a normal turn so the agent can fetch and
+  // explain the page instead of saving it and saying "saved for later".
+  if (!/https?:\/\/\S+/i.test(text)) return false;
+  if (/\b(open|curl|inspect|fetch|explain|read|look\s+at|view|describe|summarize|analy[sz]e|check\s+out|browse|visit|show\s+me|what\s+is|tell\s+me|how\s+does|summarise)\b/i.test(text)) return false;
+  const withoutUrl = text.replace(/https?:\/\/\S+/i, "").trim();
+  return withoutUrl.length <= 60;
 }
 
 function isStoreQuery(text: string): boolean {
