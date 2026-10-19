@@ -11,7 +11,7 @@ import { HealthTracker } from "../src/models/health";
 import type { ProviderConfig } from "../src/models/providers";
 import { Router } from "../src/models/router";
 import { runTaskTurn } from "../src/agent/task-loop";
-import { defaultResolvedPersona, personaInfo, registerPersona, resolvePersona, teamRoster } from "../src/agent/personas";
+import { defaultResolvedPersona, personaInfo, registerPersona, resolvePersona, teamRoster, PERSONAS } from "../src/agent/personas";
 import { createThread } from "../src/stores/threads";
 import type { Persona } from "../src/agent/personas";
 
@@ -38,7 +38,16 @@ function createAgentRouter(args: Record<string, unknown>): Router {
 }
 
 let db: Database | undefined;
-afterEach(() => { db?.close(); db = undefined; });
+// registerPersona mutates the process-wide roster, and bun shares module
+// state across test files — so every test here restores it, or the bots it
+// created would leak into personas.test.ts and break its exact-roster
+// assertions.
+const INITIAL_ROSTER = PERSONAS.length;
+afterEach(() => {
+  db?.close();
+  db = undefined;
+  PERSONAS.length = INITIAL_ROSTER;
+});
 
 describe("an agent creating its own agent", () => {
   test("a create_agent call registers a selectable, durable agent and broadcasts it", async () => {

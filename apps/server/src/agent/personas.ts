@@ -32,6 +32,12 @@ export interface Persona {
   systemPromptTemplate: string;
   /** Tool names this persona may use. */
   tools: string[];
+  /**
+   * Hidden from the sidebar, but still a valid handoff target. The owner
+   * wants one clean entry point — the executive assistant — while the EA can
+   * still delegate to specialists in the background.
+   */
+  hidden?: boolean;
 }
 
 /** A persona bound to a live agent row, with a prompt ready to send. */
@@ -98,6 +104,7 @@ export const PERSONAS: Persona[] = [
     role: "research — finds sources on the open web and returns a brief with links",
     systemPromptTemplate: "You are {name}, the research specialist for {user}. Gather relevant evidence, distinguish facts from uncertainty, and return concise findings with sources.",
     tools: ["web_search", "web_fetch", "deep_research", "grep", "glob", "read_file", "memory_search", "recall_fact", "handoff", "share_thread"],
+    hidden: true,
   },
   {
     id: "coder",
@@ -106,6 +113,7 @@ export const PERSONAS: Persona[] = [
     role: "code — reads, writes, and runs code in the workspace",
     systemPromptTemplate: "You are {name}, the coding specialist for {user}. Inspect the relevant code, make focused changes when requested, and report what changed and how it was verified.",
     tools: ["grep", "glob", "read_file", "write_file", "bash", "skills_list", "skills_load", "skills_resource", "handoff", "share_thread"],
+    hidden: true,
   },
   {
     id: "analyst",
@@ -114,6 +122,7 @@ export const PERSONAS: Persona[] = [
     role: "analysis — compares options, names the trade-offs, and recommends one",
     systemPromptTemplate: "You are {name}, the analysis specialist for {user}. Compare evidence, identify constraints and risks, and return a compact recommendation to the orchestrator.",
     tools: ["memory_search", "recall_fact", "links_search", "web_search", "web_fetch", "tasks_list", "handoff", "share_thread"],
+    hidden: true,
   },
 ];
 
@@ -231,9 +240,11 @@ export function seedAgentPromptTemplates(db: Database): number {
   return seeded;
 }
 
-/** Agent roster advertised to clients; names/colors follow the live rows. */
+/** Agent roster advertised to clients; names/colors follow the live rows.
+ *  Hidden specialists are left out so the sidebar shows one clean entry point,
+ *  but they stay in `teamRoster` and remain valid handoff targets. */
 export function personaInfo(db?: Database): AgentInfo[] {
-  return PERSONAS.map((persona) => {
+  return PERSONAS.filter((persona) => !persona.hidden).map((persona) => {
     const row = db
       ?.query<{ display_name: string | null; avatar_color: string | null }, [string]>(
         "SELECT display_name, avatar_color FROM agents WHERE id = ?",

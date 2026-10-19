@@ -8,6 +8,7 @@ import {
   resolvePersona,
   seedAgentPromptTemplates,
   setOwnerName,
+  teamRoster,
 } from "../src/agent/personas";
 
 let db: Database | undefined;
@@ -112,7 +113,11 @@ describe("persona roster", () => {
     expect(ea?.tools?.length ?? 0).toBeGreaterThan(0);
   });
 
-  test("personaInfo without a database falls back to the static roster", () => {
-    expect(personaInfo().map((agent) => agent.id)).toEqual(PERSONAS.map((persona) => persona.id));
+  test("personaInfo shows only non-hidden agents; the team still sees all", () => {
+    db = openDatabase(":memory:");
+    // The sidebar roster hides specialists so there is one clean entry point.
+    expect(personaInfo(db).map((agent) => agent.id)).toEqual(["ea"]);
+    // But they remain valid handoff targets for the EA.
+    expect(teamRoster(db, { exclude: "ea" }).map((member) => member.id)).toEqual(["researcher", "coder", "analyst"]);
   });
 });
