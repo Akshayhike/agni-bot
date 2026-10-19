@@ -495,16 +495,4 @@ export const MIGRATIONS: Migration[] = [
       ALTER TABLE channel_messages DROP COLUMN status;
     `,
   },
-  {
-    id: 15,
-    name: "friday_agent",
-    sql: `
-      -- FRIDAY: the owner's blunt communications companion. The prompt column
-      -- is deliberately empty; seedAgentPromptTemplates materializes the persona
-      -- template at boot, so the stored prompt tracks the template rather than
-      -- freezing a copy of it.
-      INSERT OR IGNORE INTO agents (id, name, color, role, default_name, display_name, system_prompt, avatar_color, onboarded, created_at, updated_at)
-        VALUES ('friday', 'FRIDAY', '#e05252', 'agent', 'FRIDAY', 'FRIDAY', '', '#e05252', 1, datetime('now'), datetime('now'));
-    `,
-  },
 ];
