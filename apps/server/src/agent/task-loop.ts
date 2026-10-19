@@ -14,6 +14,7 @@ import { buildTaskToolRegistry, taskToolHints, taskToolSpecs } from "../tools/ta
 import { teamRoster } from "./personas";
 import { registerHandoffTool } from "../tools/handoff-tool";
 import { registerRenameTool } from "../tools/rename-tool";
+import { registerCreateAgentTool } from "../tools/create-agent-tool";
 import { recallFact } from "../tools/facts";
 import { buildDelegationPrefix } from "./prompts";
 import { appendChannelMessage, getChannelSummary } from "../stores/channels";
@@ -139,6 +140,7 @@ export async function runTaskTurn(db: Database, router: Router, settings: TaskTu
   // Renaming is an action, not a sentence: this persists the new name and
   // pushes `agent.updated` so every client's roster follows in the same turn.
   registerRenameTool(registry, { db, emit: run.emit, currentAgentID: persona.id });
+  registerCreateAgentTool(registry, { db, emit: run.emit });
   const tools = taskToolSpecs(registry, persona.tools, "static"); // includes the per-turn tools registered above
   let timedOut = false;
   const timer = setTimeout(() => { timedOut = true; controller.abort(); }, settings.turnTimeoutMs);

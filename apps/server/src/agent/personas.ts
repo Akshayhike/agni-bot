@@ -89,7 +89,7 @@ export const PERSONAS: Persona[] = [
     color: "#f0b95a",
     role: "front desk — replies fast, decides who should do the work, and synthesizes the answers",
     systemPromptTemplate: AGNI_PROMPT_TEMPLATE,
-    tools: ["memory_search", "memory_write", "links_search", "link_save", "tasks_list", "task_create", "task_update", "grep", "glob", "read_file", "write_file", "web_search", "web_fetch", "deep_research", "bash", "skills_list", "skills_load", "skills_resource", "mail_search", "mail_read", "mail_send", "remember_fact", "recall_fact", "forget_fact", "handoff", "rename_agent", "share_thread"],
+    tools: ["memory_search", "memory_write", "links_search", "link_save", "tasks_list", "task_create", "task_update", "grep", "glob", "read_file", "write_file", "web_search", "web_fetch", "deep_research", "bash", "skills_list", "skills_load", "skills_resource", "mail_search", "mail_read", "mail_send", "remember_fact", "recall_fact", "forget_fact", "handoff", "rename_agent", "create_agent", "share_thread"],
   },
   {
     id: "researcher",
@@ -125,6 +125,19 @@ export function getPersona(id: string): Persona | undefined {
 /** The persona id an agent id maps to; `agni` is the EA alias. */
 export function canonicalAgentID(id: string): string {
   return getPersona(id)?.id ?? id;
+}
+
+/**
+ * Add an agent to the roster at runtime. The roster is otherwise static
+ * (PERSONAS); this is the seam for an agent creating its own agent, so a bot
+ * the owner asks for in chat shows up in the app without a restart. Every
+ * reader — `personaInfo`, `teamRoster`, `getPersona` — sees it immediately.
+ */
+export function registerPersona(persona: Persona): void {
+  if (PERSONAS.some((existing) => existing.id === persona.id)) {
+    throw new Error(`agent ${persona.id} already exists`);
+  }
+  PERSONAS.push(persona);
 }
 
 export function defaultPersona(): Persona {
