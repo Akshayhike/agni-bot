@@ -6,6 +6,7 @@ import { Flame } from "lucide-react";
 import type { ConnectionState } from "@agni/client";
 import type { AgentInfo } from "@agni/client";
 import { isPrimaryAgent } from "../state/app-model";
+import { APP_MARKS, APP_MONOGRAMS } from "./app-marks";
 
 export type FlameSize = "small" | "medium" | "large";
 
@@ -128,6 +129,35 @@ export function PresenceDot({ online }: { online: boolean }) {
 /** A hairline that reads as structure, not decoration. */
 export function Hairline() {
   return <div className="hairline" role="separator" />;
+}
+
+/**
+ * A connected app, as a tile: its own brand mark on a light chip, the way the
+ * app switcher shows it. Brands we have a mark for get the real thing; the
+ * rest get a quiet monogram, so the row never lies about what is connected.
+ */
+export function AppTile({ plugin }: { plugin: { id: string; name: string } }) {
+  const mark = APP_MARKS[plugin.id];
+  if (mark) {
+    return (
+      <span className="app-tile" style={{ background: mark.chip }} aria-hidden="true">
+        <svg className="app-tile-mark" viewBox="0 0 24 24" focusable="false">
+          <path d={mark.path} fill={mark.color} />
+        </svg>
+      </span>
+    );
+  }
+  const mono = APP_MONOGRAMS[plugin.id];
+  const glyph = mono?.glyph ?? Array.from(plugin.name.trim())[0]?.toUpperCase() ?? "?";
+  return (
+    <span
+      className="app-tile app-tile-mono"
+      style={{ background: mono?.chip ?? "#2a2a2d", color: mono?.ink ?? "#d4d4d8" }}
+      aria-hidden="true"
+    >
+      {glyph}
+    </span>
+  );
 }
 
 export function Spinner() {

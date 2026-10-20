@@ -68,7 +68,7 @@ try {
   await page.screenshot({ path: resolve(evidence, "04-agent-switcher.png") });
   await page.keyboard.press("Escape");
 
-  await page.getByRole("button", { name: "Open plugins" }).click();
+  await page.getByRole("button", { name: "Connect apps" }).click();
   await page.getByRole("dialog", { name: "Settings" }).waitFor();
   await page.getByRole("button", { name: "General" }).click();
   await page.screenshot({ path: resolve(evidence, "05-settings.png") });

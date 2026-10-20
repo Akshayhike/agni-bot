@@ -2,16 +2,17 @@
  * The roster, and nothing else. Each agent has one enduring conversation
  * surface; sessions are seams in it, not list entries (blueprint v3 §5).
  */
-import { ChevronsUpDown, Puzzle, Search, X } from "lucide-react";
+import { Search, X } from "lucide-react";
 import { useAppModel, useAppSnapshot } from "../state/use-app-model";
-import { SidebarAgentBadge, connectionShortStatus } from "./bits";
+import { AppTile, SidebarAgentBadge, connectionShortStatus, initials } from "./bits";
 
 export function SidebarView() {
   const model = useAppModel();
   const snapshot = useAppSnapshot();
   const agents = model.filteredAgents;
-  const connected = snapshot.plugins.filter((plugin) => plugin.status === "connected").length;
+  const connected = snapshot.plugins.filter((plugin) => plugin.status === "connected");
   const total = snapshot.plugins.length;
+  const owner = profileName(snapshot.settings.deviceName);
 
   return (
     <aside className="sidebar">
@@ -67,40 +68,41 @@ export function SidebarView() {
         )}
       </div>
 
-      <button
-        type="button"
-        className="sidebar-plugins"
-        onClick={() => model.openSettings()}
-        title="Connect plugins (Gmail, Calendar, Drive, Granola, Notion)"
-        aria-label="Open plugins"
-      >
-        <span className="sidebar-plugins-icon">
-          <Puzzle size={14} />
-        </span>
-        <span className="sidebar-plugins-label">Plugins</span>
-        <span className="sidebar-plugins-count">
-          {connected}/{total}
-        </span>
-      </button>
+      <div className="sidebar-footer">
+        <button
+          type="button"
+          className="sidebar-owner"
+          onClick={() => model.openSettings()}
+          title={`${owner} — settings`}
+          aria-label={`Open settings for ${owner}`}
+        >
+          <span className="sidebar-owner-avatar">{initials(owner)}</span>
+          {snapshot.connectionState.kind !== "ready" ? (
+            <span
+              className="presence-dot"
+              style={{ background: "#f0a04b" }}
+              title={connectionShortStatus(snapshot.connectionState)}
+            />
+          ) : null}
+        </button>
 
-      <button
-        type="button"
-        className="sidebar-profile"
-        onClick={() => model.openSettings()}
-        title="Settings, providers, and connection"
-        aria-label={`Open settings for ${profileName(snapshot.settings.deviceName)}`}
-      >
-        <span className="sidebar-profile-initials">{profileInitials(profileName(snapshot.settings.deviceName))}</span>
-        <span className="sidebar-profile-name">{profileName(snapshot.settings.deviceName)}</span>
-        {snapshot.connectionState.kind !== "ready" ? (
-          <span
-            className="presence-dot"
-            style={{ background: "#f0a04b" }}
-            title={connectionShortStatus(snapshot.connectionState)}
-          />
-        ) : null}
-        <ChevronsUpDown size={9} aria-hidden="true" />
-      </button>
+        <button
+          type="button"
+          className="connect-apps"
+          onClick={() => model.openSettings()}
+          title={`Connect apps — ${connected.length} of ${total} connected`}
+          aria-label="Connect apps"
+        >
+          <span className="connect-apps-label">Connect apps</span>
+          {connected.length > 0 ? (
+            <span className="connect-apps-icons">
+              {connected.map((plugin) => (
+                <AppTile key={`${plugin.id}_${plugin.account}`} plugin={plugin} />
+              ))}
+            </span>
+          ) : null}
+        </button>
+      </div>
     </aside>
   );
 }
@@ -109,14 +111,4 @@ function profileName(deviceName: string): string {
   const marker = deviceName.indexOf("'s ");
   if (marker >= 0) return deviceName.slice(0, marker);
   return deviceName.trim().length === 0 ? "This Browser" : deviceName;
-}
-
-function profileInitials(name: string): string {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => Array.from(part)[0] ?? "")
-    .join("")
-    .toUpperCase();
 }
