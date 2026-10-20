@@ -19,6 +19,8 @@ data/
 /scratch/
 # build artifacts / evidence stay local
 .evidence/
+artifacts/
+.turbo/
 apps/mac/.build/
 
 .DS_Store

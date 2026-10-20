@@ -1,0 +1,53 @@
+/**
+ * The design tokens from apps/mac/DESIGN.md, in one place. Colour, type,
+ * spacing and the few motion values the app uses. Nothing here is decorative:
+ * every token is referenced by a view.
+ */
+:root {
+  /* Charcoal chat canvas; keeps the reference's soft, readable dark layers. */
+  --canvas: #1c1c1c;
+  --sidebar: #141414;
+  /* Rows, wells, sidebar selection. */
+  --surface: #232326;
+  --surface-raised: #28282b;
+  --incoming-bubble: #2a2a2d;
+  --outgoing-bubble: #e8e8e3;
+  /* 1px separators and card edges. */
+  --hairline: rgb(255 255 255 / 7%);
+  --ink: #f3f3f3;
+  --ink-secondary: #8a8a8e;
+  --ink-tertiary: #71717a;
+  /* Agni's identity and every live state. The only warm colour in the app. */
+  --ember: #ff3146;
+  --ember-deep: #c4293c;
+  /* The persona colour the server assigns, used for scheduled work. */
+  --amber: #f0b95a;
+
+  --sidebar-width: 260px;
+  --inspector-width: 320px;
+  --measure: 680px;
+  --gutter: 20px;
+  --row-radius: 10px;
+  --bubble-radius: 18px;
+  --card-radius: 12px;
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI",
+    Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: "SF Mono", ui-monospace, SFMono-Regular, Menlo, Consolas,
+    monospace;
+
+  --text-display: 22px;
+  --text-title: 15px;
+  --text-body: 14px;
+  --text-row-title: 14px;
+  --text-meta: 12px;
+  --text-caption: 11px;
+  --text-machine: 11px;
+  --text-code: 13px;
+
+  --shadow-card: 0 18px 40px rgb(0 0 0 / 35%);
+  --shadow-popover: 0 16px 36px rgb(0 0 0 / 45%);
+  --motion-snappy: 160ms cubic-bezier(0.2, 0.9, 0.3, 1);
+  /* Arrivals: the answer rising into place when it lands. */
+  --motion-enter: 520ms cubic-bezier(0.16, 1, 0.3, 1);
+}

@@ -9,8 +9,11 @@ we control. Full plan: [`docs/blueprint-v3.html`](docs/blueprint-v3.html).
 | Path | What it is |
 | --- | --- |
 | `apps/server` | Bun + TypeScript core: WebSocket protocol, agent loop, model router, SQLite stores, daemon lifecycle, job queue. Runs on this Mac now, bb-1 later. |
+| `apps/web` | React + Vite web client, a faithful port of the native Mac UI. Shares `@agni/client` with future shells. |
+| `apps/mac` | Native SwiftUI macOS client (`AgniApp` + `AgniKit`). Token in Keychain, resumable streaming. |
 | `apps/app` | Tauri 2 clients (macOS + Android) from one codebase. P1 — Rust toolchain not installed yet. |
-| `packages/protocol` | Wire protocol v1: typed frames shared by server and both apps. This is the contract. |
+| `packages/client` | Client core: frame decoding, connection loop, conversation reducer, settings, formatting. Used by the web app; the reference for the Swift port. |
+| `packages/protocol` | Wire protocol v2: typed frames shared by server and every client. This is the contract. |
 | `tools/cli` | Protocol client: `chat` (interactive), `ask`, `bench`, `ping`. The P0 proof gate lives here. |
 | `docs` | Blueprint v3 (canonical), architecture notes, protocol spec. |
 
@@ -30,6 +33,34 @@ bun run daemon status       # pid, uptime, provider health, usage today
 Foreground alternative while hacking: `bun run dev` (watch mode). Both modes are
 the same process; the daemon just detaches it, writes `data/agni.pid`, appends
 to `data/agni.log`, and waits for `/health` before reporting success.
+
+### Web app
+
+`apps/web` is the React port of the SwiftUI client. It runs on pnpm + Turborepo
+alongside the Bun server; the workspace still uses Bun for the server, CLI, and
+tests.
+
+```sh
+pnpm install
+bun run daemon start
+bun run pair --name Web     # copy the one-time token
+pnpm web                    # http://127.0.0.1:5173
+```
+
+Enter the daemon address (`127.0.0.1:8787`, or its Tailscale address) and the
+token in the browser. The token is kept in `localStorage`; **Forget this
+device** clears it. The page checks `/health` before connecting, so a daemon on
+another origin needs CORS, which `/health` already sends.
+
+Useful commands:
+
+```sh
+pnpm check                  # typecheck + web/client Vitest + Bun server tests
+pnpm web:build              # production bundle in apps/web/dist
+pnpm --filter @agni/client smoke   # headless client core against a live daemon
+pnpm --filter @agni/web smoke:ui   # Playwright smoke (needs AGNI_URL/AGNI_TOKEN
+                                   # and a running Vite dev server)
+```
 
 ### Background work (the daemon doing things on its own)
 
