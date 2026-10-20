@@ -127,6 +127,89 @@ export class PluginService {
     return infos;
   }
 
+  /**
+   * Store a plugin's credentials and connect it.
+   *
+   * The secrets arrive over the authenticated socket and go straight into
+   * plugins.json (mode 600) on the daemon host. Nothing is echoed back, and
+   * the app keeps no copy — the same rule the provider keys follow.
+   */
+  configure(
+    pluginID: string,
+    account: PluginAccount,
+    credentials: {
+      user?: string;
+      pass?: string;
+      key?: string;
+      url?: string;
+      clientID?: string;
+      clientSecret?: string;
+    },
+  ): { authorizeURL?: string; error?: { code: string; message: string } } {
+    const manifest = manifestFor(pluginID);
+    if (!manifest) return { error: { code: "unknown_plugin", message: `no plugin "${pluginID}" in the catalog` } };
+    const role = manifest.roles.find((entry) => entry.account === account);
+    if (!role) {
+      return { error: { code: "unknown_plugin", message: `plugin "${pluginID}" does not offer an ${account} connection` } };
+    }
+
+    if (manifest.authKind === "app-password") {
+      const user = credentials.user?.trim() ?? "";
+      const pass = credentials.pass ?? "";
+      if (!user || !pass) {
+        return {
+          error: { code: "plugin_not_configured", message: "Enter the account email and its app password." },
+        };
+      }
+      upsertPlugin(this.pluginsFile, pluginID, {
+        account,
+        enabled: true,
+        auth: { kind: "app-password", user, pass },
+        label: user,
+        connectedAt: Date.now(),
+      });
+      this.save();
+      return this.connect(pluginID, account);
+    }
+
+    if (manifest.authKind === "api-key") {
+      const key = credentials.key?.trim() ?? "";
+      const url = credentials.url?.trim() ?? "";
+      if (!key && !url) {
+        return {
+          error: { code: "plugin_not_configured", message: "Enter an API key, or the URL of a self-hosted instance." },
+        };
+      }
+      upsertPlugin(this.pluginsFile, pluginID, {
+        account,
+        enabled: true,
+        auth: { kind: "api-key", key: key || undefined, url: url || undefined },
+        label: url ? `self-hosted (${url})` : "cloud",
+        connectedAt: Date.now(),
+      });
+      this.save();
+      return this.connect(pluginID, account);
+    }
+
+    if (manifest.authKind === "oauth") {
+      const clientID = credentials.clientID?.trim() ?? "";
+      const clientSecret = credentials.clientSecret?.trim() ?? "";
+      if (!clientID || !clientSecret) {
+        return {
+          error: { code: "plugin_not_configured", message: "Enter the Google client ID and client secret." },
+        };
+      }
+      this.pluginsFile.oauthClients = {
+        ...(this.pluginsFile.oauthClients ?? {}),
+        google: { clientID, clientSecret },
+      };
+      this.save();
+      return this.connect(pluginID, account);
+    }
+
+    return this.connect(pluginID, account);
+  }
+
   /** Begin a connect flow; answers the authorize URL for the browser, or an error. */
   connect(pluginID: string, account: PluginAccount): { authorizeURL?: string; error?: { code: string; message: string } } {
     const manifest = manifestFor(pluginID);

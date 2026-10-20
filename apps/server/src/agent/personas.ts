@@ -96,7 +96,7 @@ export const PERSONAS: Persona[] = [
     color: "#f0b95a",
     role: "front desk — replies fast, decides who should do the work, and synthesizes the answers",
     systemPromptTemplate: AGNI_PROMPT_TEMPLATE,
-    tools: ["memory_search", "memory_write", "links_search", "link_save", "tasks_list", "task_create", "task_update", "grep", "glob", "read_file", "write_file", "web_search", "web_fetch", "deep_research", "bash", "skills_list", "skills_load", "skills_resource", "mail_search", "mail_read", "mail_send", "remember_fact", "recall_fact", "forget_fact", "handoff", "rename_agent", "create_agent", "share_thread"],
+    tools: ["memory_search", "memory_write", "links_search", "link_save", "tasks_list", "task_create", "task_update", "grep", "glob", "read_file", "write_file", "web_search", "web_fetch", "deep_research", "bash", "skills_list", "skills_load", "skills_resource", "mail_search", "mail_read", "mail_send", "remember_fact", "recall_fact", "forget_fact", "handoff", "rename_agent", "create_agent", "share_thread", "job_schedule", "job_list", "job_cancel", "update_agent"],
   },
   {
     id: "researcher",
@@ -150,6 +150,93 @@ export function registerPersona(persona: Persona): void {
   PERSONAS.push(persona);
 }
 
+/** The toolset a new agent gets when the caller does not pick one. */
+export const DEFAULT_AGENT_TOOLS = ["memory_search", "recall_fact", "web_search", "web_fetch", "tasks_list", "job_schedule", "job_list", "job_cancel", "update_agent"];
+
+/**
+ * Rebuild the roster from the agents the assistant created at runtime.
+ *
+ * A bot made in chat used to live only in the process: the row was in the
+ * database, but the roster came from the static list, so the bot vanished
+ * from the sidebar on the next daemon restart — the owner asked for it, saw
+ * it appear, and then it was gone. The rows are the truth; the roster is
+ * rebuilt from them at boot.
+ */
+export function loadRuntimeAgents(db: Database): number {
+  const rows = db
+    .query<{
+      id: string; name: string; color: string | null; role: string | null; role_detail: string | null;
+      display_name: string | null; system_prompt: string | null; avatar_color: string | null; tools: string | null;
+    }, []>("SELECT id, name, color, role, role_detail, display_name, system_prompt, avatar_color, tools FROM agents")
+    .all();
+  let loaded = 0;
+  for (const row of rows) {
+    if (getPersona(row.id)) continue; // a shipped persona, or the `agni` alias
+    const persona: Persona = {
+      id: row.id,
+      name: row.display_name?.trim() || row.name,
+      color: row.avatar_color?.trim() || row.color?.trim() || "#8a9a5b",
+      role: row.role_detail?.trim() || row.role?.trim() || "agent",
+      systemPromptTemplate: row.system_prompt?.trim() || "You are {name}, an assistant for {user}.",
+      tools: parseToolList(row.tools),
+    };
+    registerPersona(persona);
+    loaded += 1;
+  }
+  return loaded;
+}
+
+/**
+ * Change an agent's role and prompt, as the owner describes them.
+ *
+ * The row is the durable truth; the in-memory persona is what the next turn
+ * resolves. Both are updated, so the change lands in this turn and survives
+ * the next restart. The prompt is a template: `{name}` and `{user}` are
+ * substituted when it is resolved.
+ */
+export function updatePersona(
+  db: Database,
+  id: string,
+  changes: { role?: string; prompt?: string },
+): { id: string; name: string; role: string; prompt: string } | undefined {
+  const persona = getPersona(id);
+  if (!persona) return undefined;
+  const role = changes.role?.trim();
+  const prompt = changes.prompt?.trim();
+  if (!role && !prompt) throw new Error("nothing to change: give a role or a prompt");
+  if (role) {
+    db.run("UPDATE agents SET role_detail = ?, updated_at = ? WHERE id = ?", [role, nowISO(), persona.id]);
+    persona.role = role;
+  }
+  if (prompt) {
+    db.run("UPDATE agents SET system_prompt = ?, updated_at = ? WHERE id = ?", [prompt, nowISO(), persona.id]);
+    persona.systemPromptTemplate = prompt;
+  }
+  const row = db.query<{ display_name: string | null; system_prompt: string | null }, [string]>(
+    "SELECT display_name, system_prompt FROM agents WHERE id = ?",
+  ).get(persona.id);
+  return {
+    id: persona.id,
+    name: row?.display_name?.trim() || persona.name,
+    role: persona.role,
+    prompt: row?.system_prompt?.trim() || persona.systemPromptTemplate,
+  };
+}
+
+function parseToolList(raw: string | null): string[] {
+  if (!raw) return [...DEFAULT_AGENT_TOOLS];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (Array.isArray(parsed)) {
+      const tools = parsed.filter((tool): tool is string => typeof tool === "string" && tool.length > 0);
+      if (tools.length > 0) return tools;
+    }
+  } catch {
+    // A malformed allowlist falls back to the default set.
+  }
+  return [...DEFAULT_AGENT_TOOLS];
+}
+
 export function defaultPersona(): Persona {
   const persona = PERSONAS[0];
   if (!persona) throw new Error("no personas defined");
@@ -191,8 +278,8 @@ export function resolvePersona(db: Database, id: string): ResolvedPersona | unde
   const persona = getPersona(id);
   if (!persona) return undefined;
   const row = db
-    .query<{ display_name: string | null; avatar_color: string | null; system_prompt: string | null }, [string]>(
-      "SELECT display_name, avatar_color, system_prompt FROM agents WHERE id = ?",
+    .query<{ display_name: string | null; avatar_color: string | null; system_prompt: string | null; role_detail: string | null }, [string]>(
+      "SELECT display_name, avatar_color, system_prompt, role_detail FROM agents WHERE id = ?",
     )
     .get(persona.id);
   const name = row?.display_name?.trim() || persona.name;
@@ -202,7 +289,9 @@ export function resolvePersona(db: Database, id: string): ResolvedPersona | unde
     id: persona.id,
     name,
     color: row?.avatar_color?.trim() || persona.color,
-    role: persona.role,
+    // The owner's own description of what this agent is for wins over the
+    // shipped one.
+    role: row?.role_detail?.trim() || persona.role,
     systemPromptTemplate: template,
     tools: [...persona.tools],
     systemPrompt: composeSystemPrompt(template, name),
@@ -247,17 +336,29 @@ export function seedAgentPromptTemplates(db: Database): number {
 export function personaInfo(db?: Database): AgentInfo[] {
   return PERSONAS.filter((persona) => !persona.hidden).map((persona) => {
     const row = db
-      ?.query<{ display_name: string | null; avatar_color: string | null }, [string]>(
-        "SELECT display_name, avatar_color FROM agents WHERE id = ?",
+      ?.query<{ display_name: string | null; avatar_color: string | null; onboarded: number; role_detail: string | null }, [string]>(
+        "SELECT display_name, avatar_color, onboarded, role_detail FROM agents WHERE id = ?",
       )
       .get(persona.id);
     return {
       id: persona.id,
       name: row?.display_name?.trim() || persona.name,
       color: row?.avatar_color?.trim() || persona.color,
+      // What this agent is for, in the owner's words — shown in the app.
+      role: shortRole(row?.role_detail?.trim() || persona.role),
       tools: [...persona.tools],
+      onboarded: (row?.onboarded ?? 0) === 1,
     };
   });
+}
+
+/**
+ * The role as a label: "inbox manager — first line of defense on the owner's
+ * mail" reads as "inbox manager" in a sidebar.
+ */
+function shortRole(role: string): string {
+  const head = role.split(/\s+[—–-]\s+/)[0]?.trim() ?? role;
+  return head.length > 48 ? `${head.slice(0, 47)}…` : head;
 }
 
 export interface TeamMember {

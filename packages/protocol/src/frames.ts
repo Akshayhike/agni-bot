@@ -43,7 +43,11 @@ export const AgentInfoSchema = z.object({
   name: z.string().min(1),
   color: z.string().optional(),
   model: z.string().optional(),
+  /** What this agent is for, in the owner's words ("inbox manager"). */
+  role: z.string().optional(),
   tools: z.array(z.string()).optional(),
+  /** Set once the agent has been named; the "what should I call you?" prompt is settled. */
+  onboarded: z.boolean().optional(),
 });
 export type AgentInfo = z.infer<typeof AgentInfoSchema>;
 
@@ -69,6 +73,8 @@ export const MessageInfoSchema = z.object({
   sessionID: z.string().optional(),
   senderName: z.string().optional(),
   senderColor: z.string().optional(),
+  /** The agent this message is about — a handoff notice names its target. */
+  toAgentId: z.string().optional(),
   uiHint: z.string().optional(),
 });
 export type MessageInfo = z.infer<typeof MessageInfoSchema>;
@@ -254,18 +260,22 @@ export const ClientFrameSchema = z.discriminatedUnion("type", [
   /** Configure a built-in API provider. The key is accepted only by the daemon. */
   z.object({
     type: z.literal("provider.add"),
-    providerID: z.enum(["groq", "cerebras", "nim", "gemini", "openrouter"]),
+    providerID: z.enum(["groq", "cerebras", "nim", "gemini", "openrouter", "custom"]),
     apiKey: z.string().min(1).max(4096),
     model: z.string().trim().min(1).max(200).optional(),
+    /** OpenAI-compatible base URL; required when providerID is "custom". */
+    baseUrl: z.string().trim().min(1).max(500).optional(),
+    /** Name to show for a custom endpoint; the host is used when absent. */
+    label: z.string().trim().min(1).max(64).optional(),
   }),
   z.object({
     type: z.literal("provider.model.set"),
-    providerID: z.enum(["groq", "cerebras", "nim", "gemini", "openrouter"]),
+    providerID: z.string().trim().min(1).max(64),
     model: z.string().trim().min(1).max(200),
   }),
   z.object({
     type: z.literal("provider.models.list"),
-    providerID: z.enum(["groq", "cerebras", "nim", "gemini", "openrouter"]),
+    providerID: z.string().trim().min(1).max(64),
   }),
   /** Read the catalog bound to accounts; the settings Plugins pane renders it. */
   z.object({ type: z.literal("plugin.list") }),
@@ -281,6 +291,25 @@ export const ClientFrameSchema = z.discriminatedUnion("type", [
   }),
   /** Disconnect one connection (revokes tokens server-side, then Google). */
   z.object({ type: z.literal("plugin.disconnect"), connectionID: z.string().min(1) }),
+  /**
+   * Give a plugin its credentials and connect it. The secrets arrive over the
+   * authenticated socket and are written to plugins.json on the daemon host —
+   * never kept by the app, never echoed back.
+   */
+  z.object({
+    type: z.literal("plugin.configure"),
+    pluginID: z.string().min(1),
+    account: PluginAccountSchema,
+    /** app-password: the account and its app password. */
+    user: z.string().trim().min(1).max(320).optional(),
+    pass: z.string().min(1).max(512).optional(),
+    /** api-key: the cloud key, or a self-hosted URL. */
+    key: z.string().min(1).max(512).optional(),
+    url: z.string().trim().max(500).optional(),
+    /** oauth: the Google client credentials the daemon signs with. */
+    clientID: z.string().trim().min(1).max(200).optional(),
+    clientSecret: z.string().min(1).max(200).optional(),
+  }),
   /** Typing indicator from this client, aimed at a channel (or conversation when channelId is absent). */
   z.object({
     type: z.literal("user.typing"),
@@ -443,6 +472,8 @@ export const ServerFrameSchema = z.discriminatedUnion("type", [
     text: z.string(),
     internal: z.boolean(),
     uiHint: z.enum(["onboarding_name_prompt", "handoff_notice", "normal"]).optional(),
+    /** The agent this message is about — a handoff notice names its target. */
+    toAgentId: z.string().optional(),
     createdAt: z.string(),
   }),
   /** An agent was renamed/updated; clients refresh the roster. */

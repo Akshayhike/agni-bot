@@ -335,6 +335,8 @@ struct AddProviderView: View {
   var providerID = State(wrappedValue: "groq")
   var apiKey = State(wrappedValue: "")
   var modelID = State(wrappedValue: "llama-3.1-8b-instant")
+  var baseUrl = State(wrappedValue: "")
+  var label = State(wrappedValue: "")
 
   private let options = [
     ProviderOption(id: "groq", title: "Groq", note: "Fast · instant lane"),
@@ -342,11 +344,17 @@ struct AddProviderView: View {
     ProviderOption(id: "nim", title: "NVIDIA NIM", note: "Free credits · all lanes"),
     ProviderOption(id: "gemini", title: "Gemini", note: "Free tier · task and deep lanes"),
     ProviderOption(id: "openrouter", title: "OpenRouter", note: "Free models · deep lane"),
+    ProviderOption(id: "custom", title: "Custom endpoint", note: "Any OpenAI-compatible URL · token router, proxy"),
   ]
+
+  private var isCustom: Bool { providerID.wrappedValue == "custom" }
 
   private var availableOptions: [ProviderOption] {
     let configured = Set(model.health?.providers.map(\.id) ?? [])
-    return options.filter { !configured.contains($0.id) }
+    // A custom endpoint gets its own id when it is added, so the option is
+    // hidden once one exists rather than when the literal id is configured.
+    let hasCustom = configured.contains { $0.hasPrefix("custom") }
+    return options.filter { $0.id == "custom" ? !hasCustom : !configured.contains($0.id) }
   }
 
   var body: some View {
@@ -376,6 +384,24 @@ struct AddProviderView: View {
           Text(option.note)
             .font(Typography.caption)
             .foregroundStyle(Palette.inkTertiary)
+        }
+
+        if isCustom {
+          TextField("Endpoint URL", text: baseUrl.projectedValue)
+            .textFieldStyle(.roundedBorder)
+            .accessibilityLabel("Endpoint URL")
+          Text("The base URL of an OpenAI-compatible endpoint — your token router, a proxy, or a self-hosted gateway. The daemon calls /chat/completions on it.")
+            .font(Typography.caption)
+            .foregroundStyle(Palette.inkTertiary)
+            .fixedSize(horizontal: false, vertical: true)
+
+          TextField("Name", text: label.projectedValue)
+            .textFieldStyle(.roundedBorder)
+            .accessibilityLabel("Endpoint name")
+          Text("How this endpoint is named in the list. The host is used when left empty.")
+            .font(Typography.caption)
+            .foregroundStyle(Palette.inkTertiary)
+            .fixedSize(horizontal: false, vertical: true)
         }
 
         SecureField("API key", text: apiKey.projectedValue)
@@ -412,7 +438,13 @@ struct AddProviderView: View {
         Button {
           let enteredKey = apiKey.wrappedValue
           apiKey.wrappedValue = ""
-          model.addProvider(providerID: providerID.wrappedValue, apiKey: enteredKey, model: modelID.wrappedValue)
+          model.addProvider(
+            providerID: providerID.wrappedValue,
+            apiKey: enteredKey,
+            model: modelID.wrappedValue,
+            baseUrl: isCustom ? baseUrl.wrappedValue : nil,
+            label: isCustom ? label.wrappedValue : nil
+          )
         } label: {
           if model.isAddingProvider {
             ProgressView().controlSize(.small)
@@ -421,7 +453,12 @@ struct AddProviderView: View {
           }
         }
         .keyboardShortcut(.defaultAction)
-        .disabled(availableOptions.isEmpty || apiKey.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.isAddingProvider)
+        .disabled(
+          availableOptions.isEmpty
+            || apiKey.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || (isCustom && baseUrl.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            || model.isAddingProvider
+        )
       }
     }
     .padding(20)

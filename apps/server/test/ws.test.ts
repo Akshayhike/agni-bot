@@ -182,6 +182,21 @@ describe("websocket end-to-end", () => {
     expect(stored?.from_id).toBe(userMessage.fromId);
   });
 
+  test("reports the name prompt as settled once the agent has a name", async () => {
+    await startTestServer();
+    client!.send({ type: "agent.rename", agentId: "ea", name: "Vision" });
+    await client!.next("agent.updated");
+
+    client!.send({ type: "conversation.open", conversationID: "", agentID: "ea" });
+    const opened = await client!.next("conversation.ok");
+    client!.send({ type: "conversation.history", conversationID: opened.conversationID, limit: 50 });
+    const history = await client!.next("conversation.history.ok");
+
+    const prompt = history.messages.find((message) => message.uiHint?.startsWith("onboarding"));
+    expect(prompt?.uiHint).toBe("onboarding_completed");
+    expect(prompt?.senderName).toBe("Vision");
+  });
+
   test("opens a direct channel for a specialist", async () => {
     await startTestServer();
     client!.send({ type: "msg.send", channelId: "dm:researcher", toAgentId: "researcher", text: "hello researcher" });

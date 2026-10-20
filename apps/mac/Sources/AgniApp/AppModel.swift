@@ -379,7 +379,7 @@ final class AppModel {
     Task { try? await connection.send(.jobDelete(jobID: job.id)) }
   }
 
-  func addProvider(providerID: String, apiKey: String, model: String? = nil) {
+  func addProvider(providerID: String, apiKey: String, model: String? = nil, baseUrl: String? = nil, label: String? = nil) {
     let key = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !key.isEmpty else {
       providerAddError = "Enter an API key."
@@ -395,7 +395,9 @@ final class AppModel {
     pendingProviderID = providerID
     Task {
       do {
-        try await connection.send(.providerAdd(providerID: providerID, apiKey: key, model: model))
+        try await connection.send(
+          .providerAdd(providerID: providerID, apiKey: key, model: model, baseUrl: baseUrl, label: label)
+        )
       } catch {
         isAddingProvider = false
         pendingProviderID = nil

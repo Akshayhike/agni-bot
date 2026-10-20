@@ -168,4 +168,122 @@ describe("task lane loop", () => {
     expect(db.query("SELECT count(*) AS count FROM tasks").get()).toEqual({ count: 0 });
     expect(db.query<{ state: string }, [string]>("SELECT state FROM agent_sessions WHERE thread_id = ?").get(thread.id)?.state).toBe("done");
   });
+
+  test("a turn that runs out of steps says what the tools actually did", async () => {
+    db = openDatabase(":memory:");
+    const thread = createThread(db, taskPersona.id);
+    // The model only ever calls a tool: the turn has to end on the step
+    // budget, and the answer has to name the work that happened.
+    const fetchMock = (async () => streamResponse([
+      { choices: [{ delta: { tool_calls: [{ index: 0, id: "call-loop", type: "function", function: { name: "tasks_list", arguments: "{\"status\":\"open\",\"limit\":5}" } }] } }] },
+    ])) as unknown as typeof fetch;
+    const router = new Router([provider], new HealthTracker(), fetchMock);
+    const result = await runTaskTurn(db, router, { firstTokenTimeoutMs: 1000, turnTimeoutMs: 5000 }, {
+      threadID: thread.id, text: "List my tasks, then keep going", persona: taskPersona,
+      emit: () => undefined, signal: new AbortController().signal,
+    });
+
+    expect(result.text).toContain("hit the 16-tool limit");
+    expect(result.text).toContain("Done: tasks_list");
+    // The message is durable: it is what the thread shows after a reload.
+    expect(db.query<{ text: string }, [string]>("SELECT text FROM messages WHERE thread_id = ? AND role = 'assistant'").get(thread.id)?.text).toContain("Done: tasks_list");
+  });
+
+  test("a turn that reads the app's own source is stopped, and told what it can do", async () => {
+    db = openDatabase(":memory:");
+    const persona = { ...taskPersona, tools: ["bash", "mail_search", "task_create"] };
+    const thread = createThread(db, persona.id);
+    // The failure this catches: the owner asks for something the tools cannot
+    // do, and the model goes to read the app's source to find out how to
+    // build it — fifteen `cat` calls, then a budget failure that tells the
+    // owner nothing.
+    let request = 0;
+    const fetchMock = (async () => {
+      request += 1;
+      return streamResponse([
+        { choices: [{ delta: { tool_calls: [{ index: 0, id: `call-${request}`, type: "function", function: { name: "bash", arguments: JSON.stringify({ command: "cat apps/server/src/ws/frames.ts" }) } }] } }] },
+      ]);
+    }) as unknown as typeof fetch;
+    const router = new Router([provider], new HealthTracker(), fetchMock);
+    const result = await runTaskTurn(db, router, { firstTokenTimeoutMs: 1000, turnTimeoutMs: 5000 }, {
+      threadID: thread.id, text: "add a fire board widget to the app", persona,
+      emit: () => undefined, signal: new AbortController().signal,
+    });
+
+    // It stops early, with the truth, instead of running out of budget.
+    expect(result.text).toContain("I went looking through the app's own source");
+    expect(result.text).not.toContain("task budget");
+    expect(result.text).toContain("mail_search");
+    // Fewer than the full step budget: the guard fired first.
+    const calls = db.query<{ n: number }, []>("SELECT COUNT(*) as n FROM tool_calls").get()?.n ?? 0;
+    expect(calls).toBeLessThan(16);
+    // The model was told to act before the turn was cut.
+    const log = db.query<{ message_log: string }, [string]>("SELECT message_log FROM agent_sessions WHERE thread_id = ?").get(thread.id)?.message_log ?? "";
+    expect(log).toContain("Stop reading the app's source");
+  });
+
+  test("interleaving lookups does not hide the wandering", async () => {
+    db = openDatabase(":memory:");
+    const persona = { ...taskPersona, tools: ["bash", "job_list", "recall_fact", "task_create"] };
+    const thread = createThread(db, persona.id);
+    let request = 0;
+    const calls = ["bash", "job_list", "bash", "recall_fact", "bash", "bash", "bash"];
+    const fetchMock = (async () => {
+      request += 1;
+      const name = calls[Math.min(request - 1, calls.length - 1)] ?? "bash";
+      const args = name === "bash" ? { command: "cat apps/server/src/ws/frames.ts" } : {};
+      return streamResponse([
+        { choices: [{ delta: { tool_calls: [{ index: 0, id: `call-${request}`, type: "function", function: { name, arguments: JSON.stringify(args) } }] } }] },
+      ]);
+    }) as unknown as typeof fetch;
+    const router = new Router([provider], new HealthTracker(), fetchMock);
+    const result = await runTaskTurn(db, router, { firstTokenTimeoutMs: 1000, turnTimeoutMs: 5000 }, {
+      threadID: thread.id, text: "add a fire board widget to the app", persona,
+      emit: () => undefined, signal: new AbortController().signal,
+    });
+
+    // Looking at the app's own state is not progress, so the guard still fires.
+    expect(result.text).toContain("I went looking through the app's own source");
+    expect(result.text).not.toContain("tool limit");
+  });
+
+  test("a request about the code is not treated as going off road", async () => {
+    db = openDatabase(":memory:");
+    const persona = { ...taskPersona, tools: ["bash"] };
+    const thread = createThread(db, persona.id);
+    let request = 0;
+    const fetchMock = (async () => {
+      request += 1;
+      // Reading the source is the work here, so the guard stays out of it.
+      return request <= 3
+        ? streamResponse([{ choices: [{ delta: { tool_calls: [{ index: 0, id: `call-${request}`, type: "function", function: { name: "bash", arguments: JSON.stringify({ command: "cat apps/server/src/index.ts" }) } }] } }] }])
+        : streamResponse([{ choices: [{ delta: { content: "Here is what the daemon does." } }] }]);
+    }) as unknown as typeof fetch;
+    const router = new Router([provider], new HealthTracker(), fetchMock);
+    const result = await runTaskTurn(db, router, { firstTokenTimeoutMs: 1000, turnTimeoutMs: 5000 }, {
+      threadID: thread.id, text: "read the code and explain how the daemon boots", persona,
+      emit: () => undefined, signal: new AbortController().signal,
+    });
+
+    expect(result.text).toBe("Here is what the daemon does.");
+    expect(result.text).not.toContain("I went looking through the app's own source");
+  });
+
+  test("a turn that fails outright leaves a message the user can see", async () => {
+    db = openDatabase(":memory:");
+    const thread = createThread(db, taskPersona.id);
+    // No providers at all: the model call cannot even start.
+    const router = new Router([], new HealthTracker(), (async () => streamResponse([])) as unknown as typeof fetch);
+    const emitted: Array<{ type: string; [key: string]: unknown }> = [];
+    const result = await runTaskTurn(db, router, { firstTokenTimeoutMs: 1000, turnTimeoutMs: 5000 }, {
+      threadID: thread.id, text: "check your email", persona: taskPersona,
+      emit: (frame) => emitted.push(frame as { type: string; [key: string]: unknown }), signal: new AbortController().signal,
+    });
+
+    expect(result.stopReason).toBe("error");
+    expect(result.text).toContain("This turn failed:");
+    expect(result.text).toContain("no model providers configured");
+    expect(emitted.find((frame) => frame.type === "error")).toMatchObject({ code: "no_provider" });
+    expect(db.query<{ text: string }, [string]>("SELECT text FROM messages WHERE thread_id = ? AND role = 'assistant'").get(thread.id)?.text).toContain("This turn failed:");
+  });
 });

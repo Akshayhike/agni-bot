@@ -139,6 +139,34 @@ export function backgroundSession(db: Database, conversation: ConversationRow, t
   })();
 }
 
+/**
+ * A block for work an agent was asked to do by another agent.
+ *
+ * The work belongs to the agent that was asked: it lives in that agent's
+ * conversation, so opening that agent's chat shows the work. When the agent
+ * has no live block, this becomes the active one — that is the chat with
+ * that agent. When it does, the work is a background block, so it never
+ * steals a conversation the owner is in the middle of.
+ */
+export function delegationSession(db: Database, conversation: ConversationRow, title: string): ThreadRow {
+  const now = nowISO();
+  return db.transaction(() => {
+    const active = conversation.active_thread_id ? getThread(db, conversation.active_thread_id) : null;
+    if (!active || active.closed_at !== null) {
+      const block = createThread(db, conversation.agent_id, title, { conversationID: conversation.id });
+      db.run("UPDATE conversations SET active_thread_id = ?, updated_at = ? WHERE id = ?", [block.id, now, conversation.id]);
+      conversation.active_thread_id = block.id;
+      conversation.updated_at = now;
+      return { ...block, created_at: now };
+    }
+    const block = createThread(db, conversation.agent_id, title, { conversationID: conversation.id });
+    db.run("UPDATE threads SET closed_at = ?, closed_by = 'background' WHERE id = ?", [now, block.id]);
+    db.run("UPDATE conversations SET updated_at = ? WHERE id = ?", [now, conversation.id]);
+    conversation.updated_at = now;
+    return { ...block, closed_at: now, closed_by: "background", created_at: now };
+  })();
+}
+
 /** Store the refreshed carried summary. */
 export function updateSummary(db: Database, conversationID: string, summary: string | null): void {
   db.run("UPDATE conversations SET summary = ?, updated_at = ? WHERE id = ?", [summary, nowISO(), conversationID]);

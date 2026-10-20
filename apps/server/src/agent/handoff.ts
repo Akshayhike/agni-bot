@@ -21,6 +21,7 @@ import type { Router } from "../models/router";
 import type { TaskTurnSettings, TaskTurnRun, TaskTurnResult } from "./task-loop";
 import { runTaskTurn } from "./task-loop";
 import { createThread } from "../stores/threads";
+import { delegationSession, ensureConversation } from "../stores/conversations";
 
 export interface HandoffRequest {
   /** Agent id the work is handed to. */
@@ -70,14 +71,23 @@ export interface HandoffDeps {
 export async function handoff(deps: HandoffDeps, request: HandoffRequest): Promise<HandoffResult> {
   const persona = deps.persona ?? resolvePersona(deps.db, request.toAgentID) ?? defaultResolvedPersona(deps.db);
   const child = enterDelegation(deps.guardrail, persona.id, request.context ?? null);
-  const childThread = createThread(deps.db, persona.id, request.task);
+  // The delegated work belongs to the agent that was asked: its block lives in
+  // that agent's conversation, so opening that agent's chat in the app shows
+  // the work instead of an empty room.
+  const conversation = ensureConversation(deps.db, persona.id);
+  const childThread = delegationSession(deps.db, conversation, `${parentName(deps.db, deps.guardrail.currentAgentID)} messaged ${persona.name}`);
   const childThreadID = childThread.id;
 
   const run: TaskTurnRun = {
     threadID: childThreadID,
     text: request.task,
     persona,
-    conversationID: deps.conversationID,
+    conversationID: conversation.id,
+    // The brief is a message *to* the specialist, not the owner speaking:
+    // it is written to the log as a note, so the specialist's chat reads
+    // like a conversation rather than a transcript of someone else's brief.
+    inputRole: "system",
+    inputText: `${parentName(deps.db, deps.guardrail.currentAgentID)} messaged you: ${request.task}`,
     carrySummary: deps.carrySummary ?? null,
     // Child work is internal; the parent receives the result through the tool
     // response and remains the only agent writing to the user-facing stream.
@@ -99,6 +109,12 @@ export async function handoff(deps: HandoffDeps, request: HandoffRequest): Promi
     stopReason: result.stopReason,
     depth: child.depth,
   };
+}
+
+/** The delegating agent's live display name, for the note the child reads. */
+function parentName(db: Database, agentID: string): string {
+  const row = db.query<{ display_name: string | null }, [string]>("SELECT display_name FROM agents WHERE id = ?").get(agentID);
+  return row?.display_name?.trim() || agentID;
 }
 
 /** Build the ToolContext chain metadata for a turn. */

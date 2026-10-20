@@ -5,8 +5,10 @@ import { HealthTracker } from "../src/models/health";
 import type { ProviderConfig } from "../src/models/providers";
 import { Router } from "../src/models/router";
 import { runTaskTurn } from "../src/agent/task-loop";
+import { handoff } from "../src/agent/handoff";
 import { defaultResolvedPersona } from "../src/agent/personas";
-import { createThread } from "../src/stores/threads";
+import { createThread, getThread } from "../src/stores/threads";
+import { conversationTranscript, ensureConversation, getConversation } from "../src/stores/conversations";
 import { rootGuardrail, enterDelegation, canDelegate, GuardrailError, MAX_DEPTH, MAX_DELEGATED_STEPS } from "../src/agent/guardrails";
 
 const provider: ProviderConfig = {
@@ -109,5 +111,42 @@ describe("agent-to-agent handoff", () => {
     });
     expect(emitted.some((frame) => frame.type === "turn.start")).toBe(true);
     expect(emitted.some((frame) => frame.type === "turn.end")).toBe(true);
+  });
+
+  test("the delegated work lands in the agent that was asked, not in a detached thread", async () => {
+    db = openDatabase(":memory:");
+    const parent = createThread(db, defaultResolvedPersona(db!).id);
+    // The specialist's own conversation — the one the owner opens when they
+    // click that agent in the app.
+    const conversation = ensureConversation(db!, "researcher");
+    const router = makeRouter(["Here is the brief."]);
+
+    const result = await handoff({
+      db: db!,
+      router,
+      settings: { firstTokenTimeoutMs: 1000, turnTimeoutMs: 5000 },
+      emit: () => undefined,
+      signal: new AbortController().signal,
+      threadID: parent.id,
+      guardrail: rootGuardrail("ea"),
+    }, { toAgentID: "researcher", task: "Find the source of the delay.", emit: () => undefined, signal: new AbortController().signal });
+
+    expect(result.agentID).toBe("researcher");
+    // The block is inside the specialist's conversation, so opening that
+    // agent's chat shows the work instead of an empty room.
+    const after = getConversation(db!, conversation.id)!;
+    expect(after.active_thread_id).toBeTruthy();
+    const block = getThread(db!, after.active_thread_id!);
+    expect(block?.agent_id).toBe("researcher");
+    expect(block?.conversation_id).toBe(conversation.id);
+    // And it is titled as the conversation it is, not as the internal brief.
+    expect(block?.title).toBe("Agni Bot messaged Researcher");
+    // The work is in that conversation's transcript.
+    const transcript = conversationTranscript(db!, conversation.id);
+    expect(transcript.some((message) => message.text.includes("Here is the brief."))).toBe(true);
+    // The brief is a note, not the owner speaking.
+    const brief = transcript.find((message) => message.text.includes("messaged you"));
+    expect(brief?.role).toBe("system");
+    expect(brief?.text).toContain("Agni Bot messaged you");
   });
 });

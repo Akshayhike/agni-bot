@@ -6,6 +6,10 @@
  * rename from the UI cannot drift apart — one writes `agents.display_name`,
  * both emit `agent.updated`, and the prompt picks the new name up on the next
  * turn because `resolvePersona` reads that column.
+ *
+ * A rename also settles the "what should I call you?" prompt: the stored
+ * message is marked completed, so the field is gone the next time the thread
+ * is loaded instead of asking for a name it already has.
  */
 import type { Database } from "bun:sqlite";
 import { canonicalAgentID } from "./personas";
@@ -40,5 +44,19 @@ export function renameAgent(db: Database, agentID: string, proposedName: string)
   // `agni` is the legacy alias row for the same persona; keep it in step so raw
   // SQL and old threads never show two names for one agent.
   if (target === "ea") db.run("UPDATE agents SET display_name = ?, updated_at = ? WHERE id = 'agni'", [name, now]);
+  settleOnboardingPrompt(db, target);
   return { ok: true, agentID: target, previousName: row.display_name?.trim() || null, name };
+}
+
+/**
+ * The inline "what should I call you?" prompt is stored once, with the hint
+ * that renders the name field. Once the agent has a name the field has no
+ * business reappearing, so the stored message is marked completed — the
+ * thread then shows "Renamed to …" instead of asking again.
+ */
+function settleOnboardingPrompt(db: Database, agentID: string): void {
+  db.run(
+    "UPDATE channel_messages SET ui_hint = 'onboarding_completed' WHERE channel_id = 'main' AND ui_hint = 'onboarding_name_prompt' AND from_id = ?",
+    [agentID],
+  );
 }

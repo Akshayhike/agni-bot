@@ -12,8 +12,10 @@ import {
   startPending,
 } from "../src/plugins/store";
 import { CATALOG, manifestFor } from "../src/plugins/catalog";
+import { mailCredentialsFromPlugins, pluginMailResolver } from "../src/plugins/credentials";
+import { resolveMailConfig } from "../src/tools/mail";
 import type { Config } from "../src/config";
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 
 function fakeConfig(overrides: Partial<Config> = {}): Config {
   return {
@@ -113,6 +115,63 @@ describe("plugin connect flow", () => {
     const service = new PluginService({ config: fakeConfig(), db, emit: () => {}, pluginsPath: ":memory:" });
     const result = service.connect("calendar", "agent");
     expect(result.error?.code).toBe("plugin_not_configured");
+    db.close();
+  });
+
+  test("configuring an app-password plugin stores the credentials and connects it", () => {
+    const db = openDatabase(":memory:");
+    const pluginsPath = "/tmp/agni-plugins-configure-test.json";
+    writeFileSync(pluginsPath, JSON.stringify({ version: 1, plugins: {} }));
+    const service = new PluginService({ config: fakeConfig(), db, emit: () => {}, pluginsPath });
+
+    const result = service.configure("gmail", "agent", { user: "agni@example.com", pass: "app-pass" });
+    expect(result.error).toBeUndefined();
+
+    const stored = JSON.parse(readFileSync(pluginsPath, "utf8")) as {
+      plugins: Record<string, { enabled: boolean; auth: { kind: string; user?: string; pass?: string } }>;
+    };
+    expect(stored.plugins.gmail?.enabled).toBe(true);
+    expect(stored.plugins.gmail?.auth.user).toBe("agni@example.com");
+    expect(stored.plugins.gmail?.auth.pass).toBe("app-pass");
+
+    const connection = getConnectionFor(db, "gmail", "agent");
+    expect(connection?.status).toBe("connected");
+    expect(connection?.account_label).toBe("agni@example.com");
+    db.close();
+  });
+
+  test("configuring without the required fields is refused, and nothing is stored", () => {
+    const db = openDatabase(":memory:");
+    const pluginsPath = "/tmp/agni-plugins-configure-empty-test.json";
+    writeFileSync(pluginsPath, JSON.stringify({ version: 1, plugins: {} }));
+    const service = new PluginService({ config: fakeConfig(), db, emit: () => {}, pluginsPath });
+
+    const result = service.configure("gmail", "agent", { user: "agni@example.com" });
+    expect(result.error?.code).toBe("plugin_not_configured");
+
+    const stored = JSON.parse(readFileSync(pluginsPath, "utf8")) as { plugins: Record<string, unknown> };
+    expect(stored.plugins.gmail).toBeUndefined();
+    db.close();
+  });
+
+  test("configuring an OAuth plugin stores the Google client and starts the grant", () => {
+    const db = openDatabase(":memory:");
+    const pluginsPath = "/tmp/agni-plugins-configure-oauth-test.json";
+    writeFileSync(pluginsPath, JSON.stringify({ version: 1, plugins: {} }));
+    const service = new PluginService({ config: fakeConfig(), db, emit: () => {}, pluginsPath });
+
+    const result = service.configure("calendar", "agent", {
+      clientID: "client-id",
+      clientSecret: "client-secret",
+    });
+    expect(result.error).toBeUndefined();
+    expect(result.authorizeURL).toContain("client_id=client-id");
+
+    const stored = JSON.parse(readFileSync(pluginsPath, "utf8")) as {
+      oauthClients?: Record<string, { clientID: string; clientSecret: string }>;
+    };
+    expect(stored.oauthClients?.google?.clientID).toBe("client-id");
+    expect(stored.oauthClients?.google?.clientSecret).toBe("client-secret");
     db.close();
   });
 
@@ -367,6 +426,45 @@ describe("plugin connection store", () => {
     expect(tokens.state).toBeUndefined(); // the pending state is gone once granted
     expect(tokens.refresh_token).toBe("rt_new");
     db.close();
+  });
+});
+
+describe("plugin credentials reach the tools", () => {
+  const pluginsPath = "/tmp/agni-plugins-credentials-test.json";
+
+  function writePlugins(entry: unknown): void {
+    writeFileSync(pluginsPath, JSON.stringify({ version: 1, plugins: entry ? { gmail: entry } : {} }));
+  }
+
+  test("a mailbox connected in the UI is the one the mail tool uses", () => {
+    writePlugins({ account: "agent", enabled: true, auth: { kind: "app-password", user: "agni@example.com", pass: "app-pass" } });
+
+    const credentials = mailCredentialsFromPlugins(pluginsPath, "agent");
+    expect(credentials).toEqual({ user: "agni@example.com", pass: "app-pass" });
+
+    const config = resolveMailConfig("agent", pluginMailResolver(pluginsPath));
+    expect(config?.user).toBe("agni@example.com");
+    expect(config?.pass).toBe("app-pass");
+    expect(config?.imapHost).toBe("imap.gmail.com");
+  });
+
+  test("a plugin that is not connected yields no credentials", () => {
+    writePlugins({ account: "agent", enabled: false, auth: { kind: "app-password", user: "agni@example.com", pass: "app-pass" } });
+    expect(mailCredentialsFromPlugins(pluginsPath, "agent")).toBeNull();
+    writePlugins(null);
+    expect(mailCredentialsFromPlugins(pluginsPath, "owner")).toBeNull();
+  });
+
+  test("the owner's mailbox is a different plugin from the agent's", () => {
+    writeFileSync(pluginsPath, JSON.stringify({
+      version: 1,
+      plugins: {
+        gmail: { account: "agent", enabled: true, auth: { kind: "app-password", user: "agni@example.com", pass: "a" } },
+        "gmail-owner": { account: "owner", enabled: true, auth: { kind: "app-password", user: "owner@example.com", pass: "b" } },
+      },
+    }));
+    expect(mailCredentialsFromPlugins(pluginsPath, "agent")?.user).toBe("agni@example.com");
+    expect(mailCredentialsFromPlugins(pluginsPath, "owner")?.user).toBe("owner@example.com");
   });
 });
 

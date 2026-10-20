@@ -116,8 +116,17 @@ describe("persona roster", () => {
   test("personaInfo shows only non-hidden agents; the team still sees all", () => {
     db = openDatabase(":memory:");
     // The sidebar roster hides specialists so there is one clean entry point.
-    expect(personaInfo(db).map((agent) => agent.id)).toEqual(["ea"]);
+    // Assert the invariant, not the exact list: another test file may have
+    // registered an agent at runtime, and the roster is process state.
+    const roster = personaInfo(db).map((agent) => agent.id);
+    expect(roster).toContain("ea");
+    expect(roster).not.toContain("researcher");
+    expect(roster).not.toContain("coder");
+    expect(roster).not.toContain("analyst");
     // But they remain valid handoff targets for the EA.
-    expect(teamRoster(db, { exclude: "ea" }).map((member) => member.id)).toEqual(["researcher", "coder", "analyst"]);
+    const team = teamRoster(db, { exclude: "ea" }).map((member) => member.id);
+    expect(team).toContain("researcher");
+    expect(team).toContain("coder");
+    expect(team).toContain("analyst");
   });
 });

@@ -69,4 +69,23 @@ describe("agent rename", () => {
     expect(result.ok).toBe(false);
     expect(displayName(db, "ea")).toBe("Agni Bot");
   });
+
+  test("a rename settles the stored name prompt so the field does not come back", () => {
+    db = openDatabase(":memory:");
+    db.run(
+      "INSERT INTO channel_messages (id, channel_id, from_type, from_id, text, internal, compacted, turn_id, ui_hint, created_at) VALUES ('m1', 'main', 'agent', 'ea', 'What would you like to call me?', 0, 0, NULL, 'onboarding_name_prompt', '2026-01-01T00:00:00.000Z')",
+    );
+    expect(
+      db.query<{ count: number }, []>("SELECT count(*) AS count FROM channel_messages WHERE ui_hint = 'onboarding_name_prompt'").get()?.count,
+    ).toBe(1);
+
+    renameAgent(db, "ea", "Baahu");
+
+    expect(
+      db.query<{ count: number }, []>("SELECT count(*) AS count FROM channel_messages WHERE ui_hint = 'onboarding_name_prompt'").get()?.count,
+    ).toBe(0);
+    expect(
+      db.query<{ count: number }, []>("SELECT count(*) AS count FROM channel_messages WHERE ui_hint = 'onboarding_completed'").get()?.count,
+    ).toBe(1);
+  });
 });

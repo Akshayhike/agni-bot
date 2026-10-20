@@ -9,7 +9,7 @@
 import type { Database } from "bun:sqlite";
 import type { ServerFrameBody } from "@agni/protocol";
 import type { Persona } from "../agent/personas";
-import { getPersona, personaInfo, registerPersona } from "../agent/personas";
+import { getPersona, personaInfo, registerPersona, DEFAULT_AGENT_TOOLS } from "../agent/personas";
 import { nowISO } from "../util/ids";
 import { MAX_AGENT_NAME_CHARS } from "../agent/identity";
 import type { ToolRegistry } from "./registry";
@@ -20,7 +20,7 @@ export interface CreateAgentToolDeps {
 }
 
 /** A starting toolset for a new agent when the caller doesn't pick one. */
-const DEFAULT_TOOLS = ["memory_search", "recall_fact", "web_search", "web_fetch", "tasks_list"];
+const DEFAULT_TOOLS = DEFAULT_AGENT_TOOLS;
 
 const PALETTE = ["#e05252", "#5b9bd5", "#65a765", "#9a7bd1", "#e0a75a", "#5ac8c8", "#d95f9e", "#8a9a5b"];
 
@@ -68,9 +68,10 @@ export function registerCreateAgentTool(registry: ToolRegistry, deps: CreateAgen
       const role = String(args.role ?? "").trim() || "agent";
       const id = String(args.id ?? "").trim() || slugify(name);
       if (!/^[a-z0-9_]+$/.test(id)) throw new Error("id must be lowercase letters, numbers, and underscores");
-      if (getPersona(id)) throw new Error(`agent ${id} already exists`);
-      const row = db.query("SELECT 1 FROM agents WHERE id = ?").get(id);
-      if (row) throw new Error(`agent ${id} already exists`);
+      // Say what to do instead: an agent that exists is renamed, not rebuilt.
+      if (getPersona(id)) throw new Error(`agent ${id} already exists — use rename_agent to change it, or pick another id`);
+      const row = db.query("SELECT display_name FROM agents WHERE id = ?").get(id) as { display_name: string | null } | null;
+      if (row) throw new Error(`agent ${id} already exists (${row.display_name ?? id}) — use rename_agent to change it, or pick another id`);
 
       const requested: string[] = Array.isArray(args.tools)
         ? args.tools.filter((tool): tool is string => typeof tool === "string")
@@ -86,9 +87,9 @@ export function registerCreateAgentTool(registry: ToolRegistry, deps: CreateAgen
 
       const now = nowISO();
       db.run(
-        `INSERT INTO agents (id, name, color, role, default_name, display_name, system_prompt, avatar_color, onboarded, created_at, updated_at)
-         VALUES (?, ?, ?, 'agent', ?, ?, ?, ?, 1, ?, ?)`,
-        [id, name, color, name, name, prompt, color, now, now],
+        `INSERT INTO agents (id, name, color, role, role_detail, default_name, display_name, system_prompt, avatar_color, onboarded, tools, created_at, updated_at)
+         VALUES (?, ?, ?, 'agent', ?, ?, ?, ?, ?, 1, ?, ?, ?)`,
+        [id, name, color, role, name, name, prompt, color, JSON.stringify(finalTools), now, now],
       );
       registerPersona(persona);
       deps.emit({ type: "agents.update", agents: personaInfo(db) });

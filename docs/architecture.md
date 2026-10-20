@@ -7,9 +7,10 @@ disagree, the blueprint wins.
 ## Shape
 
 ```
-Mac app (Tauri 2) ─┐
+Web app (React) ─────┐
+Mac app (SwiftUI) ───┤
 Android app (Tauri) ─┼── WebSocket (typed frames, seq'd, resumable) ── over Tailscale
-CLI (tools/cli) ────┘                                                │
+CLI (tools/cli) ─────┘                                                │
                                                                      ▼
                                                       apps/server  (Bun + TypeScript)
                                                       ├─ ws: server / dispatch / frame log
@@ -28,6 +29,16 @@ CLI (tools/cli) ────┘                                                �
                                                       │          deterministic P2 capture + retrieval
                                                       └─ later: ACP bridge (P3), Gmail + ICS (P4)
 ```
+
+### Clients
+
+`apps/mac` and `apps/web` are the same product in two shells: pairing,
+reconnect/resync, streaming transcript, approvals and forms, agent switcher,
+providers/plugins settings, and the details inspector. `apps/web` is the
+reference port for further platforms; `packages/client` holds its
+transport-agnostic core (frame codec, settings, health, connection loop,
+conversation reducer). Both speak `packages/protocol` v2, so a frame change
+lands there first and then flows outward.
 
 ## Process lifecycle
 
@@ -99,12 +110,36 @@ The `agni-task` persona uses `agent/task-loop.ts`; `agni` continues through
 the one-call instant runner. Each task step sends the same system prompt and
 tool schemas first, then the compacted session and recent messages. That keeps
 the leading request prefix stable for provider-side prefix caching when the
-provider supports it. The loop has an eight-tool-call and 16k-token budget,
+provider supports it. The loop has a 16-tool-call and 16k-token budget,
 persists its message log and each tool result, and only registers the P2 store
 tools. An interrupted session restores saved tool results; calls with an
 uncertain outcome are returned as errors and never replayed automatically.
 Approval decisions are stored in SQLite and resolve the active loop through
 the approval broker.
+
+Two bounds keep a turn from wandering instead of working. A turn that only
+*looks* at the app's own source — reading the checkout to find out how to
+build a feature it has no tool for — is told to act, and then stopped with
+the truth: what it can do, and that it cannot ship changes to the app. A turn
+that runs out of budget still answers, naming the work that happened instead
+of reporting a limit.
+
+Scheduling is a tool, not a cron entry: `job_schedule` puts a prompt on the
+job queue with a wall-clock schedule (`dailyAt` + `days`, so "weekdays at
+9:05" skips the weekend), `job_list` shows what is queued, and `job_cancel`
+stops it. The daemon's `turn` job kind runs the scheduled prompt in the task
+lane and raises the next occurrence itself.
+
+Redefining an agent is a tool too: `update_agent` writes the owner's words
+into the agent's role and prompt (durable, and broadcast so the app shows
+the new role), and `create_agent` gives a new agent its own allowlist and
+role — both survive a restart, because the roster is rebuilt from the
+`agents` rows at boot.
+
+A handoff lands where it belongs: the delegated work is a block in the
+*asked* agent's conversation, so opening that agent in the app shows the
+work instead of an empty room, and the chat reads "Messaged F.R.I.D.A.Y."
+rather than a routing dump.
 
 ## Failure honesty
 

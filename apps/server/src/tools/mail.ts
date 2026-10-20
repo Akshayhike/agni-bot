@@ -8,6 +8,7 @@ import type { ToolDefinition } from "./registry";
 import { ImapClient, type ImapMessage } from "../mail/imap";
 import { sendEmail } from "../mail/smtp";
 import { getConnectionFor } from "../plugins/store";
+import type { MailAccountResolver } from "../plugins/credentials";
 
 export interface MailConfig {
   user: string;
@@ -18,14 +19,31 @@ export interface MailConfig {
   smtpPort?: number;
 }
 
-function getMailConfig(account: "agent" | "owner"): MailConfig | null {
-  // Read from env via process.env (Bun loads .env)
-  const user = account === "agent"
-    ? (process.env.GMAIL_USER || "")
-    : (process.env.GMAIL_OWNER_USER || "");
-  const pass = account === "agent"
-    ? (process.env.GMAIL_APP_PASSWORD || "")
-    : (process.env.GMAIL_OWNER_APP_PASSWORD || "");
+/**
+ * A mailbox that is not connected is a one-line answer, not a scavenger hunt.
+ * The old wording ("set GMAIL_USER in .env") sent the model off reading the
+ * user's home directory looking for secrets; the connect lives in the Plugins
+ * pane now, and that is the only place worth pointing at.
+ */
+function mailNotConnected(account: "agent" | "owner"): string {
+  const whose = account === "agent" ? "Agni's own" : "the owner's";
+  return (
+    `Mail is not connected for ${whose} mailbox. The owner connects it in Settings → Plugins (Gmail). ` +
+    "Do not look for credentials in files, the environment, or the user's home directory — " +
+    "tell the owner it is not connected and stop."
+  );
+}
+
+/**
+ * The connected plugin first (what the owner set up in the UI), then the
+ * .env fallback (older installs). Both are server-side secrets.
+ */
+export function resolveMailConfig(account: "agent" | "owner", accounts?: MailAccountResolver): MailConfig | null {
+  const connected = accounts?.(account) ?? null;
+  const user = connected?.user
+    ?? (account === "agent" ? (process.env.GMAIL_USER || "") : (process.env.GMAIL_OWNER_USER || ""));
+  const pass = connected?.pass
+    ?? (account === "agent" ? (process.env.GMAIL_APP_PASSWORD || "") : (process.env.GMAIL_OWNER_APP_PASSWORD || ""));
   if (!user || !pass) return null;
   return {
     user,
@@ -37,8 +55,9 @@ function getMailConfig(account: "agent" | "owner"): MailConfig | null {
   };
 }
 
-export function createMailTools(db: Database): ToolDefinition<any, any>[] {
+export function createMailTools(db: Database, accounts?: MailAccountResolver): ToolDefinition<any, any>[] {
   const tools: ToolDefinition<any, any>[] = [];
+  const configFor = (account: "agent" | "owner"): MailConfig | null => resolveMailConfig(account, accounts);
 
   tools.push({
     name: "mail_search",
@@ -57,8 +76,8 @@ export function createMailTools(db: Database): ToolDefinition<any, any>[] {
     timeoutMs: 15_000,
     handler: async (args: any) => {
       const account = (args.account || "agent") as "agent" | "owner";
-      const cfg = getMailConfig(account);
-      if (!cfg) return { error: "Mail not configured for this account. Set GMAIL_USER/GMAIL_APP_PASSWORD in .env." };
+      const cfg = configFor(account);
+      if (!cfg) return { error: mailNotConnected(account) };
       const client = new ImapClient();
       try {
         await client.connect({ host: cfg.imapHost!, port: cfg.imapPort!, user: cfg.user, pass: cfg.pass });
@@ -102,8 +121,8 @@ export function createMailTools(db: Database): ToolDefinition<any, any>[] {
     timeoutMs: 15_000,
     handler: async (args: any) => {
       const account = (args.account || "agent") as "agent" | "owner";
-      const cfg = getMailConfig(account);
-      if (!cfg) return { error: "Mail not configured for this account." };
+      const cfg = configFor(account);
+      if (!cfg) return { error: mailNotConnected(account) };
       const client = new ImapClient();
       try {
         await client.connect({ host: cfg.imapHost!, port: cfg.imapPort!, user: cfg.user, pass: cfg.pass });
@@ -145,8 +164,8 @@ export function createMailTools(db: Database): ToolDefinition<any, any>[] {
     timeoutMs: 15_000,
     handler: async (args: any) => {
       const account = (args.account || "agent") as "agent" | "owner";
-      const cfg = getMailConfig(account);
-      if (!cfg) return { error: "Mail not configured for this account." };
+      const cfg = configFor(account);
+      if (!cfg) return { error: mailNotConnected(account) };
       const result = await sendEmail(
         { host: cfg.smtpHost!, port: cfg.smtpPort!, user: cfg.user, pass: cfg.pass },
         cfg.user, args.to, args.subject, args.body,

@@ -1,8 +1,10 @@
 /**
  * One row of the transcript. A person's message is a bubble on the right;
- * the assistant's reply is unfilled prose with the flame in the gutter, so long
- * answers read like something written to you rather than a card that was
- * delivered.
+ * the assistant's reply is unfilled prose in a quiet bubble, so long answers
+ * read like something written to you rather than a card that was delivered.
+ *
+ * The name is never spelled out again — the header already says who you are
+ * talking to, and a thread is a conversation, not a stack of labels.
  *
  * Tool activity is deliberately not rendered. The transcript answers "what did
  * I ask and what came back"; the mechanics of a turn (which tool, which
@@ -54,12 +56,19 @@ struct MessageRowView: View {
         .frame(maxWidth: 420, alignment: .leading)
       }
       if message.uiHint == "onboarding_completed" {
-        Text("Renamed to \(message.senderName ?? "your assistant")")
-          .font(Typography.caption)
-          .foregroundStyle(Palette.inkTertiary)
-          .padding(.horizontal, 9)
-          .padding(.vertical, 4)
-          .background(Palette.surfaceRaised, in: Capsule())
+        // The name is settled: the field is gone and the thread says so.
+        HStack(spacing: 6) {
+          Image(systemName: "checkmark")
+            .font(.system(size: 10, weight: .bold))
+            .foregroundStyle(Palette.ember)
+          Text("Renamed to \(message.senderName ?? "your assistant")")
+            .font(Typography.caption)
+            .foregroundStyle(Palette.inkSecondary)
+        }
+        .padding(.horizontal, 11)
+        .padding(.vertical, 5)
+        .background(Palette.surfaceRaised, in: Capsule())
+        .frame(maxWidth: .infinity, alignment: .center)
       }
     }
     .frame(maxWidth: .infinity, alignment: message.role == .user ? .trailing : .leading)
@@ -110,12 +119,6 @@ struct MessageRowView: View {
 
   private var assistantProse: some View {
     VStack(alignment: .leading, spacing: 8) {
-      if let sender = message.senderName {
-        HStack(spacing: 6) {
-          Circle().fill(Color(hex: senderColorValue)).frame(width: 7, height: 7)
-          Text(sender).font(Typography.caption).foregroundStyle(Palette.inkSecondary)
-        }
-      }
       if message.text.isEmpty && message.isStreaming {
         HStack(spacing: 8) {
           ThinkingDots()
@@ -158,11 +161,6 @@ struct MessageRowView: View {
       return "No reply — \(explanation.lowercased())."
     }
     return "\(agent?.name ?? "The assistant") produced no reply, and the daemon recorded no reason. Ask it to share this thread to see the records."
-  }
-
-  private var senderColorValue: UInt32 {
-    let raw = (message.senderColor ?? agent?.color ?? "#9A9AA0").trimmingCharacters(in: CharacterSet(charactersIn: "#"))
-    return UInt32(raw, radix: 16) ?? 0x9A9AA0
   }
 
   // MARK: system

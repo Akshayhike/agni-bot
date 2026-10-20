@@ -27,12 +27,6 @@ const objectSchema = (properties: Record<string, unknown>, required: string[]): 
 });
 const stringProp = { type: "string", minLength: 1 };
 
-/** Truncate the brief for the one-line notice the user reads. */
-function brief(text: string, max = 120): string {
-  const cleaned = text.replace(/\s+/g, " ").trim();
-  return cleaned.length > max ? `${cleaned.slice(0, max - 1)}…` : cleaned;
-}
-
 export interface HandoffToolDeps {
   db: Database;
   router: Router;
@@ -84,7 +78,11 @@ export function registerHandoffTool(registry: ToolRegistry, deps: HandoffToolDep
     deps.emit({
       type: "msg.new", id: row.id, channelId: deps.channelID, fromType,
       fromId: fromID, senderName: nameOf(fromID), senderColor: colorOf(fromID),
-      text, internal: false, uiHint: uiHint ?? "normal", createdAt: row.created_at,
+      text, internal: false, uiHint: uiHint ?? "normal",
+      // The target rides along, so the client can make the name a link to
+      // that agent's chat.
+      ...(toAgentID ? { toAgentId: toAgentID } : {}),
+      createdAt: row.created_at,
     });
   };
 
@@ -113,9 +111,11 @@ export function registerHandoffTool(registry: ToolRegistry, deps: HandoffToolDep
       const task = String(args.task ?? "").trim();
       if (!task) throw new Error("handoff requires a task");
 
-      // The user sees who was asked and what they were asked, before the work
-      // starts — this is the "message this bot" line they asked for.
-      post("system", deps.currentAgentID, `${nameOf(deps.currentAgentID)} → ${nameOf(toAgentID)}: ${brief(task)}`, "handoff_notice", toAgentID);
+      // The user sees who was asked, before the work starts — this is the
+      // "message this bot" line they asked for. The brief is internal
+      // routing: it belongs in the tool call, not in the chat. The target
+      // rides along, so the name can be a link to that agent's chat.
+      post("system", deps.currentAgentID, `Messaged ${nameOf(toAgentID)}`, "handoff_notice", toAgentID);
       if (deps.channelID) {
         deps.emit({
           type: "status.update", channelId: deps.channelID, agentId: deps.currentAgentID,

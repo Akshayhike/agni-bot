@@ -8,6 +8,8 @@
  * Payload: { threadID?, text, agentID?, notify?, maxReplyChars?, everyMs? }
  *   - threadID: reuse a thread; otherwise the job creates one.
  *   - everyMs:  recurring — schedule the next run after this one succeeds.
+ *   - dailyAt: recurring on a wall clock ("09:05"); `days` limits it to
+ *     certain weekdays, so "weekdays at 9:05" does not fire on a Saturday.
  */
 import type { Database } from "bun:sqlite";
 import type { ServerFrameBody } from "@agni/protocol";
@@ -19,6 +21,7 @@ import type { Router } from "../models/router";
 import { getThread } from "../stores/threads";
 import { backgroundSession, ensureConversation, getConversation, type ConversationRow } from "../stores/conversations";
 import { parseJobPayload, type JobRow } from "../stores/jobs";
+import { nextDailyRun } from "./schedule";
 import type { JobRunner } from "./runner";
 
 export interface TurnJobPayload {
@@ -28,6 +31,12 @@ export interface TurnJobPayload {
   /** Raise a notify frame when the turn ends. Default true. */
   notify?: boolean;
   everyMs?: number;
+  /**
+   * Recurring on a local wall clock, "09:05". With `days` it fires only on
+   * those weekdays (0 = Sunday … 6 = Saturday).
+   */
+  dailyAt?: string;
+  days?: number[];
   /**
    * Which lane the job runs in. `instant` (default) is one call, no tools,
    * bounded prompt (S1/S3) — the fast path for routine chat. `task` runs the
@@ -93,7 +102,11 @@ export function registerTurnJob(runner: JobRunner, deps: TurnJobDeps): void {
     }
 
     const outcome: { result: string; nextRunAt?: string } = { result: `thread ${threadID}: ${reply}` };
-    if (payload.everyMs && payload.everyMs > 0) {
+    if (payload.dailyAt) {
+      // A clock, not an interval: the next run is the next wall-clock moment
+      // the schedule names, on the days it names.
+      outcome.nextRunAt = nextDailyRun(payload.dailyAt, payload.days).toISOString();
+    } else if (payload.everyMs && payload.everyMs > 0) {
       outcome.nextRunAt = new Date(Date.now() + payload.everyMs).toISOString();
     }
     return outcome;

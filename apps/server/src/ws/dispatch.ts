@@ -55,6 +55,7 @@ import { buildShareDocument, publishShare, shareBaseURL } from "../share/documen
 import { createTask, getTask, listTasks, setTaskStatus, snoozeTask } from "../stores/tasks";
 import { fetchPage } from "../tools/fetch-url";
 import type { PluginService } from "../plugins/service";
+import { pluginMailResolver } from "../plugins/credentials";
 import type { FrameLog } from "./frame-log";
 
 export interface Session {
@@ -148,6 +149,8 @@ export async function dispatch(deps: DispatchDeps, session: Session, raw: string
       return handlePluginList(deps, session);
     case "plugin.connect":
       return await handlePluginConnect(deps, session, frame);
+    case "plugin.configure":
+      return await handlePluginConfigure(deps, session, frame);
     case "plugin.disconnect":
       return await handlePluginDisconnect(deps, session, frame);
     case "user.typing":
@@ -381,7 +384,12 @@ async function runUserMessage(
   const turnID = newID("trn");
   const controller = new AbortController();
   session.aborts.set(turnID, controller);
-  const turnSettings = { firstTokenTimeoutMs: deps.config.firstTokenTimeoutMs, turnTimeoutMs: deps.config.turnTimeoutMs };
+  const turnSettings = {
+    firstTokenTimeoutMs: deps.config.firstTokenTimeoutMs,
+    turnTimeoutMs: deps.config.turnTimeoutMs,
+    // Mailboxes the owner connected in Settings → Plugins.
+    mailAccounts: pluginMailResolver(deps.config.pluginsPath),
+  };
   const turn = runTaskTurn(deps.db, deps.router, turnSettings, {
     turnID,
     threadID: thread.id,
@@ -621,9 +629,11 @@ function handleConversationHistory(
     const channelRows = deps.db.query<{
       id: string; text: string; created_at: string; turn_id: string | null;
       from_id: string; from_type: string; sender_name: string | null; sender_color: string | null;
-      device_name: string | null; ui_hint: string | null;
+      device_name: string | null; ui_hint: string | null; sender_onboarded: number | null;
+      to_agent_id: string | null;
     }, [string]>(`SELECT cm.id, cm.text, cm.created_at, cm.turn_id, cm.from_id, cm.from_type,
-      a.display_name AS sender_name, a.avatar_color AS sender_color, d.name AS device_name, cm.ui_hint
+      a.display_name AS sender_name, a.avatar_color AS sender_color, d.name AS device_name, cm.ui_hint,
+      a.onboarded AS sender_onboarded, cm.to_agent_id
       FROM channel_messages cm
       LEFT JOIN agents a ON a.id = cm.from_id
       LEFT JOIN devices d ON d.id = cm.from_id
@@ -633,12 +643,21 @@ function handleConversationHistory(
       // a client message stores the *device* id, which made reloaded user
       // messages render as agent messages named after the device.
       const role = row.from_type === "user" ? "user" : row.from_type === "system" ? "system" : "assistant";
+      // The name prompt is settled once the agent has a name: the field must
+      // not come back every time the thread is loaded.
+      const uiHint =
+        row.ui_hint === "onboarding_name_prompt" && row.sender_onboarded === 1
+          ? "onboarding_completed"
+          : row.ui_hint ?? undefined;
       const messageData = {
         id: row.id, role, text: row.text, createdAt: row.created_at, turnID: row.turn_id ?? undefined,
         senderName: role === "user"
           ? row.device_name ?? "You"
           : row.sender_name ?? row.from_id,
-        senderColor: row.sender_color ?? undefined, uiHint: row.ui_hint ?? undefined,
+        senderColor: row.sender_color ?? undefined, uiHint,
+        // A handoff notice names the agent it is about, so the client can
+        // make that name a link to that agent's chat.
+        ...(row.to_agent_id ? { toAgentId: row.to_agent_id } : {}),
       };
       const duplicateIndex = messages.findIndex((message) =>
         message.role === role && message.text === row.text
@@ -839,7 +858,10 @@ async function handleProviderAdd(
   frame: Extract<ClientFrame, { type: "provider.add" }>,
 ): Promise<void> {
   if (!requireAuth(deps, session)) return;
-  const result = await addProviderCredential(deps.router, frame.providerID, frame.apiKey, frame.model);
+  const result = await addProviderCredential(deps.router, frame.providerID, frame.apiKey, frame.model, {
+    baseUrl: frame.baseUrl,
+    label: frame.label,
+  });
   if (!result.ok) {
     sendError(deps, session, result.code, result.message);
     return;
@@ -891,6 +913,33 @@ async function handlePluginConnect(
   if (!requireAuth(deps, session)) return;
   if (!deps.plugins) return sendError(deps, session, "internal", "plugin service unavailable");
   const result = deps.plugins.connect(frame.pluginID, frame.account);
+  if (result.error) {
+    sendError(deps, session, result.error.code, result.error.message);
+    return;
+  }
+  deps.reply({
+    type: "plugin.connect.ok",
+    pluginID: frame.pluginID,
+    account: frame.account,
+    authorizeURL: result.authorizeURL ?? null,
+  });
+}
+
+async function handlePluginConfigure(
+  deps: DispatchDeps,
+  session: Session,
+  frame: Extract<ClientFrame, { type: "plugin.configure" }>,
+): Promise<void> {
+  if (!requireAuth(deps, session)) return;
+  if (!deps.plugins) return sendError(deps, session, "internal", "plugin service unavailable");
+  const result = deps.plugins.configure(frame.pluginID, frame.account, {
+    user: frame.user,
+    pass: frame.pass,
+    key: frame.key,
+    url: frame.url,
+    clientID: frame.clientID,
+    clientSecret: frame.clientSecret,
+  });
   if (result.error) {
     sendError(deps, session, result.error.code, result.error.message);
     return;

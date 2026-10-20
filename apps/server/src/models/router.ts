@@ -139,7 +139,7 @@ export class Router {
     if (candidates.length === 0) {
       throw new RouterError(
         "no_provider",
-        "no model providers configured — set GROQ_API_KEY, CEREBRAS_API_KEY, or NVIDIA_API_KEY in .env",
+        "no model providers configured — add one in Settings → Models & providers, or set GROQ_API_KEY, CEREBRAS_API_KEY, or NVIDIA_API_KEY in .env",
       );
     }
 

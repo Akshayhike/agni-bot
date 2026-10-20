@@ -14,6 +14,7 @@ import { newID } from "../util/ids";
 import type { ResolvedPersona } from "./personas";
 import { recallFact } from "../tools/facts";
 import { buildFastPathMessages } from "./prompts";
+import type { MailAccountResolver } from "../plugins/credentials";
 
 /** S1: hard ceiling on history riding in the prompt — never the full thread. */
 export const HISTORY_MESSAGE_LIMIT = 16;
@@ -21,6 +22,8 @@ export const HISTORY_MESSAGE_LIMIT = 16;
 export interface TurnSettings {
   firstTokenTimeoutMs: number;
   turnTimeoutMs: number;
+  /** Mailboxes connected in Settings → Plugins, for the mail tools. */
+  mailAccounts?: MailAccountResolver;
 }
 
 export interface TurnRun {

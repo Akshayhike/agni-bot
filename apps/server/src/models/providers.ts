@@ -6,6 +6,10 @@ import { resolve } from "node:path";
  * enabled by the presence of its API key (except LM Studio, which is local).
  * Free-first per Blueprint v3 §8: the router orders providers around health,
  * failover on 429/timeout. Ordering here is only the default.
+ *
+ * A custom endpoint (a token router, a proxy, a self-hosted gateway) is not in
+ * this list: it is described at runtime in the provider config file and points
+ * at an OpenAI-compatible `/chat/completions`.
  */
 
 export interface ProviderConfig {
@@ -14,6 +18,16 @@ export interface ProviderConfig {
   baseUrl: string;
   apiKey: string;
   model: string;
+}
+
+/** A user-supplied OpenAI-compatible endpoint. The key lives in the env. */
+export interface CustomProviderEntry {
+  id: string;
+  label: string;
+  baseUrl: string;
+  model: string;
+  /** The env variable that carries this endpoint's key. */
+  envKey: string;
 }
 
 interface ProviderSpec {
@@ -27,6 +41,9 @@ interface ProviderSpec {
   envModel: string;
   model: string;
 }
+
+/** The id a custom endpoint takes when it is the first one. */
+export const CUSTOM_PROVIDER_PREFIX = "custom";
 
 const SPECS: ProviderSpec[] = [
   {
@@ -97,18 +114,92 @@ export function providerModelTarget(id: string): { id: string; envModel: string 
   return spec ? { id: spec.id, envModel: spec.envModel } : null;
 }
 
-export function loadProviders(env: Record<string, string | undefined>): ProviderConfig[] {
-  const modelConfigPath = resolve(env.AGNI_PROVIDER_CONFIG_PATH?.trim() || "data/providers.json");
-  let configuredModels: Record<string, string> = {};
+/** The provider config file: chosen models plus the custom endpoints. */
+export function providerConfigPath(env: Record<string, string | undefined> = Bun.env): string {
+  return resolve(env.AGNI_PROVIDER_CONFIG_PATH?.trim() || "data/providers.json");
+}
+
+interface ProviderConfigFile {
+  version?: unknown;
+  models?: unknown;
+  custom?: unknown;
+}
+
+/** Read the config file; a missing or invalid file is simply empty. */
+export function readProviderConfigFile(path: string): ProviderConfigFile {
   try {
-    const value = JSON.parse(readFileSync(modelConfigPath, "utf8")) as { version?: unknown; models?: unknown };
-    if (value.version === 1 && value.models && typeof value.models === "object" && !Array.isArray(value.models)) {
-      configuredModels = Object.fromEntries(
-        Object.entries(value.models).filter((entry): entry is [string, string] => typeof entry[1] === "string"),
-      );
-    }
+    return JSON.parse(readFileSync(path, "utf8")) as ProviderConfigFile;
   } catch {
     // Missing or invalid optional config falls back to environment defaults.
+    return {};
+  }
+}
+
+function customEntries(value: unknown): CustomProviderEntry[] {
+  if (!Array.isArray(value)) return [];
+  const entries: CustomProviderEntry[] = [];
+  for (const raw of value) {
+    if (!raw || typeof raw !== "object") continue;
+    const entry = raw as Partial<CustomProviderEntry>;
+    if (typeof entry.id !== "string" || !entry.id) continue;
+    if (typeof entry.baseUrl !== "string" || !entry.baseUrl) continue;
+    if (typeof entry.envKey !== "string" || !entry.envKey) continue;
+    entries.push({
+      id: entry.id,
+      label: typeof entry.label === "string" && entry.label ? entry.label : entry.id,
+      baseUrl: entry.baseUrl,
+      model: typeof entry.model === "string" ? entry.model : "",
+      envKey: entry.envKey,
+    });
+  }
+  return entries;
+}
+
+/** The custom endpoints the owner configured, in file order. */
+export function loadCustomProviders(env: Record<string, string | undefined> = Bun.env): CustomProviderEntry[] {
+  return customEntries(readProviderConfigFile(providerConfigPath(env)).custom);
+}
+
+/**
+ * The next free id for a custom endpoint: `custom`, then `custom-2`, and so on.
+ * Ids are stable once written, so the app can address an endpoint later.
+ */
+export function nextCustomProviderID(existing: CustomProviderEntry[]): string {
+  const taken = new Set(existing.map((entry) => entry.id));
+  if (!taken.has(CUSTOM_PROVIDER_PREFIX)) return CUSTOM_PROVIDER_PREFIX;
+  for (let index = 2; index < 1000; index += 1) {
+    const candidate = `${CUSTOM_PROVIDER_PREFIX}-${index}`;
+    if (!taken.has(candidate)) return candidate;
+  }
+  return `${CUSTOM_PROVIDER_PREFIX}-${Date.now()}`;
+}
+
+/**
+ * A base URL for an OpenAI-compatible endpoint. The path is kept as given:
+ * gateways differ (`/v1`, `/openai/v1`, nothing at all).
+ */
+export function validateCustomBaseUrl(raw: string): string | null {
+  const value = raw.trim().replace(/\/+$/, "");
+  if (!value || value.length > 500 || /[\s\u0000-\u001f]/.test(value)) return null;
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+  if (!url.hostname) return null;
+  return value;
+}
+
+export function loadProviders(env: Record<string, string | undefined>): ProviderConfig[] {
+  const modelConfigPath = providerConfigPath(env);
+  const config = readProviderConfigFile(modelConfigPath);
+  let configuredModels: Record<string, string> = {};
+  if (config.version === 1 && config.models && typeof config.models === "object" && !Array.isArray(config.models)) {
+    configuredModels = Object.fromEntries(
+      Object.entries(config.models).filter((entry): entry is [string, string] => typeof entry[1] === "string"),
+    );
   }
   const providers: ProviderConfig[] = [];
   for (const spec of SPECS) {
@@ -133,6 +224,21 @@ export function loadProviders(env: Record<string, string | undefined>): Provider
       baseUrl: (spec.envBaseUrl && env[spec.envBaseUrl]?.trim()) || spec.baseUrl,
       apiKey,
       model: (configuredModels[spec.id] || env[spec.envModel])?.trim() || spec.model,
+    });
+  }
+  // Custom endpoints last: the free lanes come first, the owner's gateway is
+  // the fallback that always answers.
+  for (const entry of customEntries(config.custom)) {
+    const apiKey = env[entry.envKey]?.trim();
+    if (!apiKey) continue;
+    const model = (configuredModels[entry.id] || entry.model).trim();
+    if (!model) continue;
+    providers.push({
+      id: entry.id,
+      label: entry.label,
+      baseUrl: entry.baseUrl,
+      apiKey,
+      model,
     });
   }
   return providers;

@@ -258,7 +258,7 @@ public enum ClientFrame: Sendable, Equatable {
   case jobDelete(jobID: String)
   case taskList(status: String?, limit: Int?)
   case taskUpdate(taskID: String, action: String, until: String?)
-  case providerAdd(providerID: String, apiKey: String, model: String?)
+  case providerAdd(providerID: String, apiKey: String, model: String?, baseUrl: String?, label: String?)
   case providerModelSet(providerID: String, model: String)
   case providerModelsList(providerID: String)
   case pluginList
@@ -355,10 +355,12 @@ public enum ClientFrame: Sendable, Equatable {
       object["taskID"] = taskID
       object["action"] = action
       if let until { object["until"] = until }
-    case .providerAdd(let providerID, let apiKey, let model):
+    case .providerAdd(let providerID, let apiKey, let model, let baseUrl, let label):
       object["providerID"] = providerID
       object["apiKey"] = apiKey
       if let model { object["model"] = model }
+      if let baseUrl { object["baseUrl"] = baseUrl }
+      if let label { object["label"] = label }
     case .providerModelSet(let providerID, let model):
       object["providerID"] = providerID
       object["model"] = model
@@ -453,7 +455,9 @@ public enum ClientFrame: Sendable, Equatable {
       self = .providerAdd(
         providerID: try Require.string(object, "providerID"),
         apiKey: try Require.string(object, "apiKey"),
-        model: object["model"] as? String)
+        model: object["model"] as? String,
+        baseUrl: object["baseUrl"] as? String,
+        label: object["label"] as? String)
     case "provider.model.set":
       self = .providerModelSet(
         providerID: try Require.string(object, "providerID"),

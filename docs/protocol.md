@@ -59,10 +59,11 @@ never reason about thread ids.
 | `job.delete` | `{jobID}` | Deletes a task unless it is running; replies with a refreshed `job.list.ok`. |
 | `task.list` | `{status?, limit?}` | Lists durable tasks; status is `open \| done \| snoozed \| all`. |
 | `task.update` | `{taskID, action, until?}` | Completes, reopens, or snoozes a task until an ISO timestamp. |
-| `provider.add` | `{providerID, apiKey, model?}` | Adds a supported API provider over the authenticated socket. The daemon stores the key and optional model ID in its mode-600 `.env` and updates the live router; the key is never returned. |
+| `provider.add` | `{providerID, apiKey, model?, baseUrl?, label?}` | Adds a supported API provider over the authenticated socket. `providerID: "custom"` adds an endpoint of the owner's own: `baseUrl` is an OpenAI-compatible base (`https://host/v1`), `label` names it in the list. The daemon stores the key in its mode-600 `.env` and the endpoint in `data/providers.json`; neither is ever returned. |
 | `provider.model.set` | `{providerID, model}` | Changes a configured provider's model ID on the daemon and updates the live router. |
 | `plugin.list` | `{}` | The plugin catalog bound to accounts (see below); answer: `plugin.list.ok`. |
 | `plugin.connect` | `{pluginID, account}` | Begin connecting `pluginID` to `account` (`agent` = Agni's own, `owner` = the user's). OAuth kinds answer `plugin.connect.ok` with an authorize URL to open in the system browser; MCP kinds are not connectable until their server pass lands. |
+| `plugin.configure` | `{pluginID, account, user?, pass?, key?, url?, clientID?, clientSecret?}` | Gives a plugin its credentials and connects it in one step. `app-password` kinds take `user` + `pass`; `api-key` kinds take `key` and/or `url`; `oauth` kinds take the Google `clientID` + `clientSecret`. The daemon writes them to its mode-600 `plugins.json` and answers `plugin.connect.ok` (with an authorize URL for OAuth). |
 | `plugin.disconnect` | `{connectionID}` | Revokes the connection (server-side tokens deleted, Google revoke called); answers and fans out the refreshed snapshot. |
 
 ## Plugins
@@ -100,7 +101,7 @@ accountLabel?, error?, connectedAt?}`.
 | `approval.request` | `{requestID, action, preview, buttons}` | `buttons`: subset of `once \| always \| reject`. |
 | `form.request` | `{requestID, question, options?}` | Ad-hoc question to the user. |
 | `notify` | `{title, body, sound?, threadID?}` | Push-worthy event; Mac opens the referenced thread when clicked. |
-| `agents.update` | `{agents: [{id, name, color?, model?, tools?}]}` | Roster snapshot. |
+| `agents.update` | `{agents: [{id, name, color?, model?, role?, tools?, onboarded?}]}` | Roster snapshot. `onboarded` is set once the agent has been named, which settles the "what should I call you?" prompt. `role` is what the agent is for, in the owner's words ("inbox manager"). |
 | `thread.list.ok` | `{threads: [{id, agentID, title?, updatedAt}]}` | Answer to `thread.list`; addressed to the requester. |
 | `thread.history.ok` | `{threadID, title?, messages: [{id, role, text, createdAt, turnID?}]}` | Answer to `thread.history`; addressed to the requester. |
 | `conversation.ok` | `{conversationID, agentID, sessionID}` | Answer to `conversation.open`; `sessionID`: the active block, `""` before the first block. Addressed, not replayed. |
@@ -113,7 +114,7 @@ accountLabel?, error?, connectedAt?}`.
 | `provider.add.ok` | `{providers: [...]}` | Provider metadata after adding a key; contains no credentials. |
 | `presence` | `{state}` | `online \| offline`. |
 | `status.update` | `{channelId, agentId?, text, transient}` | Activity text; transient updates clear on the next message. |
-| `msg.new` | `{id, channelId, fromType, fromId, senderName, senderColor?, text, internal, uiHint?, createdAt}` | Durable channel message; `uiHint` can be `onboarding_name_prompt` or `handoff_notice`. |
+| `msg.new` | `{id, channelId, fromType, fromId, senderName, senderColor?, text, internal, uiHint?, toAgentId?, createdAt}` | Durable channel message; `uiHint` can be `onboarding_name_prompt` or `handoff_notice`. `toAgentId` names the agent a handoff notice is about, so the client can render the name as a link to that agent's chat. |
 | `agent.updated` | `{agentId, displayName, onboarded}` | Agent rename/onboarding state changed. |
 | `error` | `{code, message, retryAfter?}` | See codes below. |
 

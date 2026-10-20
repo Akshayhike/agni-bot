@@ -19,6 +19,7 @@ import { hostname } from "node:os";
 import { PROTOCOL_VERSION } from "@agni/protocol";
 import { listDevices, mintToken, revokeDevice } from "./auth/tokens";
 import { loadConfig, type Config } from "./config";
+import { pluginMailResolver } from "./plugins/credentials";
 import {
   daemonStatus,
   followLog,
@@ -28,7 +29,7 @@ import {
   tailLog,
 } from "./daemon";
 import { openDatabase } from "./db";
-import { seedAgentPromptTemplates, setOwnerName } from "./agent/personas";
+import { seedAgentPromptTemplates, setOwnerName, loadRuntimeAgents } from "./agent/personas";
 import { JobRunner } from "./jobs/runner";
 import { registerTurnJob, type TurnJobPayload } from "./jobs/turn";
 import { registerBriefJob } from "./jobs/brief";
@@ -58,6 +59,10 @@ async function serve(): Promise<void> {
   setOwnerName(config.userFirstName);
   const seeded = seedAgentPromptTemplates(db);
   if (seeded > 0) log.info(`agents: seeded ${seeded} prompt template(s)`);
+  // Agents the assistant created at runtime live in the database; the roster
+  // is rebuilt from those rows so they survive a restart.
+  const restored = loadRuntimeAgents(db);
+  if (restored > 0) log.info(`agents: restored ${restored} agent(s) created at runtime`);
   const router = new Router(config.providers, new HealthTracker(), fetch, config.maxConcurrentTurns);
 
   const requeued = requeueStuckJobs(db);
@@ -74,7 +79,12 @@ async function serve(): Promise<void> {
     throw error;
   }
 
-  const settings = { firstTokenTimeoutMs: config.firstTokenTimeoutMs, turnTimeoutMs: config.turnTimeoutMs };
+  const settings = {
+    firstTokenTimeoutMs: config.firstTokenTimeoutMs,
+    turnTimeoutMs: config.turnTimeoutMs,
+    // Mailboxes the owner connected in Settings → Plugins.
+    mailAccounts: pluginMailResolver(config.pluginsPath),
+  };
   const runner = new JobRunner(db, running.emit, { pollMs: config.jobPollMs });
   registerTurnJob(runner, { db, router, settings, emit: running.emit });
   registerBriefJob(runner, { db, emit: running.emit });

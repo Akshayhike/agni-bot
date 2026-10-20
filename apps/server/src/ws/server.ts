@@ -27,6 +27,17 @@ export interface RunningServer {
   stop(): void;
 }
 
+/**
+ * The daemon's read-only health snapshot is safe to expose to any origin: it
+ * carries no secrets, and a web client paired on another origin must be able
+ * to read it before it opens the socket.
+ */
+const CORS_HEADERS = {
+  "access-control-allow-origin": "*",
+  "access-control-allow-methods": "GET, OPTIONS",
+  "access-control-allow-headers": "accept, content-type",
+} as const;
+
 /** Shape of `GET /health` — also what `daemon status` shows. */
 export interface HealthReport {
   ok: boolean;
@@ -75,7 +86,12 @@ export function startServer(config: Config, db: Database, router: Router, starte
     async fetch(request, srv) {
       const url = new URL(request.url);
       if (url.pathname === "/health") {
-        return Response.json(healthReport(db, router, frameLog.seq, startedAt));
+        if (request.method === "OPTIONS") {
+          return new Response(null, { status: 204, headers: CORS_HEADERS });
+        }
+        return Response.json(healthReport(db, router, frameLog.seq, startedAt), {
+          headers: { ...CORS_HEADERS, "cache-control": "no-store" },
+        });
       }
       if (url.pathname === "/oauth/callback") {
         return handleOAuthCallback(plugins, url);

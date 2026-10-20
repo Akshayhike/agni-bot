@@ -495,4 +495,25 @@ export const MIGRATIONS: Migration[] = [
       ALTER TABLE channel_messages DROP COLUMN status;
     `,
   },
+  {
+    id: 15,
+    name: "agents_tool_allowlist",
+    sql: `
+      -- An agent the assistant creates at runtime has to survive a restart:
+      -- its tool allowlist lived only in the process, so a daemon restart
+      -- left the row in the database with no tools and no roster entry.
+      ALTER TABLE agents ADD COLUMN tools TEXT;
+    `,
+  },
+  {
+    id: 16,
+    name: "agents_role_detail",
+    sql: `
+      -- The "role" column is the hierarchy role (orchestrator/agent). The
+      -- descriptive role the owner gives an agent ("inbox manager", "second
+      -- pair of eyes") is its own column, so it can be set without
+      -- overwriting the hierarchy and it survives a restart.
+      ALTER TABLE agents ADD COLUMN role_detail TEXT;
+    `,
+  },
 ];
