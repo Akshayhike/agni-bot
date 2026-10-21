@@ -30,9 +30,12 @@ import {
 } from "./daemon";
 import { openDatabase } from "./db";
 import { seedAgentPromptTemplates, setOwnerName, loadRuntimeAgents } from "./agent/personas";
+import { setSlotBudgets } from "./context/compiler";
 import { JobRunner } from "./jobs/runner";
 import { registerTurnJob, type TurnJobPayload } from "./jobs/turn";
 import { registerBriefJob } from "./jobs/brief";
+import { registerTaggerJob, scheduleTagger } from "./jobs/tagger";
+import { registerMemoryJobs } from "./jobs/memory";
 import { log } from "./log";
 import { HealthTracker } from "./models/health";
 import { Router } from "./models/router";
@@ -57,6 +60,8 @@ async function serve(): Promise<void> {
   const config = loadConfig();
   const db = openDatabase(config.dbPath);
   setOwnerName(config.userFirstName);
+  // ASM-007: the slot budgets are configuration, applied once at boot.
+  setSlotBudgets(config.slotBudgets ?? {});
   const seeded = seedAgentPromptTemplates(db);
   if (seeded > 0) log.info(`agents: seeded ${seeded} prompt template(s)`);
   // Agents the assistant created at runtime live in the database; the roster
@@ -88,6 +93,25 @@ async function serve(): Promise<void> {
   const runner = new JobRunner(db, running.emit, { pollMs: config.jobPollMs });
   registerTurnJob(runner, { db, router, settings, emit: running.emit });
   registerBriefJob(runner, { db, emit: running.emit });
+  // TAG-001: memory is extracted in batches, never on the path of a turn.
+  registerTaggerJob(runner, { db, router, emit: running.emit });
+  // MEM-003/MEM-006: vectors and the nightly sweep.
+  registerMemoryJobs(runner, { db, router });
+  // The sweep keeps itself alive; the embedding runs whenever there is
+  // something left to embed.
+  if (!listJobs(db, { limit: 50 }).some((job) => job.kind === "memory.consolidate")) {
+    enqueueJob(db, { kind: "memory.consolidate", payload: {} });
+  }
+  if (!listJobs(db, { limit: 50 }).some((job) => job.kind === "summary.rollup")) {
+    enqueueJob(db, {
+      kind: "summary.rollup",
+      payload: {},
+      runAt: new Date(Date.now() + 120_000).toISOString(),
+    });
+  }
+  if (!listJobs(db, { limit: 50 }).some((job) => job.kind === "memory.embed")) {
+    enqueueJob(db, { kind: "memory.embed", payload: {}, runAt: new Date(Date.now() + 30_000).toISOString() });
+  }
   runner.start();
 
   log.info(`agni server v${PROTOCOL_VERSION} listening on ${running.url} (pid ${process.pid})`);

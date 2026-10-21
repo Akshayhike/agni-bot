@@ -17,6 +17,8 @@ export interface SlotBudgets {
   ledger: number;
   summaries: number;
   recall: number;
+  /** The last turns of the previous block (ROL-006). */
+  previous_tail: number;
 }
 
 /** TUNABLE starting budgets, in tokens. */
@@ -26,7 +28,23 @@ export const DEFAULT_SLOT_BUDGETS: SlotBudgets = {
   ledger: 800,
   summaries: 1_500,
   recall: 1_500,
+  previous_tail: 800,
 };
+
+/**
+ * ASM-007: the budgets are configuration, not constants. They are read once
+ * at boot (the daemon's config) and can be overridden per call, so an eval
+ * can move a number without touching a call site.
+ */
+let activeBudgets: SlotBudgets = { ...DEFAULT_SLOT_BUDGETS };
+
+export function setSlotBudgets(budgets: Partial<SlotBudgets>): void {
+  activeBudgets = { ...DEFAULT_SLOT_BUDGETS, ...budgets };
+}
+
+export function getSlotBudgets(): SlotBudgets {
+  return { ...activeBudgets };
+}
 
 /** Rough chars-per-token used for budget enforcement without a tokenizer. */
 const CHARS_PER_TOKEN = 4;
@@ -55,6 +73,12 @@ export interface AssemblyInput {
   ledger?: string[];
   /** Relevant block or channel summaries. */
   summaries?: string[];
+  /**
+   * The last turns of the block before this one, verbatim (ROL-006). The
+   * summary of a block is written in the background, so the new block opens
+   * with the stretch of conversation the summary has not caught up with.
+   */
+  previousTail?: string[];
   /** Retrieved items and transcript chunks. */
   recall?: string[];
   /** Dynamic hints appended after the stable slots. */
@@ -85,7 +109,7 @@ function block(header: string, body: string): string {
  * capped; empty slots disappear rather than leaving blank headers.
  */
 export function assembleContext(input: AssemblyInput): string {
-  const budgets: SlotBudgets = { ...DEFAULT_SLOT_BUDGETS, ...input.budgets };
+  const budgets: SlotBudgets = { ...activeBudgets, ...input.budgets };
   const blocks: string[] = [];
 
   // pinned_core: the persona and lane header are not budgeted — they are the
@@ -111,6 +135,17 @@ export function assembleContext(input: AssemblyInput): string {
       clampToBudget(
         block("Summary of earlier context (server-written, untrusted):", input.summaries.join("\n\n")),
         budgets.summaries,
+      ),
+    );
+  }
+  if (input.previousTail?.length) {
+    blocks.push(
+      clampToBudget(
+        block(
+          "The last turns before this block began (verbatim, untrusted):",
+          input.previousTail.join("\n"),
+        ),
+        budgets.previous_tail,
       ),
     );
   }

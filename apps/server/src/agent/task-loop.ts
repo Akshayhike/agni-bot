@@ -15,13 +15,20 @@ import { teamRoster } from "./personas";
 import { deriveAnchor } from "../context/compiler";
 import { registerHandoffTool } from "../tools/handoff-tool";
 import { registerDelegateTaskTool } from "../tools/delegate-task-tool";
+import { registerRequestOwnerInputTool } from "../tools/needs-input-tool";
+import { registerArtifactTool } from "../tools/artifact-tool";
 import { registerSecureExecTool } from "../tools/secure-exec-tool";
 import { registerSayTool } from "../tools/say-tool";
 import { registerRenameTool } from "../tools/rename-tool";
 import { registerCreateAgentTool } from "../tools/create-agent-tool";
 import { createUpdateAgentTool } from "../tools/update-agent-tool";
 import { recallFact } from "../tools/facts";
+import { retrieveFacts, rewriteForRetrieval, previousBlockTail } from "./retrieval";
+import { embedderConfig } from "./embeddings";
+import { registerExpandTool } from "../tools/expand-tool";
 import { buildDelegationPrefix } from "./prompts";
+import { getThread } from "../stores/threads";
+import { listSummaries } from "../stores/summaries";
 import { appendChannelMessage, getChannelSummary } from "../stores/channels";
 import { compactChannelHistory } from "./compactor";
 import { GuardrailError, enterDelegation, rootGuardrail, stepGuardrail, type GuardrailState } from "./guardrails";
@@ -35,6 +42,11 @@ export interface TaskTurnSettings {
    * them from there, so a connected mailbox is actually usable.
    */
   mailAccounts?: MailAccountResolver;
+  /**
+   * ASM-004: the confidence floor for automatic retrieval. Below it,
+   * nothing is injected.
+   */
+  minRecallScore?: number;
 }
 export interface TaskTurnRun {
   turnID?: string;
@@ -62,6 +74,20 @@ export interface TaskTurnRun {
   inputRole?: "user" | "system";
   /** The text written to the durable log (defaults to the request text). */
   inputText?: string;
+  /**
+   * DEL-006: this turn is a delegated task. The task can ask the owner a
+   * question and wait for the answer, so the turn knows which task it is and
+   * where the question should be asked.
+   */
+  delegation?: {
+    taskID: string;
+    /** The agent doing the work. */
+    ownerAgentID: string;
+    /** The agent that delegated, and gets the answer. */
+    parentAgentID: string | null;
+    /** The channel the owner is watching. */
+    parentChannelID: string | null;
+  };
 }
 export interface TaskTurnResult { turnID: string; text: string; stopReason: StopReason }
 
@@ -136,7 +162,65 @@ const TASK_SYSTEM_PROMPT = [
   "Never ask the owner to type a password in chat: use `run_privileged` for commands that need one, and never put a secret in a command.",
 ].join(" ");
 
+/** A final answer longer than this is split for the channel. */
+const LONG_ANSWER_CHARS = 1_200;
+
 const activeThreads = new Set<string>();
+
+/**
+ * The tail of the block before this one, verbatim (ROL-006).
+ */
+function openedTail(db: Database, threadID: string): string[] {
+  const raw = getThread(db, threadID)?.opened_tail;
+  if (!raw) return [];
+  return raw.split("\n").filter((line) => line.trim().length > 0);
+}
+
+/**
+ * Split a long answer for the channel: the first paragraph becomes a
+ * progress bubble, the rest stays the answer. The words are the model's —
+ * only the presentation changes.
+ */
+export function splitForChannel(text: string): Array<{ text: string; hint: "progress" | "normal" }> {
+  const paragraphs = text.split(/\n\s*\n/).map((part) => part.trim()).filter(Boolean);
+  if (paragraphs.length < 2) return [{ text, hint: "normal" }];
+  const first = paragraphs[0]!;
+  const rest = paragraphs.slice(1).join("\n\n");
+  if (first.length > LONG_ANSWER_CHARS) return [{ text, hint: "normal" }];
+  return [{ text: first, hint: "progress" }, { text: rest, hint: "normal" }];
+}
+
+/** Is a turn running in this thread right now? A wake waits for it. */
+export function isThreadActive(threadID: string): boolean {
+  return activeThreads.has(threadID);
+}
+
+/** The turn running in a thread, so an interrupt can stop it. */
+const runningTurns = new Map<string, { turnID: string; controller: AbortController }>();
+
+/**
+ * Stop the turn running in a thread. The owner interrupting with a new
+ * message is the common case: the old turn is cancelled and the new one
+ * takes over, instead of the new message bouncing off a busy thread.
+ */
+export function cancelThreadTurn(threadID: string, reason = "interrupted"): boolean {
+  const running = runningTurns.get(threadID);
+  if (!running) return false;
+  try {
+    running.controller.abort();
+  } catch {
+    // Aborting twice is not an error worth raising.
+  }
+  return true;
+}
+
+/** Wait (briefly) for a thread to be free again. */
+async function waitForThreadIdle(threadID: string, timeoutMs = 2_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (activeThreads.has(threadID) && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+}
 
 /** Tools that write user-scope memory (DEL-007 read-only agents cannot use them). */
 const MEMORY_WRITE_TOOLS = new Set(["remember_fact", "memory_write", "forget_fact"]);
@@ -146,9 +230,19 @@ export async function runTaskTurn(db: Database, router: Router, settings: TaskTu
   const now = nowISO();
   const existing = db.query("SELECT turn_id, state, message_log, summary, step_count, token_count FROM agent_sessions WHERE thread_id = ?").get(threadID) as { turn_id: string; state: string; message_log: string; summary: string | null; step_count: number; token_count: number } | null;
   if ((existing?.state === "running" || existing?.state === "awaiting_approval") && activeThreads.has(threadID)) {
-    throw new Error("a task turn is already active or awaiting approval for this thread");
+    // The owner interrupted: the running turn stops and this one takes
+    // over. Waiting for the old turn to unwind keeps the two from writing
+    // into the same block at the same time.
+    cancelThreadTurn(threadID, "the owner sent a new message");
+    await waitForThreadIdle(threadID);
+    if (activeThreads.has(threadID)) {
+      throw new Error("a task turn is already active or awaiting approval for this thread");
+    }
   }
-  const recovering = existing?.state === "running" || existing?.state === "awaiting_approval";
+  // A session parked on a question is resumed, not restarted: the answer
+  // continues the same conversation.
+  const recovering =
+    existing?.state === "running" || existing?.state === "awaiting_approval" || existing?.state === "waiting";
   const turnID = recovering ? existing.turn_id : run.turnID ?? newID("trn");
   let messages: ChatMessage[];
   let stepCount = recovering ? existing.step_count : 0;
@@ -172,6 +266,8 @@ export async function runTaskTurn(db: Database, router: Router, settings: TaskTu
     agentID: persona.id,
     ...(run.conversationID ? { conversationID: run.conversationID } : {}),
   });
+  // PR 6: the owner can see what the agent is doing without asking.
+  run.emit({ type: "agent.presence", agentId: persona.id, state: "working" });
 
   let summary: string | null = existing?.summary ?? null;
   const registry = buildTaskToolRegistry(db, settings.mailAccounts);
@@ -205,6 +301,22 @@ export async function runTaskTurn(db: Database, router: Router, settings: TaskTu
     history: messages,
     userText: run.text,
   });
+  // ASM-003/004/006: what this turn needs, retrieved rather than carried.
+  // The query is rewritten when the message points back, the search is
+  // hybrid, and when nothing good enough comes back the tail of the
+  // previous block is used instead of a wider, worse search.
+  const rewritten = rewriteForRetrieval(run.text, { anchor, history: messages });
+  const retrieved = await retrieveFacts(db, {
+    query: rewritten.query,
+    callerAgentID: persona.id,
+    limit: 6,
+    minScore: settings.minRecallScore,
+    embedder: embedderConfig(),
+  });
+  const recall: string[] = retrieved.hits.map((hit) => hit.row.content);
+  if (retrieved.belowThreshold) {
+    recall.push(...previousBlockTail(db, { conversationID: run.conversationID ?? null, threadID }));
+  }
   const delegationPrefix = buildDelegationPrefix({
     persona,
     facts,
@@ -214,6 +326,16 @@ export async function runTaskTurn(db: Database, router: Router, settings: TaskTu
     maxDepth: 5,
     toolHints: dynamicHints,
     anchor,
+    // ASM-004: what this turn needs, retrieved rather than carried.
+    recall,
+    // ROL-006: the new block opens with the last turns of the old one, so
+    // the boundary does not lose the stretch the summary has not caught up
+    // with.
+    previousTail: openedTail(db, threadID),
+    // CMP-001: the day and epoch summaries, when this conversation has them.
+    rollups: run.conversationID
+      ? listSummaries(db, { conversationID: run.conversationID, level: "day", limit: 3 }).map((summary) => summary.text)
+      : [],
     // Only an agent that can actually hand off needs to know the roster.
     team: persona.tools.includes("handoff") ? teamRoster(db, { exclude: persona.id }) : [],
   });
@@ -233,6 +355,7 @@ export async function runTaskTurn(db: Database, router: Router, settings: TaskTu
 
   const controller = new AbortController();
   activeThreads.add(threadID);
+  runningTurns.set(threadID, { turnID, controller });
   // The handoff tool needs the live emit/signal/guardrail; register it per
   // turn so it can spawn a delegated child in the same thread. It is added
   // after the controller exists so its signal wiring is live.
@@ -245,7 +368,25 @@ export async function runTaskTurn(db: Database, router: Router, settings: TaskTu
   // queued; the specialist runs in a background session with only the brief.
   registerDelegateTaskTool(registry, {
     db, emit: run.emit, currentAgentID: persona.id, channelID: run.channelID, parentTurnID: turnID,
+    parentThreadID: threadID,
   });
+  // DEL-006: a delegated task can ask the owner a question and wait. The
+  // tool is only registered for a delegated turn, and the turn stops with
+  // `needs_input` once the question is asked.
+  let needsInput = false;
+  if (run.delegation) {
+    registerRequestOwnerInputTool(registry, {
+      db,
+      emit: run.emit,
+      task: {
+        id: run.delegation.taskID,
+        ownerAgentID: run.delegation.ownerAgentID,
+        parentAgentID: run.delegation.parentAgentID,
+        parentChannelID: run.delegation.parentChannelID,
+      },
+      onNeedsInput: () => { needsInput = true; },
+    });
+  }
   // Separate progress bubbles, and a one-time password prompt that never
   // reaches the model. Both are per-turn because they need the live emit.
   registerSayTool(registry, {
@@ -257,6 +398,11 @@ export async function runTaskTurn(db: Database, router: Router, settings: TaskTu
   // Renaming is an action, not a sentence: this persists the new name and
   // pushes `agent.updated` so every client's roster follows in the same turn.
   registerRenameTool(registry, { db, emit: run.emit, currentAgentID: persona.id });
+  // DEL-004: the full result of a delegated task, read through the same
+  // visibility filter as everything else.
+  registerArtifactTool(registry, { db, currentAgentID: persona.id });
+  // ASM-005: a reference is a pointer; this is how the model follows it.
+  registerExpandTool(registry, { db, currentAgentID: persona.id });
   // Redefining an agent is an action too: the owner's words become the
   // agent's role and prompt, durably.
   registry.register(createUpdateAgentTool({ db, emit: run.emit }));
@@ -284,6 +430,8 @@ export async function runTaskTurn(db: Database, router: Router, settings: TaskTu
   let offRoadSteps = 0;
   let offRoadNudged = false;
   let acted = false;
+  // PR 6: did the agent narrate with `say` during this turn?
+  let saidSomething = false;
   const offRoadGuard = !persona.id.startsWith("coder") && !CODE_REQUEST.test(run.text) && !FILE_REQUEST.test(run.text);
   let activeStepText = "";
   try {
@@ -361,6 +509,7 @@ export async function runTaskTurn(db: Database, router: Router, settings: TaskTu
           content = withNote(content, offRoadNote(persona.tools));
         }
         messages.push({ role: "tool", toolCallID: call.id, content });
+        if (call.function.name === "say") saidSomething = true;
         const outcome = toolOutcome(call.function.name, callResult.content);
         toolOutcomes.push(outcome);
         if (outcome.ok) stepProgressed = true;
@@ -372,6 +521,17 @@ export async function runTaskTurn(db: Database, router: Router, settings: TaskTu
           // Approval denial is returned as a tool error and the model may explain it.
           persistSession(db, threadID, turnID, "running", messages, summary, stepCount, tokenCount);
         }
+        // DEL-006: the task asked the owner a question. The turn stops here
+        // and resumes with the answer — it does not keep working on a guess.
+        if (needsInput) {
+          stopReason = "needs_input";
+          break;
+        }
+      }
+      // The question was asked; the turn ends here, waiting for the answer.
+      if (needsInput) {
+        stopReason = "needs_input";
+        break;
       }
       // A step that only calls tools is normal — some models narrate nothing
       // until they have an answer. A step that calls tools and achieves
@@ -430,6 +590,7 @@ export async function runTaskTurn(db: Database, router: Router, settings: TaskTu
     clearTimeout(timer);
     run.signal.removeEventListener("abort", abort);
     activeThreads.delete(threadID);
+    if (runningTurns.get(threadID)?.turnID === turnID) runningTurns.delete(threadID);
   }
 
   if (finalText) {
@@ -451,9 +612,19 @@ export async function runTaskTurn(db: Database, router: Router, settings: TaskTu
   if (run.channelID) void compactChannelHistory(db, router, run.channelID, persona.id);
   finishTurn(db, { id: turnID, stopReason, ...usage });
   touchThread(db, threadID);
-  persistSession(db, threadID, turnID, stopReason === "end" ? "done" : "failed", messages, summary, stepCount, tokenCount);
+  // A turn waiting for the owner's answer is not a failed turn: the session
+  // is parked, and the resume picks it up.
+  const sessionState = stopReason === "end" ? "done" : stopReason === "needs_input" ? "waiting" : "failed";
+  persistSession(db, threadID, turnID, sessionState, messages, summary, stepCount, tokenCount);
   if (usage) recordUsage(db, { turnID, ...usage });
   run.emit({ type: "turn.end", turnID, threadID, stopReason, ...(usage ? { usage } : {}), ...(run.conversationID ? { conversationID: run.conversationID } : {}) });
+  // PR 6: waiting for the owner is not the same as working.
+  run.emit({
+    type: "agent.presence",
+    agentId: persona.id,
+    state: stopReason === "needs_input" ? "waiting" : "idle",
+    ...(run.delegation?.taskID ? { taskId: run.delegation.taskID } : {}),
+  });
   return { turnID, text: finalText, stopReason };
 }
 

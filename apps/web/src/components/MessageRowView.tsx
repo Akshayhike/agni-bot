@@ -6,9 +6,9 @@
  * The name is never spelled out again — the header already says who you are
  * talking to, and a thread is a conversation, not a stack of labels.
  *
- * Tool activity is deliberately not rendered. The transcript answers "what did
- * I ask and what came back"; the mechanics of a turn are diagnostics. Progress
- * is shown by the status strip, and a turn that produced nothing says why.
+ * Tool activity is shown as one quiet, collapsible line under the answer —
+ * enough to see that the work happened, not enough to turn the transcript
+ * into a log. The `say` tool is for the milestones that deserve words.
  */
 import { useState, type FormEvent } from "react";
 import ReactMarkdown from "react-markdown";
@@ -69,6 +69,10 @@ export function MessageRowView({
           <Check size={12} />
           Renamed to {agent?.name ?? message.senderName ?? "your assistant"}
         </div>
+      ) : null}
+
+      {message.uiHint === "needs_input" && message.taskId && message.questionId ? (
+        <TaskQuestion taskID={message.taskId} questionID={message.questionId} />
       ) : null}
 
       {menu ? (
@@ -156,6 +160,41 @@ function AssistantProse({
       {explanation && message.text.length > 0 ? (
         <div className="stop-explanation">Response didn't finish · {explanation}</div>
       ) : null}
+
+      {message.tools.length > 0 ? <ActivityStrip message={message} /> : null}
+    </div>
+  );
+}
+
+/**
+ * The activity strip: what the agent did, quietly. The transcript answers
+ * "what did I ask and what came back" — this is the progress behind it, one
+ * line until the owner wants to see it. It is here so the UI shows that
+ * work is happening even when the model forgets to narrate.
+ */
+function ActivityStrip({ message }: { message: ChatMessage }) {
+  const [open, setOpen] = useState(false);
+  const tools = message.tools;
+  const running = tools.find((tool) => tool.state === "running");
+  const failed = tools.filter((tool) => tool.state === "failed").length;
+  const summary = running
+    ? `Working · ${running.name}`
+    : `${tools.length} step${tools.length === 1 ? "" : "s"}${failed > 0 ? ` · ${failed} failed` : ""}`;
+  return (
+    <div className="activity-strip">
+      <button type="button" className="activity-summary" onClick={() => setOpen(!open)}>
+        {summary}
+      </button>
+      {open ? (
+        <ul className="activity-list">
+          {tools.map((tool) => (
+            <li key={tool.id} className={tool.state}>
+              <span className="activity-name">{tool.name}</span>
+              {tool.preview ? <span className="activity-preview">{tool.preview}</span> : null}
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </div>
   );
 }
@@ -240,8 +279,48 @@ function NamePrompt({ onSave }: { onSave: (name: string) => void }) {
   );
 }
 
-function ThinkingDots() {
+/**
+ * DEL-006: a delegated task asked the owner something. The answer goes back
+ * through its own frame, so a normal message can never resume a task by
+ * accident.
+ */
+function TaskQuestion({ taskID, questionID }: { taskID: string; questionID: string }) {
+  const model = useAppModel();
+  const [answer, setAnswer] = useState("");
+  const [sent, setSent] = useState(false);
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    const trimmed = answer.trim();
+    if (trimmed.length === 0) return;
+    model.answerTask(taskID, questionID, trimmed);
+    setAnswer("");
+    setSent(true);
+  };
+  if (sent) {
+    return (
+      <div className="task-answer-sent">
+        <Check size={12} />
+        Answer sent
+      </div>
+    );
+  }
   return (
+    <form className="task-question" onSubmit={submit}>
+      <input
+        className="text-input"
+        value={answer}
+        onChange={(event) => setAnswer(event.target.value)}
+        placeholder="Answer the question…"
+        aria-label="Answer the question"
+      />
+      <button type="submit" className="btn primary">
+        Send
+      </button>
+    </form>
+  );
+}
+
+function ThinkingDots() {  return (
     <span className="thinking-dots" aria-label="Agni is thinking">
       <span />
       <span />

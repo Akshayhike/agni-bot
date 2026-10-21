@@ -22,6 +22,7 @@ import {
   type TaskRow,
 } from "../stores/tasks";
 import { enqueueJob } from "../stores/jobs";
+import { readFacts } from "./expand-tool";
 
 const objectSchema = (properties: Record<string, unknown>, required: string[]): Record<string, unknown> => ({
   type: "object", properties, required, additionalProperties: false,
@@ -36,6 +37,8 @@ export interface DelegateTaskToolDeps {
   channelID?: string;
   /** The parent turn, so the task can be traced back to what delegated it. */
   parentTurnID?: string;
+  /** The parent thread, so the answer to a question can go back to it. */
+  parentThreadID?: string;
 }
 
 export function registerDelegateTaskTool(registry: ToolRegistry, deps: DelegateTaskToolDeps): void {
@@ -60,6 +63,7 @@ export function registerDelegateTaskTool(registry: ToolRegistry, deps: DelegateT
       constraints: { type: "array", items: { type: "string" }, description: "Rules the result must respect." },
       deadline: { type: "string", description: "Optional ISO date/time by which the work is needed." },
       outputSchema: { type: "string", description: "Optional description of the shape of the result." },
+      factIDs: { type: "array", items: { type: "string" }, description: "Ids of saved facts the child needs. Their text travels with the brief." },
       mode: {
         type: "string",
         enum: ["async", "wait"],
@@ -76,13 +80,14 @@ export function registerDelegateTaskTool(registry: ToolRegistry, deps: DelegateT
       const goal = String(args.goal ?? "").trim();
       if (!goal) throw new Error("delegate_task requires a goal");
 
+      const factIDs = Array.isArray(args.factIDs) ? args.factIDs.map(String).slice(0, 20) : undefined;
       const brief: DelegationBrief = {
         goal,
         constraints: Array.isArray(args.constraints) ? args.constraints.map(String) : undefined,
         deadline: args.deadline === undefined ? null : String(args.deadline),
         outputSchema: args.outputSchema === undefined ? null : String(args.outputSchema),
-      };
-      // Idempotency: the same goal already in flight for the same specialist
+        ...(factIDs && factIDs.length > 0 ? { factIDs } : {}),
+      };      // Idempotency: the same goal already in flight for the same specialist
       // is returned, not queued twice. A model retry must not double the work.
       const existing = findActiveDelegation(deps.db, toAgentID, goal);
       if (existing) {
@@ -109,6 +114,9 @@ export function registerDelegateTaskTool(registry: ToolRegistry, deps: DelegateT
         brief,
         origin: "ea_delegated",
         parentTurnID: deps.parentTurnID ?? null,
+        parentThreadID: deps.parentThreadID ?? null,
+        parentChannelID: deps.channelID ?? null,
+        parentAgentID: deps.currentAgentID,
       });
 
       // The brief is the entire child context: goal, constraints, deadline and
@@ -175,6 +183,11 @@ function taskView(task: TaskRow, deps: DelegateTaskToolDeps): Record<string, unk
     result: result.value,
     resultRedacted: result.redacted,
     visibility,
+    // DEL-004: the full result lives in an artifact. The reference is only
+    // useful to a caller that may read it.
+    artifactRef: result.redacted ? null : task.artifact_id,
+    question: task.pending_question,
+    questionID: task.pending_question_id,
     terminal: task.delegate_state === "done" || task.delegate_state === "failed",
     jobID: task.job_id,
     updatedAt: task.updated_at,
@@ -281,9 +294,12 @@ function registerTaskCancelTool(registry: ToolRegistry, deps: DelegateTaskToolDe
 }
 
 /** Render the TaskPacket as the child's prompt. */
-export function formatBrief(brief: DelegationBrief): string {
+export function formatBrief(brief: DelegationBrief, facts: Array<{ id: string; text: string }> = []): string {
   const lines = [`Goal: ${brief.goal}`];
   if (brief.constraints?.length) lines.push(`Constraints:\n${brief.constraints.map((item) => `- ${item}`).join("\n")}`);
+  if (facts.length > 0) {
+    lines.push(`Facts you may need:\n${facts.map((fact) => `- [${fact.id}] ${fact.text}`).join("\n")}`);
+  }
   if (brief.deadline) lines.push(`Deadline: ${brief.deadline}`);
   if (brief.outputSchema) lines.push(`Return format: ${brief.outputSchema}`);
   return lines.join("\n");

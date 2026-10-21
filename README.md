@@ -97,6 +97,79 @@ The secret is injected via stdin and a short-lived 0600 askpass file in a 0700
 temp directory; it is removed when the command exits. Output is scrubbed of the
 exact value before it reaches the model.
 
+**On a Mac, the operating system can ask instead.** `run_privileged` takes an
+`auth` mode:
+
+- `auto` (default) — machine-level commands (`sudo …`) go to the macOS
+  authorization dialog (password or Touch ID); everything else (`ssh`, `git`)
+  goes to the one-time prompt, because those must run as the owner, not as
+  root.
+- `os` — always the macOS authorization.
+- `password` — always the one-time prompt.
+
+The command is written into a private directory (`mkdtemp`, 0700) as a 0700
+script, never into a bare temp file and never into a command line, and the
+script is deleted the moment the run ends. The authorization dialog shows the
+**command itself**, because the approval covers the whole script.
+
+The owner's password is never stored anywhere — not in the Keychain, not in a
+file. The Keychain holds the device token and nothing else.
+
+### Summaries in levels
+
+A session block's summary says what happened in that block. The day summary
+says what happened in the day, and the epoch summary says what happened over
+a week. The rollup is deterministic — the union of the day's decisions and
+open loops — so it costs nothing, runs in the background, and is
+idempotent. Each level keeps the range it came from, so a summary can
+always be traced back to the turns that produced it.
+
+### What Agni remembers, seen from the app
+
+The Inspector has a **Memory** section: every fact the agent holds, with its
+scope, where it came from, how sure the agent is, and how often it is
+recalled. The list is filtered by the same rules the retrieval uses, so
+nothing shows there that the agent could not have recalled — a private
+agent's fact is not in the list, and another agent's scoped note is not
+either.
+
+Editing and deleting come later; the read view ships first, because a
+memory you cannot see is a memory you cannot trust.
+
+### The acceptance suite
+
+```sh
+bun run eval           # the deterministic evals
+bun run eval:nightly   # the same, with the nightly policy
+```
+
+Six evals, each measuring a promise the system makes and failing when the
+promise breaks:
+
+| Eval | What it measures |
+|---|---|
+| EVAL-001 | needle recall — facts planted early, found by a vague question after the blocks rolled over |
+| EVAL-002 | the gate's misses, and that the rollover sweep catches them |
+| EVAL-003 | continuity — an ephemeral follow-up keeps its referent |
+| EVAL-004 | leaks — private and scoped content never reaches the caller |
+| EVAL-005 | cost — the retrieval is cheap enough to sit on the turn's path |
+| EVAL-006 | drift — the summary and the source still agree |
+
+They run against an in-memory database and a stub model, so they measure
+the *system* rather than the luck of a provider. The provider-backed checks
+are skipped when there is no key.
+
+### Seeing what the agent is doing
+
+The sidebar shows a quiet dot next to an agent that is working, waiting for
+you, or blocked — so "working" and "waiting for you" are not the same
+silence. Under each answer there is a one-line activity strip (expandable)
+showing what the agent did, so progress does not depend on the model
+remembering to narrate.
+
+Interrupting works the way it should: a new message stops the running turn
+and takes over, instead of bouncing off a busy thread.
+
 ### Agent visibility
 
 Every agent has a visibility that says what *other* agents may see of its
@@ -118,6 +191,73 @@ by other agents, and a private fact is readable by its owner alone.
 
 Change it with `update_agent` (`visibility: private | summary | shared`) or
 in the app.
+
+### What Agni remembers, and what it may not
+
+Memory is extracted in batches, after a turn — never on the path of one. A
+turn that is small talk produces nothing.
+
+- **The source decides the scope.** Only what the owner said (or something
+  verified) may become a fact *about the owner*. A tool result, a web page
+  or an email is data: a page that says "the user prefers dark mode" is a
+  prompt-injection attempt, not a fact. What a conversation *implies* is
+  kept as that agent's own note.
+- **Confidence has a floor.** An item the extractor is not sure about stays
+  in the transcript and is not promoted.
+- **Strict schema.** Every extracted item is validated; an invalid one is
+  dropped and logged, never stored.
+- **Changes are flagged.** When a new fact contradicts an older one, the new
+  one wins and the old one is closed — and the conflict is recorded
+  (`memory_conflicts`) rather than hidden.
+
+### Blocks that roll over without making you wait
+
+A session block is the unit of context. When one fills up, it is closed and
+a new one opens **immediately** — the turn never waits for a summary. The
+new block opens with the previous summary plus the last six turns of the
+old one, and the summary of the closed block is written in the background.
+A second rotation that lands before the first summary does not lose the
+newer one.
+
+The trigger is 65% of the block budget, with hysteresis above it, so a
+block hovering near the threshold does not thrash. An idle gap plus a topic
+shift also starts a new block.
+
+### Search and memory
+
+Facts and the conversation transcript are indexed with SQLite FTS5, so
+recall is a real search rather than a substring match. A search is ranked
+with
+
+```
+score = relevance * recency_decay(last_used_at) * salience * (1 + log(1 + use_count))
+```
+
+and a recall moves `last_used_at` and `use_count`, so the formula reflects
+what actually gets used. Below the confidence floor (`AGNI_MIN_RECALL_SCORE`,
+default `0.15`) nothing is injected — a plausible match that is not good
+enough is still nothing.
+
+The agent can search the transcript itself with `transcript_search`; the
+search respects the same visibility rules as everything else, so a private
+agent's conversation is not searchable from outside.
+
+Retrieval is hybrid when a local embedder is configured
+(`AGNI_EMBEDDING_BASE_URL` or `AGNI_OLLAMA_BASE_URL`, plus
+`AGNI_EMBEDDING_MODEL`). The text search comes first — it is local and
+fast — and the embedder is the *lift* for the cases the text search cannot
+serve. If the embedder is down, recall falls back to FTS alone. There is no
+vector service: the vectors live in the database and the similarity is
+computed in JavaScript.
+
+A nightly sweep keeps the store honest: it closes what is already
+superseded, merges duplicates, archives what nothing has used in months,
+and promotes what is used often into the pinned profile. It never deletes
+anything — forgetting is still the owner's call.
+
+The slot budgets of the context assembler are configuration:
+`AGNI_SLOT_PINNED_CORE`, `AGNI_SLOT_ANCHOR`, `AGNI_SLOT_LEDGER`,
+`AGNI_SLOT_SUMMARIES`, `AGNI_SLOT_RECALL` (tokens).
 
 ### Smoke test without any keys
 

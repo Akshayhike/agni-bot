@@ -27,6 +27,7 @@ import {
   type HealthReport,
   type IncomingFrame,
   type JobInfo,
+  type MemoryItem,
   type NoticeKind,
   type NoticeRow,
   type PluginInfo,
@@ -63,6 +64,10 @@ export interface AppSnapshot {
   /** Full roster for `@mention` and handoff links, including hidden agents. */
   mentionAgents: AgentInfo[];
   unread: ReadonlySet<string>;
+  /** What each agent is doing: idle, working, waiting, blocked. */
+  agentStates: Readonly<Record<string, "idle" | "working" | "waiting" | "blocked">>;
+  /** What the agent can remember, filtered the way retrieval filters it. */
+  memories: MemoryItem[];
 
   health: HealthReport | null;
   healthError: string | null;
@@ -137,7 +142,11 @@ export class AppModel {
   private agents: AgentInfo[] = seedAgents();
   /** Hidden specialists are absent from the sidebar but still addressable. */
   private mentionAgents: AgentInfo[] = seedAgents();
+  /** The channel this client is bound to, when it bound itself to an agent. */
+  private boundChannelID: string | null = null;
   private unread = new Set<string>();
+  private agentStates: Record<string, "idle" | "working" | "waiting" | "blocked"> = {};
+  private memories: MemoryItem[] = [];
 
   private health: HealthReport | null = null;
   private healthError: string | null = null;
@@ -221,6 +230,8 @@ export class AppModel {
       agents: this.agents,
       mentionAgents: this.mentionAgents,
       unread: new Set(this.unread),
+      agentStates: { ...this.agentStates },
+      memories: this.memories,
       health: this.health,
       healthError: this.healthError,
       configuredProviders: this.configuredProviders,
@@ -543,6 +554,31 @@ export class AppModel {
       .catch(() => undefined);
   }
 
+  /**
+   * DEL-006: answer a question a delegated task asked. Its own frame, so a
+   * normal message can never resume a task by accident.
+   */
+  answerTask(taskID: string, questionID: string, text: string): void {
+    const connection = this.connection;
+    const answer = text.trim();
+    if (!connection || !answer) return;
+    void connection.send({ type: "task.answer", taskID, questionID, text: answer }).catch(() => undefined);
+  }
+
+  /** Ask what the agent can remember (PR 8). */
+  refreshMemories(scope: "global_user" | "agent" = "global_user"): void {
+    const connection = this.connection;
+    if (!connection) return;
+    void connection.send({ type: "memory.list", scope, limit: 100 }).catch(() => undefined);
+  }
+
+  /** Pin this client to an agent's conversation and its DM channel. */
+  bindDirect(agentID: string): void {
+    const connection = this.connection;
+    if (!connection) return;
+    void connection.send({ type: "bind.direct", agentID }).catch(() => undefined);
+  }
+
   /** Resolve a leading `@name`/`@id` against the visible roster. */
   private resolveMention(text: string): { agent: AgentInfo; text: string } | null {
     const prefix = /^\s*@/.exec(text);
@@ -591,7 +627,7 @@ export class AppModel {
       return;
     }
     const specialistID = this.conversation.agentID === "ea" ? undefined : this.conversation.agentID;
-    const channelID = specialistID ? `dm:${specialistID}` : "main";
+    const channelID = this.boundChannelID ?? (specialistID ? `dm:${specialistID}` : "main");
     void connection
       .send({
         type: "msg.send",
@@ -1073,6 +1109,12 @@ export class AppModel {
       return;
     }
 
+    if (frame.type === "memory.list.ok") {
+      this.memories = frame.memories;
+      this.publish();
+      return;
+    }
+
     if (frame.type === "task.update.ok") {
       const index = this.tasks.findIndex((task) => task.id === frame.task.id);
       if (index === -1) this.tasks = [...this.tasks, frame.task];
@@ -1201,6 +1243,20 @@ export class AppModel {
         case "agentsChanged":
           if (JSON.stringify(effect.agents) !== JSON.stringify(this.agents)) this.agents = effect.agents;
           break;
+        case "taskChanged":
+          this.tasks = this.tasks.map((task) => (task.id === effect.task.id ? effect.task : task));
+          break;
+        case "bound":
+          // The server resolved the agent's conversation and channel; the
+          // client follows it from here.
+          this.conversation.bind(effect.conversationID, effect.agentID, effect.sessionID || null);
+          this.boundChannelID = effect.channelID;
+          break;
+        case "agentPresence":
+          // What the agent is doing: the owner can tell "working" from
+          // "waiting for you" without asking.
+          this.agentStates = { ...this.agentStates, [effect.agentID]: effect.state };
+          break;
         case "presence":
           break;
       }
@@ -1239,6 +1295,7 @@ export class AppModel {
     await this.refreshHealth();
     this.refreshJobs();
     this.refreshTasks();
+    this.refreshMemories();
     this.refreshPlugins();
   }
 

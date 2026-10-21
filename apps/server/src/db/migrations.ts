@@ -599,4 +599,172 @@ export const MIGRATIONS: Migration[] = [
          AND visibility = 'summary';
     `,
   },
+  {
+    id: 22,
+    name: "delegation_lifecycle",
+    sql: `
+      -- DEL-006: a delegated task can ask a question and be answered.
+      -- The question, the thread it belongs to, and the parent that has to be
+      -- woken when the work lands.
+      ALTER TABLE tasks ADD COLUMN child_thread_id TEXT;    -- the specialist's own thread
+      ALTER TABLE tasks ADD COLUMN parent_thread_id TEXT;   -- where the answer goes
+      ALTER TABLE tasks ADD COLUMN parent_channel_id TEXT;  -- the channel the owner watches
+      ALTER TABLE tasks ADD COLUMN parent_agent_id TEXT;   -- who has to be woken
+      ALTER TABLE tasks ADD COLUMN pending_question TEXT;  -- the question being asked
+      ALTER TABLE tasks ADD COLUMN pending_question_id TEXT;
+      ALTER TABLE tasks ADD COLUMN result_delivered_at TEXT; -- the wake was claimed
+      ALTER TABLE tasks ADD COLUMN artifact_id TEXT;        -- DEL-004: the full result
+      CREATE INDEX idx_tasks_pending ON tasks(delegate_state, pending_question_id);
+    `,
+  },
+  {
+    id: 23,
+    name: "artifacts",
+    sql: `
+      -- DEL-004: a delegated result is stored by reference. The task row keeps
+      -- a short summary for the caller's context; the full text lives here and
+      -- is only ever read through the visibility filter.
+      CREATE TABLE artifacts (
+        id TEXT PRIMARY KEY,
+        task_id TEXT,
+        agent_id TEXT NOT NULL,     -- the agent that produced it
+        kind TEXT NOT NULL DEFAULT 'result',
+        content TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+      CREATE INDEX idx_artifacts_task ON artifacts(task_id);
+      CREATE INDEX idx_artifacts_agent ON artifacts(agent_id);
+    `,
+  },
+  {
+    id: 24,
+    name: "fts_indexes",
+    sql: `
+      -- MEM-003: facts and transcripts are indexed for search. FTS5 with
+      -- external content, kept in sync by triggers, so a write never has to
+      -- remember to update the index. The vector half of hybrid retrieval
+      -- lands with the embeddings (PR 3c); the BLOB column already exists.
+      CREATE VIRTUAL TABLE agent_memories_fts USING fts5(
+        content, tags, key_slug,
+        content='agent_memories', content_rowid='rowid',
+        tokenize='porter unicode61 remove_diacritics 2'
+      );
+      CREATE TRIGGER agent_memories_fts_ai AFTER INSERT ON agent_memories BEGIN
+        INSERT INTO agent_memories_fts(rowid, content, tags, key_slug)
+        VALUES (new.rowid, new.content, new.tags, new.key_slug);
+      END;
+      CREATE TRIGGER agent_memories_fts_ad AFTER DELETE ON agent_memories BEGIN
+        INSERT INTO agent_memories_fts(agent_memories_fts, rowid, content, tags, key_slug)
+        VALUES ('delete', old.rowid, old.content, old.tags, old.key_slug);
+      END;
+      CREATE TRIGGER agent_memories_fts_au AFTER UPDATE ON agent_memories BEGIN
+        INSERT INTO agent_memories_fts(agent_memories_fts, rowid, content, tags, key_slug)
+        VALUES ('delete', old.rowid, old.content, old.tags, old.key_slug);
+        INSERT INTO agent_memories_fts(rowid, content, tags, key_slug)
+        VALUES (new.rowid, new.content, new.tags, new.key_slug);
+      END;
+
+      CREATE VIRTUAL TABLE channel_messages_fts USING fts5(
+        text,
+        content='channel_messages', content_rowid='rowid',
+        tokenize='porter unicode61 remove_diacritics 2'
+      );
+      CREATE TRIGGER channel_messages_fts_ai AFTER INSERT ON channel_messages BEGIN
+        INSERT INTO channel_messages_fts(rowid, text) VALUES (new.rowid, new.text);
+      END;
+      CREATE TRIGGER channel_messages_fts_ad AFTER DELETE ON channel_messages BEGIN
+        INSERT INTO channel_messages_fts(channel_messages_fts, rowid, text) VALUES ('delete', old.rowid, old.text);
+      END;
+      CREATE TRIGGER channel_messages_fts_au AFTER UPDATE ON channel_messages BEGIN
+        INSERT INTO channel_messages_fts(channel_messages_fts, rowid, text) VALUES ('delete', old.rowid, old.text);
+        INSERT INTO channel_messages_fts(rowid, text) VALUES (new.rowid, new.text);
+      END;
+
+      -- Backfill the indexes for the rows that already exist.
+      INSERT INTO agent_memories_fts(agent_memories_fts) VALUES ('rebuild');
+      INSERT INTO channel_messages_fts(channel_messages_fts) VALUES ('rebuild');
+    `,
+  },
+  {
+    id: 25,
+    name: "tagger_batches_and_conflicts",
+    sql: `
+      -- TAG-001: the tagger works in batches. A message that has been swept
+      -- for memory is marked, so the next batch starts where this one
+      -- stopped instead of reading the whole channel again.
+      ALTER TABLE channel_messages ADD COLUMN tagged_at TEXT;
+      CREATE INDEX idx_channel_messages_untagged ON channel_messages(tagged_at, created_at);
+
+      -- MEM-002: a changed fact closes the old one — and the conflict is
+      -- recorded, because closing it silently would hide that the two
+      -- statements disagreed.
+      CREATE TABLE memory_conflicts (
+        id TEXT PRIMARY KEY,
+        memory_id TEXT NOT NULL,
+        previous_id TEXT NOT NULL,
+        previous_content TEXT NOT NULL,
+        content TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        resolved INTEGER NOT NULL DEFAULT 0,
+        resolved_at TEXT
+      );
+      CREATE INDEX idx_memory_conflicts_open ON memory_conflicts(resolved, created_at);
+    `,
+  },
+  {
+    id: 26,
+    name: "memory_embeddings",
+    sql: `
+      -- D-02/D-03: the embedder is optional and the vectors live in the
+      -- database. The model and its dimensions ride along, so a change of
+      -- model re-embeds instead of mixing two vector spaces.
+      ALTER TABLE agent_memories ADD COLUMN embedding_model TEXT;
+      ALTER TABLE agent_memories ADD COLUMN embedding_dim INTEGER;
+      -- MEM-006: consolidation archives what nothing uses; an archived item
+      -- is still there, it is just not recalled.
+      ALTER TABLE agent_memories ADD COLUMN archived_at TEXT;
+      CREATE INDEX idx_agent_memories_archived ON agent_memories(archived_at, valid_to);
+    `,
+  },
+  {
+    id: 27,
+    name: "rollover_structured_summary",
+    sql: `
+      -- ROL-005: the carried summary is structured, not free text: the
+      -- decisions, the open loops, the entities, the tone, and the turns it
+      -- came from. The text version stays for the prompt.
+      ALTER TABLE conversations ADD COLUMN summary_json TEXT;
+      -- The version of the summary that is current. A second rotation can
+      -- land before the first summary does; the newer version wins.
+      ALTER TABLE conversations ADD COLUMN summary_version INTEGER NOT NULL DEFAULT 0;
+      -- ROL-006: the new block opens with the last turns of the old one.
+      ALTER TABLE threads ADD COLUMN opened_tail TEXT;
+    `,
+  },
+  {
+    id: 28,
+    name: "summary_levels",
+    sql: `
+      -- CMP-001: summaries in levels. A block summary says what happened in
+      -- one session block; a day summary says what happened in a day; an
+      -- epoch summary says what happened over a longer stretch. Each level
+      -- keeps the range it came from, so a summary can be traced back.
+      CREATE TABLE summaries (
+        id TEXT PRIMARY KEY,
+        conversation_id TEXT NOT NULL,
+        agent_id TEXT NOT NULL,
+        level TEXT NOT NULL,          -- block | day | epoch
+        parent_id TEXT,
+        title TEXT NOT NULL,
+        text TEXT NOT NULL,
+        structured TEXT,
+        source_from INTEGER,
+        source_to INTEGER,
+        day TEXT,
+        created_at TEXT NOT NULL
+      );
+      CREATE INDEX idx_summaries_conversation ON summaries(conversation_id, level, created_at);
+      CREATE INDEX idx_summaries_day ON summaries(conversation_id, day, level);
+    `,
+  },
 ];

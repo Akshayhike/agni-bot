@@ -1,5 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { newID, nowISO } from "../util/ids";
+import { cosineSimilarity, packVector, unpackVector } from "../agent/embeddings";
 
 export const MEMORY_TYPES = ["fact", "preference", "style", "entity", "decision", "procedure", "insight"] as const;
 export type MemoryType = (typeof MEMORY_TYPES)[number];
@@ -31,10 +32,13 @@ export interface AgentMemoryRow {
   salience: number;
   visibility: string;
   source: string;
+  embedding_model: string | null;
+  embedding_dim: number | null;
+  archived_at: string | null;
 }
 
 const MEMORY_COLUMNS =
-  "id, scope, agent_id, type, key_slug, content, tags, importance, created_at, updated_at, kind, valid_from, valid_to, supersedes_id, source_block_id, source_turn_ids, last_used_at, use_count, embedding, confidence, salience, visibility, source";
+  "id, scope, agent_id, type, key_slug, content, tags, importance, created_at, updated_at, kind, valid_from, valid_to, supersedes_id, source_block_id, source_turn_ids, last_used_at, use_count, embedding, confidence, salience, visibility, source, embedding_model, embedding_dim, archived_at";
 
 export interface AgentMemoryInput {
   scope?: string;
@@ -127,12 +131,26 @@ export function putAgentMemory(db: Database, input: AgentMemoryInput): AgentMemo
   const importance = clampImportance(input.importance ?? 0);
   const agentID = input.agentID === undefined ? null : input.agentID;
   const timestamp = nowISO();
+  const source = input.source?.trim() || "user";
+
+  // TAG-002: a fact about the owner may only come from the owner (or from
+  // something verified). A tool result, a web page or an email is data: a
+  // page that says "the user prefers dark mode" is an injection attempt, not
+  // a fact. An item that breaks the rule is kept as the agent's own note
+  // instead of becoming a fact about the owner.
+  const userScope = scope === "global_user" || scope === "user";
+  const sourceMayWriteUserFacts = source === "user" || source === "verified";
+  if (userScope && !sourceMayWriteUserFacts && !agentID) {
+    throw new Error("only owner-stated content may become a user-scoped fact");
+  }
+  const effectiveScope = userScope && !sourceMayWriteUserFacts ? "agent" : scope;
+  const effectiveAgentID = effectiveScope === "agent" ? agentID : null;
 
   const existing = db
     .query<AgentMemoryRow, [string, string, string]>(
       `SELECT ${MEMORY_COLUMNS} FROM agent_memories WHERE scope = ? AND COALESCE(agent_id, '') = ? AND key_slug = ? AND valid_to IS NULL`,
     )
-      .get(scope, agentID ?? "", normalizedKeySlug);
+      .get(effectiveScope, effectiveAgentID ?? "", normalizedKeySlug);
 
   if (existing) {
     // MEM-002: a changed fact supersedes the old one; it is never silently
@@ -157,8 +175,8 @@ export function putAgentMemory(db: Database, input: AgentMemoryInput): AgentMemo
 
   const row: AgentMemoryRow = {
     id: newID("mem"),
-    scope,
-    agent_id: agentID,
+    scope: effectiveScope,
+    agent_id: effectiveAgentID,
     type,
     key_slug: normalizedKeySlug,
     content,
@@ -178,7 +196,10 @@ export function putAgentMemory(db: Database, input: AgentMemoryInput): AgentMemo
     confidence: clampConfidence(input.confidence),
     salience: clampImportance(input.salience ?? importance),
     visibility: normalizeMemoryVisibility(input.visibility),
-    source: input.source?.trim() || "user",
+    source,
+    embedding_model: null,
+    embedding_dim: null,
+    archived_at: null,
   };
   db.run(
     `INSERT INTO agent_memories (id, scope, agent_id, type, key_slug, content, tags, importance, created_at, updated_at, kind, valid_from, valid_to, supersedes_id, source_block_id, source_turn_ids, last_used_at, use_count, embedding, confidence, salience, visibility, source)
@@ -220,6 +241,298 @@ export function getAgentMemory(db: Database, id: string): AgentMemoryRow | null 
       )
       .get(id) ?? null
   );
+}
+
+/**
+ * A search hit, with the score that ranked it.
+ */
+export interface MemoryHit {
+  row: AgentMemoryRow;
+  /** 0..1 — higher is a better match. */
+  score: number;
+  /** The text relevance, before the ranking multipliers. */
+  relevance: number;
+}
+
+/**
+ * The ranking formula from the spec:
+ *   score = relevance * recency_decay(last_used_at) * salience * (1 + log(1 + use_count))
+ *
+ * `relevance` comes from FTS5's bm25; the rest is how much the item matters
+ * and how fresh it is. A formula whose inputs never change is dead code, so
+ * `markMemoryUsed` moves `last_used_at` and `use_count` on every recall.
+ */
+export function rankMemory(
+  row: AgentMemoryRow,
+  relevance: number,
+  now = Date.now(),
+): number {
+  const recency = recencyDecay(row.last_used_at ?? row.updated_at, now);
+  const salience = row.salience > 0 ? row.salience : 0.5;
+  const use = 1 + Math.log(1 + (row.use_count ?? 0));
+  return relevance * recency * salience * use;
+}
+
+/** A half-life of two weeks, floored so a stale item is not worthless. */
+export function recencyDecay(timestamp: string | null, now = Date.now()): number {
+  if (!timestamp) return 0.5;
+  const at = Date.parse(timestamp);
+  if (!Number.isFinite(at)) return 0.5;
+  const days = Math.max(0, (now - at) / 86_400_000);
+  return Math.max(0.2, Math.pow(0.5, days / 14));
+}
+
+/**
+ * Full-text search over the facts, with the same caller-filter the list
+ * uses. The filter is applied in SQL, so a private fact cannot be ranked
+ * into a result set the caller will see.
+ */
+export function searchAgentMemories(
+  db: Database,
+  input: {
+    query: string;
+    scope?: string;
+    agentID?: string | null;
+    callerAgentID?: string | null;
+    limit?: number;
+  },
+): MemoryHit[] {
+  const query = input.query.trim();
+  if (!query) return [];
+  const scope = input.scope ?? "global_user";
+  const agentID = input.agentID === undefined ? null : input.agentID;
+  const caller = input.callerAgentID ?? null;
+  if (scope === "agent" && !agentID) return [];
+  if (scope === "agent" && caller && caller !== agentID) return [];
+  const limit = Math.min(50, Math.max(1, Math.floor(input.limit ?? 10)));
+
+  const rows = runFtsSearch(db, {
+    table: "agent_memories_fts",
+    columns: MEMORY_COLUMNS.split(", ").map((column) => `m.${column}`).join(", "),
+    join: "JOIN agent_memories m ON m.rowid = agent_memories_fts.rowid",
+    filter: memoryFilter(scope, agentID, caller),
+    query,
+    limit: limit * 4,
+  });
+  if (rows.length === 0) return [];
+
+  const now = Date.now();
+  const hits: MemoryHit[] = rows.map((row) => {
+    // bm25 is negative and smaller is better; turn it into a 0..1 relevance.
+    const relevance = 1 / (1 + Math.max(0, row.rank));
+    return { row: row as unknown as AgentMemoryRow, relevance, score: rankMemory(row as unknown as AgentMemoryRow, relevance, now) };
+  });
+  hits.sort((a, b) => b.score - a.score);
+  return hits.slice(0, limit);
+}
+
+interface SqlFilter {
+  clauses: string[];
+  values: string[];
+}
+
+/** The caller-filter, shared by the list and the search. */
+function memoryFilter(scope: string, agentID: string | null, caller: string | null): SqlFilter {
+  const clauses = ["m.valid_to IS NULL"];
+  const values: string[] = [];
+  if (scope === "agent") {
+    clauses.push("m.agent_id = ?");
+    values.push(agentID ?? "");
+  } else {
+    clauses.push("(m.agent_id IS NULL OR m.agent_id = ?)");
+    values.push(caller ?? "");
+  }
+  clauses.push("(m.visibility <> 'private' OR COALESCE(m.agent_id, 'ea') = ?)");
+  values.push(caller ?? "");
+  return { clauses, values };
+}
+
+/**
+ * Run an FTS query with the caller's filter. Precision first (`AND`), then
+ * recall (`OR`): a paraphrase that misses every term still finds the item.
+ */
+function runFtsSearch(
+  db: Database,
+  input: {
+    table: string;
+    columns: string;
+    join: string;
+    filter: SqlFilter;
+    query: string;
+    limit: number;
+  },
+): Array<Record<string, unknown> & { rank: number }> {
+  for (const mode of ["and", "or"] as const) {
+    const params: (string | number)[] = [toMatchQuery(input.query, mode), ...input.filter.values, input.limit];
+    try {
+      const rows = db
+        .query<Record<string, unknown> & { rank: number }, (string | number)[]>(
+          `SELECT ${input.columns}, bm25(${input.table}) AS rank
+           FROM ${input.table}
+           ${input.join}
+           WHERE ${input.table} MATCH ? AND ${input.filter.clauses.join(" AND ")}
+           ORDER BY rank ASC
+           LIMIT ?`,
+        )
+        .all(...params);
+      if (rows.length > 0) return rows;
+    } catch {
+      // A malformed FTS query must not take the turn down.
+      return [];
+    }
+  }
+  return [];
+}
+
+/**
+ * Store a vector with the model that produced it. A different model means a
+ * different vector space, so the old vector is replaced rather than mixed
+ * with the new one.
+ */
+export function setMemoryEmbedding(
+  db: Database,
+  id: string,
+  vector: Float32Array,
+  model: string,
+): void {
+  db.run("UPDATE agent_memories SET embedding = ?, embedding_model = ?, embedding_dim = ? WHERE id = ?", [
+    packVector(vector),
+    model,
+    vector.length,
+    id,
+  ]);
+}
+
+/** Facts that have no vector, or one from an older model. */
+export function listMemoriesNeedingEmbedding(
+  db: Database,
+  options: { model: string; limit?: number } = { model: "" },
+): AgentMemoryRow[] {
+  const limit = Math.min(500, Math.max(1, Math.floor(options.limit ?? 100)));
+  return db
+    .query<AgentMemoryRow, [string, number]>(
+      `SELECT ${MEMORY_COLUMNS} FROM agent_memories
+       WHERE valid_to IS NULL AND archived_at IS NULL
+         AND (embedding IS NULL OR embedding_model IS NULL OR embedding_model <> ?)
+       ORDER BY updated_at ASC LIMIT ?`,
+    )
+    .all(options.model, limit);
+}
+
+/**
+ * The vector neighbours of a query, filtered by the same caller-filter as
+ * the text search. A private fact is not a neighbour of another agent.
+ */
+export function searchMemoriesByVector(
+  db: Database,
+  input: {
+    vector: Float32Array;
+    scope?: string;
+    agentID?: string | null;
+    callerAgentID?: string | null;
+    limit?: number;
+  },
+): MemoryHit[] {
+  const scope = input.scope ?? "global_user";
+  const agentID = input.agentID === undefined ? null : input.agentID;
+  const caller = input.callerAgentID ?? null;
+  if (scope === "agent" && !agentID) return [];
+  if (scope === "agent" && caller && caller !== agentID) return [];
+  const limit = Math.min(50, Math.max(1, Math.floor(input.limit ?? 10)));
+
+  const params: (string | number)[] = [];
+  const clauses = ["m.valid_to IS NULL", "m.embedding IS NOT NULL"];
+  if (scope === "agent") {
+    clauses.push("m.agent_id = ?");
+    params.push(agentID!);
+  } else {
+    clauses.push("(m.agent_id IS NULL OR m.agent_id = ?)");
+    params.push(caller ?? "");
+  }
+  clauses.push("(m.visibility <> 'private' OR COALESCE(m.agent_id, 'ea') = ?)");
+  params.push(caller ?? "");
+  params.push(limit * 4);
+
+  const rows = db
+    .query<AgentMemoryRow & { embedding: Uint8Array | null }, (string | number)[]>(
+      `SELECT ${MEMORY_COLUMNS.split(", ").map((column) => `m.${column}`).join(", ")}, m.embedding AS embedding
+       FROM agent_memories m
+       WHERE ${clauses.join(" AND ")}
+       LIMIT ?`,
+    )
+    .all(...params);
+
+  const now = Date.now();
+  const hits: MemoryHit[] = [];
+  for (const row of rows) {
+    const vector = unpackVector(row.embedding);
+    if (!vector) continue;
+    // Cosine similarity maps into 0..1 so it can be fused with bm25.
+    const relevance = (cosineSimilarity(input.vector, vector) + 1) / 2;
+    hits.push({ row, relevance, score: rankMemory(row, relevance, now) });
+  }
+  hits.sort((a, b) => b.score - a.score);
+  return hits.slice(0, limit);
+}
+
+/**
+ * Hybrid retrieval: the text hits and the vector hits fused with
+ * reciprocal rank fusion (RRF). RRF is used because the two scores live on
+ * different scales — a bm25 rank and a cosine similarity — and pretending
+ * otherwise makes the fusion a tuning trap.
+ */
+export function fuseHits(textHits: MemoryHit[], vectorHits: MemoryHit[]): MemoryHit[] {
+  const RRF_K = 60;
+  const scores = new Map<string, number>();
+  const rows = new Map<string, MemoryHit>();
+  const add = (hits: MemoryHit[]): void => {
+    hits.forEach((hit, index) => {
+      const id = hit.row.id;
+      scores.set(id, (scores.get(id) ?? 0) + 1 / (RRF_K + index + 1));
+      if (!rows.has(id)) rows.set(id, hit);
+    });
+  };
+  add(textHits);
+  add(vectorHits);
+  return [...scores.entries()]
+    .map(([id, fused]) => {
+      const hit = rows.get(id)!;
+      return { ...hit, score: fused, relevance: hit.relevance };
+    })
+    .sort((a, b) => b.score - a.score);
+}
+
+/**
+ * Mark facts as used. The ranking formula reads `last_used_at` and
+ * `use_count`, so a recall has to move them or the formula is decoration.
+ */
+export function markMemoryUsed(db: Database, ids: string[]): void {
+  if (ids.length === 0) return;
+  const placeholders = ids.map(() => "?").join(",");
+  db.run(
+    `UPDATE agent_memories SET last_used_at = ?, use_count = use_count + 1 WHERE id IN (${placeholders})`,
+    [nowISO(), ...ids],
+  );
+}
+
+/**
+ * Turn free text into an FTS5 MATCH expression. Every term is quoted, so a
+ * stray quote or operator in the user's words cannot become a query error.
+ *
+ * `mode` is the trade-off between precision and recall: `and` wants every
+ * term, `or` wants any of them. The search tries `and` first and falls back
+ * to `or`, so a paraphrase ("when do we deploy") still finds the fact that
+ * says "deployments happen on Tuesday".
+ */
+export function toMatchQuery(query: string, mode: "and" | "or" = "and"): string {
+  const terms = query
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}_-]+/u)
+    .filter((term) => term.length > 0)
+    .slice(0, 16);
+  if (terms.length === 0) return '""';
+  const joiner = mode === "and" ? " AND " : " OR ";
+  return terms.map((term) => `"${term.replace(/"/g, "")}"`).join(joiner);
 }
 
 export function getAgentMemoryByKey(

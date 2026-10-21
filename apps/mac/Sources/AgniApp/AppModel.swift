@@ -42,6 +42,8 @@ final class AppModel {
   private(set) var threads: [ThreadInfo] = []
   private(set) var agents: [AgentInfo] = []
   private(set) var unread: Set<String> = []
+  /// What each agent is doing: idle, working, waiting, blocked.
+  private(set) var agentStates: [String: String] = [:]
 
   // daemon health
   private(set) var health: HealthReport?
@@ -50,6 +52,8 @@ final class AppModel {
   private(set) var plugins: [PluginInfo] = []
   private(set) var jobs: [JobInfo] = []
   private(set) var tasks: [TaskInfo] = []
+  /// What the agent can remember, filtered the way retrieval filters it.
+  private(set) var memories: [MemoryItem] = []
   private(set) var isAddingProvider = false
   private(set) var providerAddError: String?
   private(set) var providerAddSuccess: String?
@@ -233,6 +237,12 @@ final class AppModel {
   func refreshTasks() {
     guard let connection, connectionState.isReady else { return }
     Task { try? await connection.send(.taskList(status: "all", limit: 200)) }
+  }
+
+  /// Ask what the agent can remember.
+  func refreshMemories() {
+    guard let connection, connectionState.isReady else { return }
+    Task { try? await connection.send(.memoryList(scope: "global_user", limit: 100)) }
   }
 
   func refreshPlugins() {
@@ -545,6 +555,11 @@ final class AppModel {
 
   private func handleFrame(_ frame: ServerFrame) {
     switch frame {
+    case .agentPresence(let presence):
+      // What the agent is doing: the owner can tell "working" from
+      // "waiting for you" without asking.
+      agentStates[presence.agentId] = presence.state
+      return
     case .statusUpdate(let status):
       let activeChannel = conversation.agentID == "ea" ? "main" : "dm:\(conversation.agentID)"
       guard status.channelId == activeChannel else { return }
@@ -603,6 +618,9 @@ final class AppModel {
 
     case .taskListOK(let list):
       tasks = list.tasks
+
+    case .memoryListOK(let list):
+      memories = list.memories
 
     case .taskUpdateOK(let result):
       if let index = tasks.firstIndex(where: { $0.id == result.task.id }) { tasks[index] = result.task }

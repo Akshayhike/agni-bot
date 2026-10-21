@@ -334,12 +334,16 @@ public struct Conversation: Sendable, Equatable {
   public mutating func apply(_ frame: ServerFrame) -> [ConversationEffect] {
     switch frame {
     case .helloOK, .conversationOK, .conversationHistoryOK, .threadExportOK, .threadListOK, .threadHistoryOK,
-      .jobListOK, .taskListOK, .taskUpdateOK, .providerAddOK, .providerModelsOK,
+      .jobListOK, .taskListOK, .taskUpdateOK, .memoryListOK, .providerAddOK, .providerModelsOK,
       .pluginListOK, .pluginConnectOK, .pluginState, .unknown:
       return []
 
     case .presence(let presence):
       return [.presence(presence.isOnline)]
+
+    case .agentPresence:
+      // The agent's own state is the app's business, not the conversation's.
+      return []
 
     case .agentsUpdate(let update):
       return [.agentsChanged(update.agents)]
