@@ -159,7 +159,7 @@ const TASK_SYSTEM_PROMPT = [
   // Communication shape: separate progress messages, not one wall. A long
   // install or research pass should announce itself and keep the final answer
   // distinct. Passwords only ever go through `run_privileged`'s secure prompt.
-  "When work will take more than a few seconds, send a one- or two-sentence progress update with `say` before starting and after each milestone; keep the final answer short, separate, and do not repeat the updates. " +
+  "For any task with more than one step, call `say` with a one- or two-sentence update before starting and after each milestone, so the owner sees separate messages as the work progresses; keep the final answer short, separate, and do not repeat the updates. " +
   "For work that will take minutes, put it on a background job or delegate it and return, so the owner can keep chatting while the UI tracks it. " +
   "Never ask the owner to type a password in chat: use `run_privileged` for commands that need one, and never put a secret in a command.",
 ].join(" ");
