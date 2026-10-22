@@ -127,6 +127,12 @@ accountLabel?, error?, connectedAt?}`.
 | `agent.updated` | `{agentId, displayName, onboarded}` | Agent rename/onboarding state changed. |
 | `error` | `{code, message, retryAfter?}` | See codes below. |
 
+A task turn speaks in messages, not one growing reply: each completed assistant
+message is published as its own ordinary `msg.new` after that message's `token`
+chunks. Clients seal the streaming bubble under the durable `msg.new` id and
+open a fresh bubble for the next chunks. `uiHint: "progress"` rows (`say`) are
+separate messages and never seal the answer.
+
 ## Error codes (v2)
 
 `bad_frame`, `unauthorized`, `version_mismatch`, `unknown_thread`, `unknown_conversation`,

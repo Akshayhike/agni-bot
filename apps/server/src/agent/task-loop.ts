@@ -415,7 +415,9 @@ export async function runTaskTurn(db: Database, router: Router, settings: TaskTu
   const timer = setTimeout(() => { timedOut = true; controller.abort(); }, settings.turnTimeoutMs);
   const abort = (): void => controller.abort();
   run.signal.addEventListener("abort", abort, { once: true });
-  let finalText = "";
+  // The last thing the agent said, for the turn result. Each utterance has
+  // already been published as its own message.
+  let answerText = "";
   let stopReason: StopReason = "end";
   // What the tools actually did this turn. A turn that runs out of budget has
   // to say what it managed — "I reached the limit" alone is not an answer.
@@ -437,6 +439,25 @@ export async function runTaskTurn(db: Database, router: Router, settings: TaskTu
   let saidSomething = false;
   const offRoadGuard = !persona.id.startsWith("coder") && !CODE_REQUEST.test(run.text) && !FILE_REQUEST.test(run.text);
   let activeStepText = "";
+  // Each assistant utterance is its own durable message. The task lane used to
+  // accumulate every step into one bubble; the owner asked for discrete
+  // messages, so publish at each step boundary instead.
+  const publish = (text: string, uiHint: "normal" | "progress" = "normal"): void => {
+    if (text.trim().length === 0) return;
+    appendMessage(db, { threadID, turnID, role: "assistant", text });
+    if (!run.channelID) return;
+    const row = appendChannelMessage(db, {
+      channelID: run.channelID, fromType: "agent", fromID: persona.id, text, turnID, uiHint,
+    });
+    const agent = db.query<{ display_name: string; avatar_color: string }, [string]>(
+      "SELECT display_name, avatar_color FROM agents WHERE id = ?",
+    ).get(persona.id);
+    run.emit({
+      type: "msg.new", id: row.id, channelId: run.channelID, fromType: "agent", fromId: persona.id,
+      senderName: agent?.display_name ?? persona.name, senderColor: agent?.avatar_color,
+      text, internal: false, uiHint, createdAt: row.created_at,
+    });
+  };
   try {
     while (stepCount < MAX_STEPS && tokenCount < MAX_TOKENS) {
       if (controller.signal.aborted) { stopReason = timedOut ? "timeout" : "cancelled"; break; }
@@ -471,14 +492,20 @@ export async function runTaskTurn(db: Database, router: Router, settings: TaskTu
       tokenCount += result.outputTokens ?? estimateTokens(result.text + JSON.stringify(result.toolCalls ?? []));
       usage = { provider: result.provider, model: result.model, inputTokens: result.inputTokens, outputTokens: result.outputTokens, latencyMs: result.latencyMs };
       if (!result.toolCalls?.length) {
-        finalText += result.text;
+        answerText = result.text;
         messages.push(assistantMessage(result.text, result.reasoning));
         consecutiveNonTextSteps = 0;
+        publish(result.text);
         break;
       }
 
       messages.push({ role: "assistant", content: result.text, toolCalls: result.toolCalls, ...(result.reasoning ? { reasoning: result.reasoning } : {}) });
-      finalText += result.text;
+      // Publish the step's narration before its tools run, so the bubble reads
+      // before the progress updates those tools produce.
+      if (result.text.trim().length > 0) {
+        answerText = result.text;
+        publish(result.text);
+      }
       persistSession(db, threadID, turnID, "running", messages, summary, stepCount, tokenCount);
       let stepProgressed = false;
       for (const call of result.toolCalls) {
@@ -541,16 +568,21 @@ export async function runTaskTurn(db: Database, router: Router, settings: TaskTu
       // nothing is flailing, and that is what the guard is for.
       consecutiveNonTextSteps = stepProgressed ? 0 : consecutiveNonTextSteps + 1;
       if (consecutiveNonTextSteps > MAX_NONTEXT_STEPS) {
-        finalText += "I couldn't make progress on this — please rephrase or continue in a new message.";
-        messages.push({ role: "assistant", content: finalText });
+        const text = "I couldn't make progress on this — please rephrase or continue in a new message.";
+        answerText = text;
+        run.emit({ type: "token", turnID, threadID, delta: text });
+        messages.push({ role: "assistant", content: text });
+        publish(text);
         break;
       }
       // The turn is reading the app's own source instead of doing the work.
       // Say so plainly, and say what it can actually do.
       if (offRoadSteps >= OFF_ROAD_STOP_AT && !acted) {
-        finalText = offRoadMessage(persona.tools);
-        run.emit({ type: "token", turnID, threadID, delta: finalText });
-        messages.push({ role: "assistant", content: finalText });
+        const text = offRoadMessage(persona.tools);
+        answerText = text;
+        run.emit({ type: "token", turnID, threadID, delta: text });
+        messages.push({ role: "assistant", content: text });
+        publish(text);
         break;
       }
       if (stepCount >= MAX_STEPS || tokenCount >= MAX_TOKENS) break;
@@ -559,10 +591,12 @@ export async function runTaskTurn(db: Database, router: Router, settings: TaskTu
     for (const [sig, step] of recentCalls) {
       if (stepCount - step > DUPLICATE_WINDOW) recentCalls.delete(sig);
     }
-    if (!finalText && stopReason === "end" && (tokenCount >= MAX_TOKENS || stepCount >= MAX_STEPS)) {
-      finalText = budgetExhaustedMessage(toolOutcomes);
-      run.emit({ type: "token", turnID, threadID, delta: finalText });
-      messages.push({ role: "assistant", content: finalText });
+    if (!answerText && stopReason === "end" && (tokenCount >= MAX_TOKENS || stepCount >= MAX_STEPS)) {
+      const text = budgetExhaustedMessage(toolOutcomes);
+      answerText = text;
+      run.emit({ type: "token", turnID, threadID, delta: text });
+      messages.push({ role: "assistant", content: text });
+      publish(text);
     }
   } catch (error) {
     if (error instanceof GuardrailError) {
@@ -570,8 +604,9 @@ export async function runTaskTurn(db: Database, router: Router, settings: TaskTu
       // error frame so the user sees why the chain stopped.
       stopReason = "error";
       run.emit({ type: "error", code: error.code, message: error.message });
-      finalText = error.message;
-      messages.push({ role: "assistant", content: finalText });
+      answerText = error.message;
+      messages.push({ role: "assistant", content: answerText });
+      publish(answerText);
     } else {
       stopReason = controller.signal.aborted ? (timedOut ? "timeout" : "cancelled") : "error";
       if (stopReason === "cancelled") {
@@ -579,8 +614,9 @@ export async function runTaskTurn(db: Database, router: Router, settings: TaskTu
         // the transcript ends where the work did, and let `turn.end` explain
         // it — an error frame would make the client show a failure instead.
         if (activeStepText) {
-          finalText += activeStepText;
+          answerText = activeStepText;
           messages.push({ role: "assistant", content: activeStepText });
+          publish(activeStepText);
           activeStepText = "";
         }
       } else {
@@ -590,13 +626,15 @@ export async function runTaskTurn(db: Database, router: Router, settings: TaskTu
         if (activeStepText) {
           // Keep the streamed fragment in durable history, but leave the turn
           // marked failed so the UI never presents an interrupted task as done.
-          finalText += activeStepText;
+          answerText = activeStepText;
           messages.push({ role: "assistant", content: activeStepText });
-        } else if (!finalText && stopReason === "error") {
+          publish(activeStepText);
+        } else if (!answerText && stopReason === "error") {
           // A turn that failed with nothing to say still owes the user a trace:
           // they asked something, and silence reads as "still thinking".
-          finalText = `This turn failed: ${message}`;
-          messages.push({ role: "assistant", content: finalText });
+          answerText = `This turn failed: ${message}`;
+          messages.push({ role: "assistant", content: answerText });
+          publish(answerText);
         }
       }
     }
@@ -607,22 +645,6 @@ export async function runTaskTurn(db: Database, router: Router, settings: TaskTu
     if (runningTurns.get(threadID)?.turnID === turnID) runningTurns.delete(threadID);
   }
 
-  if (finalText) {
-    appendMessage(db, { threadID, turnID, role: "assistant", text: finalText });
-    if (run.channelID) {
-      const row = appendChannelMessage(db, {
-        channelID: run.channelID, fromType: "agent", fromID: persona.id, text: finalText, turnID,
-      });
-      const agent = db.query<{ display_name: string; avatar_color: string }, [string]>(
-        "SELECT display_name, avatar_color FROM agents WHERE id = ?",
-      ).get(persona.id);
-      run.emit({
-        type: "msg.new", id: row.id, channelId: run.channelID, fromType: "agent", fromId: persona.id,
-        senderName: agent?.display_name ?? persona.name, senderColor: agent?.avatar_color,
-        text: finalText, internal: false, uiHint: "normal", createdAt: row.created_at,
-      });
-    }
-  }
   if (run.channelID) void compactChannelHistory(db, router, run.channelID, persona.id);
   finishTurn(db, { id: turnID, stopReason, ...usage });
   touchThread(db, threadID);
@@ -639,7 +661,7 @@ export async function runTaskTurn(db: Database, router: Router, settings: TaskTu
     state: stopReason === "needs_input" ? "waiting" : "idle",
     ...(run.delegation?.taskID ? { taskId: run.delegation.taskID } : {}),
   });
-  return { turnID, text: finalText, stopReason };
+  return { turnID, text: answerText, stopReason };
 }
 
 /** What one tool call achieved, so a turn can report it in words. */

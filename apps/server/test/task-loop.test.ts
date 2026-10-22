@@ -272,6 +272,34 @@ describe("task lane loop", () => {
     expect(result.text).not.toContain("I went looking through the app's own source");
   });
 
+  test("each narrated step is published as its own message", async () => {
+    db = openDatabase(":memory:");
+    const thread = createThread(db, taskPersona.id);
+    let request = 0;
+    const fetchMock = (async () => {
+      request += 1;
+      return request === 1
+        ? streamResponse([
+            { choices: [{ delta: { content: "Checking the list." } }] },
+            { choices: [{ delta: { tool_calls: [{ index: 0, id: "call-1", type: "function", function: { name: "tasks_list", arguments: "{\"status\":\"open\",\"limit\":5}" } }] } }] },
+          ])
+        : streamResponse([{ choices: [{ delta: { content: "You have no open tasks." } }] }]);
+    }) as unknown as typeof fetch;
+    const router = new Router([provider], new HealthTracker(), fetchMock);
+    const result = await runTaskTurn(db, router, { firstTokenTimeoutMs: 1000, turnTimeoutMs: 5000 }, {
+      threadID: thread.id, text: "What tasks do I have?", persona: taskPersona,
+      emit: () => undefined, signal: new AbortController().signal,
+    });
+
+    // The caller still gets the final answer, while the transcript keeps the
+    // narration that led to it as a separate message.
+    expect(result.text).toBe("You have no open tasks.");
+    const durable = db.query<{ text: string }, [string]>(
+      "SELECT text FROM messages WHERE thread_id = ? AND role = 'assistant' ORDER BY rowid",
+    ).all(thread.id);
+    expect(durable.map((row) => row.text)).toEqual(["Checking the list.", "You have no open tasks."]);
+  });
+
   test("a turn that fails outright leaves a message the user can see", async () => {
     db = openDatabase(":memory:");
     const thread = createThread(db, taskPersona.id);
