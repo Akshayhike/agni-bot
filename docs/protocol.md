@@ -41,7 +41,7 @@ never reason about thread ids.
 | --- | --- | --- |
 | `hello` | `{v, token, device}` | First frame. `v` is the protocol version. |
 | `resync` | `{lastSeq}` | Replay everything after `lastSeq`. |
-| `msg.send` | `{threadID?, text, files?, conversationID?, channelId?, toAgentId?, texts?}` | Channel clients target a channel (default `main`) and may address an agent. `texts` batches multiple bodies; legacy clients continue to send `text`. |
+| `msg.send` | `{threadID?, text, files?, conversationID?, channelId?, toAgentId?, texts?}` | Channel clients target a channel (default `main`) and may address an agent. `texts` batches multiple bodies; legacy clients continue to send `text`. A message sent while its thread is mid-turn is queued and runs when the turn ends; `stop` (or `cancel`, `never mind`) is a control message that interrupts that turn instead. |
 | `user.typing` | `{channelId?, isTyping}` | Extends server-side message coalescing while the user is typing. |
 | `agent.rename` | `{agentId, name}` | Renames an agent and completes primary-agent onboarding. |
 | `msg.cancel` | `{turnID}` | Interrupts the turn: providers abort, partial output is kept. |

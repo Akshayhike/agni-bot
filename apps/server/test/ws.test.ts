@@ -513,6 +513,60 @@ describe("websocket end-to-end", () => {
     const main = await client!.next("bind.direct.ok");
     expect(main.channelID).toBe("main");
   });
+
+  test("a stop message cancels the running turn and says so", async () => {
+    await startTestServer((async (_url: string, init?: RequestInit) => {
+      // Hold the turn open until the stop aborts it.
+      await new Promise<void>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+      });
+      return sseResponse("never arrives");
+    }) as unknown as typeof fetch);
+
+    client!.send({ type: "agent.rename", agentId: "ea", name: "Agni" });
+    await client!.next("agent.updated");
+
+    client!.send({ type: "msg.send", channelId: "main", text: "work on the long thing" });
+    const started = await client!.next("turn.start");
+    // Let the runner register the turn before the stop arrives.
+    await new Promise((resolve) => setTimeout(resolve, 60));
+
+    client!.send({ type: "msg.send", channelId: "main", text: "stop" });
+    const ack = await client!.next("status.update", { match: (frame) => frame.text === "Stopped." });
+    expect(ack.transient).toBe(true);
+
+    const end = await client!.next("turn.end", { match: (frame) => frame.turnID === started.turnID });
+    expect(end.stopReason).toBe("cancelled");
+  });
+
+  test("a message sent mid-turn waits instead of cancelling the turn", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    let call = 0;
+    await startTestServer((async () => {
+      call += 1;
+      if (call === 1) await gate;
+      return sseResponse(call === 1 ? "first answer" : "second answer");
+    }) as unknown as typeof fetch);
+
+    client!.send({ type: "agent.rename", agentId: "ea", name: "Agni" });
+    await client!.next("agent.updated");
+
+    client!.send({ type: "msg.send", channelId: "main", text: "the first thing" });
+    const first = await client!.next("turn.start");
+
+    // A second message while the first is still running joins the queue.
+    client!.send({ type: "msg.send", channelId: "main", text: "the second thing" });
+    await client!.next("status.update", { match: (frame) => frame.text.startsWith("Queued") });
+
+    release();
+    const firstEnd = await client!.next("turn.end", { match: (frame) => frame.turnID === first.turnID });
+    expect(firstEnd.stopReason).toBe("end");
+
+    const second = await client!.next("turn.start", { match: (frame) => frame.turnID !== first.turnID });
+    const secondEnd = await client!.next("turn.end", { match: (frame) => frame.turnID === second.turnID });
+    expect(secondEnd.stopReason).toBe("end");
+  });
 });
 
 /** A thread for an agent, the way a background delegation gets one. */

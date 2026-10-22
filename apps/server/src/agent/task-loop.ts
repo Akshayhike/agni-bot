@@ -574,19 +574,30 @@ export async function runTaskTurn(db: Database, router: Router, settings: TaskTu
       messages.push({ role: "assistant", content: finalText });
     } else {
       stopReason = controller.signal.aborted ? (timedOut ? "timeout" : "cancelled") : "error";
-      const code = error instanceof RouterBusyError ? "server_busy" : error instanceof RouterError ? error.code : "task_turn_failed";
-      const message = error instanceof Error ? error.message : String(error);
-      run.emit({ type: "error", code, message });
-      if (activeStepText) {
-        // Keep the streamed fragment in durable history, but leave the turn
-        // marked failed so the UI never presents an interrupted task as done.
-        finalText += activeStepText;
-        messages.push({ role: "assistant", content: activeStepText });
-      } else if (!finalText && stopReason === "error") {
-        // A turn that failed with nothing to say still owes the user a trace:
-        // they asked something, and silence reads as "still thinking".
-        finalText = `This turn failed: ${message}`;
-        messages.push({ role: "assistant", content: finalText });
+      if (stopReason === "cancelled") {
+        // The owner stopped the turn on purpose. Keep whatever streamed so
+        // the transcript ends where the work did, and let `turn.end` explain
+        // it — an error frame would make the client show a failure instead.
+        if (activeStepText) {
+          finalText += activeStepText;
+          messages.push({ role: "assistant", content: activeStepText });
+          activeStepText = "";
+        }
+      } else {
+        const code = error instanceof RouterBusyError ? "server_busy" : error instanceof RouterError ? error.code : "task_turn_failed";
+        const message = error instanceof Error ? error.message : String(error);
+        run.emit({ type: "error", code, message });
+        if (activeStepText) {
+          // Keep the streamed fragment in durable history, but leave the turn
+          // marked failed so the UI never presents an interrupted task as done.
+          finalText += activeStepText;
+          messages.push({ role: "assistant", content: activeStepText });
+        } else if (!finalText && stopReason === "error") {
+          // A turn that failed with nothing to say still owes the user a trace:
+          // they asked something, and silence reads as "still thinking".
+          finalText = `This turn failed: ${message}`;
+          messages.push({ role: "assistant", content: finalText });
+        }
       }
     }
   } finally {
