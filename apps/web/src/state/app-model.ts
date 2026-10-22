@@ -1003,6 +1003,28 @@ export class AppModel {
     this.publish();
   }
 
+  /** Pin an agent to the top of the roster, or unpin it. */
+  toggleFavorite(agentID: string): void {
+    const favorites = this.preferences.favorites.includes(agentID)
+      ? this.preferences.favorites.filter((id) => id !== agentID)
+      : [...this.preferences.favorites, agentID];
+    this.setPreference("favorites", favorites);
+  }
+
+  /** Make a new agent, the way the roster's "+" button does. */
+  createAgent(spec: { name: string; prompt: string; role?: string }): void {
+    const connection = this.connection;
+    if (!connection) return;
+    void connection
+      .send({
+        type: "agent.create",
+        name: spec.name.trim(),
+        prompt: spec.prompt.trim(),
+        role: spec.role?.trim() || undefined,
+      })
+      .catch(() => undefined);
+  }
+
   /** Scroll the transcript to a message (search results). */
   focusMessage(messageID: string): void {
     this.focusMessageID = messageID;

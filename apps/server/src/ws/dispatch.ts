@@ -21,6 +21,7 @@ import {
   type TaskInfo,
 } from "@agni/protocol";
 import { defaultPersona, getPersona, personaInfo, mentionRoster, defaultResolvedPersona, resolvePersona, canonicalAgentID, updatePersona } from "../agent/personas";
+import { createAgentPersona } from "../agent/creation";
 import { renameAgent } from "../agent/identity";
 import { resolveAgentMention } from "../agent/mentions";
 import { cancelThreadTurn, isThreadActive, runTaskTurn } from "../agent/task-loop";
@@ -178,6 +179,8 @@ export async function dispatch(deps: DispatchDeps, session: Session, raw: string
       return handleAgentRename(deps, session, frame);
     case "agent.profile":
       return handleAgentProfile(deps, session, frame);
+    case "agent.create":
+      return handleAgentCreate(deps, session, frame);
   }
 }
 
@@ -1413,6 +1416,39 @@ function handleAgentProfile(
     });
   } catch (error) {
     sendError(deps, session, "bad_frame", error instanceof Error ? error.message : "could not update the agent");
+  }
+}
+
+function handleAgentCreate(
+  deps: DispatchDeps,
+  session: Session,
+  frame: Extract<ClientFrame, { type: "agent.create" }>,
+): void {
+  if (!requireAuth(deps, session)) return;
+  try {
+    // No tool list from the app: a bot made here starts with the default set.
+    const created = createAgentPersona(
+      deps.db,
+      {
+        name: frame.name,
+        prompt: frame.prompt,
+        role: frame.role,
+        id: frame.id,
+        color: frame.color,
+      },
+      [],
+    );
+    deps.emit({ type: "agents.update", agents: personaInfo(deps.db), mentions: mentionRoster(deps.db) });
+    deps.reply({
+      type: "agent.updated",
+      agentId: created.id,
+      displayName: created.name,
+      onboarded: true,
+      role: created.role,
+      visibility: created.visibility,
+    });
+  } catch (error) {
+    sendError(deps, session, "bad_frame", error instanceof Error ? error.message : "could not create the agent");
   }
 }
 

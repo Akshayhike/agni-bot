@@ -45,6 +45,7 @@ never reason about thread ids.
 | `user.typing` | `{channelId?, isTyping}` | Extends server-side message coalescing while the user is typing. |
 | `agent.rename` | `{agentId, name}` | Renames an agent and completes primary-agent onboarding. |
 | `agent.profile` | `{agentId, role?, visibility?}` | Edits an agent's profile from the app: `role` is the tag the roster shows ("chief of staff"), `visibility` is what other agents may see of its work (`private \| summary \| shared`). At least one field is required. The answer is an `agent.updated` carrying the new `role` and `visibility`; the same change the `update_agent` chat tool makes, so the two cannot drift apart. |
+| `agent.create` | `{name, prompt, role?, id?, color?}` | Creates an agent from the app's roster — the "+" button. `prompt` is its system prompt, `role` its tag. The same creation the `create_agent` chat tool performs, so a bot made here and a bot made in chat are the same kind of thing; the roster comes back in an `agents.update`. |
 | `msg.cancel` | `{turnID}` | Interrupts the turn: providers abort, partial output is kept. |
 | `approve.reply` | `{requestID, decision}` | `decision`: `once \| always \| reject`. |
 | `secret.reply` | `{requestID, value}` | The owner's one-time password for a `secret.request`. Consumed server-side; never persisted, replayed, logged, or sent to the model. |

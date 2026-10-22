@@ -15,12 +15,19 @@ export interface Preferences {
   typingIndicator: boolean;
   /** Draw the tool activity strip under each answer. */
   showActivity: boolean;
+  /** Agents pinned to the top of the roster. */
+  favorites: string[];
 }
 
 const KEY = "dev.agni.web.preferences";
 
 export function defaultPreferences(): Preferences {
-  return { notifications: true, typingIndicator: true, showActivity: true };
+  return {
+    notifications: true,
+    typingIndicator: true,
+    showActivity: true,
+    favorites: [],
+  };
 }
 
 function storage(): Storage | null {
@@ -45,6 +52,9 @@ export function loadPreferences(): Preferences {
       typingIndicator:
         typeof parsed.typingIndicator === "boolean" ? parsed.typingIndicator : base.typingIndicator,
       showActivity: typeof parsed.showActivity === "boolean" ? parsed.showActivity : base.showActivity,
+      favorites: Array.isArray(parsed.favorites)
+        ? parsed.favorites.filter((id): id is string => typeof id === "string")
+        : base.favorites,
     };
   } catch {
     return base;

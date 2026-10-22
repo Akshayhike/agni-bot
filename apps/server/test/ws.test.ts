@@ -286,6 +286,32 @@ describe("websocket end-to-end", () => {
     expect(error.code).toBe("bad_frame");
   });
 
+  test("creates an agent from the app and puts it in the roster", async () => {
+    await startTestServer();
+    client!.send({
+      type: "agent.create",
+      name: "FRIDAY",
+      role: "inbox manager",
+      prompt: "You read my inbox and draft replies.",
+    });
+    const roster = await client!.next("agents.update");
+    const created = roster.agents.find((agent) => agent.id === "friday");
+    expect(created?.name).toBe("FRIDAY");
+    expect(created?.role).toBe("inbox manager");
+    const row = db!.query<{ display_name: string | null; role_detail: string | null }, [string]>(
+      "SELECT display_name, role_detail FROM agents WHERE id = 'friday'",
+    ).get("friday");
+    expect(row?.display_name).toBe("FRIDAY");
+    expect(row?.role_detail).toBe("inbox manager");
+  });
+
+  test("refuses to create an agent that already exists", async () => {
+    await startTestServer();
+    client!.send({ type: "agent.create", name: "Vision", id: "ea", prompt: "A second primary agent." });
+    const error = await client!.next("error");
+    expect(error.code).toBe("bad_frame");
+  });
+
   test("opens a direct channel for a specialist", async () => {
     await startTestServer();
     client!.send({ type: "msg.send", channelId: "dm:researcher", toAgentId: "researcher", text: "hello researcher" });

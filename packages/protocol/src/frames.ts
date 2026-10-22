@@ -416,6 +416,20 @@ export const ClientFrameSchema = z.discriminatedUnion("type", [
     role: z.string().max(160).optional(),
     visibility: z.enum(["private", "summary", "shared"]).optional(),
   }),
+  /**
+   * Create an agent from the app — the "+" in the roster. The same creation
+   * the `create_agent` chat tool performs, so a bot made here and a bot made
+   * in chat are the same kind of thing. The roster frame comes back with the
+   * new agent in it.
+   */
+  z.object({
+    type: z.literal("agent.create"),
+    name: z.string().min(1).max(64),
+    prompt: z.string().min(1).max(8_000),
+    role: z.string().max(160).optional(),
+    id: z.string().max(64).optional(),
+    color: z.string().max(16).optional(),
+  }),
 ]);
 export type ClientFrame = z.infer<typeof ClientFrameSchema>;
 export type ClientFrameType = ClientFrame["type"];

@@ -19,6 +19,9 @@ export function ThreadHeader() {
   const snapshot = useAppSnapshot();
   const [shareOpen, setShareOpen] = useState(false);
   const [connectionOpen, setConnectionOpen] = useState(false);
+  const agent = model.agent;
+  const agentState = agent ? snapshot.agentStates[agent.id] : undefined;
+  const working = snapshot.conversation.isStreaming || agentState === "working";
 
   return (
     <header className="thread-header">
@@ -33,14 +36,14 @@ export function ThreadHeader() {
       <button
         type="button"
         className="agent-pill"
-        aria-label={`Open ${model.agent?.name ?? "the agent"}'s profile`}
+        aria-label={`Open ${agent?.name ?? "the agent"}'s profile`}
         onClick={() => model.openAgentProfile()}
       >
-        <SidebarAgentBadge agent={model.agent} size={22} />
-        <span className="agent-pill-name">{model.agent?.name ?? "Agni"}</span>
-        {snapshot.conversation.isStreaming ? (
-          <span className="agent-pill-status">Writing…</span>
-        ) : null}
+        <span className="agent-pill-avatar">
+          <SidebarAgentBadge agent={agent} size={22} />
+          {working ? <span className="agent-pill-dot" aria-label="Working" /> : null}
+        </span>
+        <span className="agent-pill-name">{agent?.name ?? "Agni"}</span>
       </button>
       <span className="thread-header-spacer" />
 
