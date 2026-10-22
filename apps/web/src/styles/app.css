@@ -361,6 +361,12 @@ button:disabled {
   height: 52px;
 }
 
+/* The drawer title and its close button only exist in the phone layout. */
+.sidebar-title,
+.sidebar-close {
+  display: none;
+}
+
 .sidebar-search {
   display: flex;
   align-items: center;
@@ -683,12 +689,12 @@ button:disabled {
 .transcript-inner {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
   width: 100%;
-  max-width: 780px;
+  max-width: none;
   min-height: 100%;
   margin: 0 auto;
-  padding: 18px 26px 22px;
+  padding: 20px clamp(16px, 3vw, 44px) 24px;
 }
 
 .transcript-empty {
@@ -734,7 +740,7 @@ button:disabled {
 }
 
 .user-bubble {
-  max-width: 520px;
+  max-width: min(78%, 720px);
   padding: 12px 16px;
   border-radius: var(--bubble-radius);
   background: var(--outgoing-bubble);
@@ -756,7 +762,7 @@ button:disabled {
 }
 
 .assistant-bubble {
-  max-width: 620px;
+  max-width: min(100%, 960px);
   padding: 12px 16px;
   border-radius: var(--bubble-radius);
   background: var(--incoming-bubble);
@@ -778,7 +784,6 @@ button:disabled {
   color: var(--ink);
   font-size: var(--text-body);
   line-height: 1.55;
-  white-space: pre-wrap;
   overflow-wrap: anywhere;
   user-select: text;
 }
@@ -1152,10 +1157,56 @@ button:disabled {
   gap: 8px;
 }
 
+/* Quick replies read as a list of labelled choices, the way the reference
+   app offers them, not as a row of anonymous buttons. */
 .form-options {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--hairline);
+  border-radius: 14px;
+}
+
+.form-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 12px;
+  border: none;
+  border-top: 1px solid var(--hairline);
+  background: transparent;
+  color: var(--ink);
+  font-size: var(--text-body);
+  text-align: left;
+  transition: background var(--motion-snappy);
+}
+
+.form-option:first-child {
+  border-top: none;
+}
+
+.form-option:hover {
+  background: rgb(255 255 255 / 5%);
+}
+
+.form-option-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  border-radius: 7px;
+  background: var(--surface-raised);
+  color: var(--ink-secondary);
+  font-size: var(--text-caption);
+  font-weight: 600;
+}
+
+.form-option-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .form-hint {
@@ -1247,9 +1298,9 @@ button:disabled {
 .composer-zone {
   position: relative;
   width: 100%;
-  max-width: 740px;
+  max-width: none;
   margin: 0 auto;
-  padding: 12px 20px 18px;
+  padding: 12px clamp(16px, 3vw, 44px) 20px;
 }
 
 .slash-menu {
@@ -1302,7 +1353,7 @@ button:disabled {
   padding: 0 8px;
   border: 1px solid rgb(255 255 255 / 12%);
   border-radius: 99px;
-  background: #222225;
+  background: var(--surface-raised);
 }
 
 .composer-plus {
@@ -1623,6 +1674,13 @@ button:disabled {
   padding: 24px 14px 12px;
   font-size: 17px;
   font-weight: 600;
+}
+
+.settings-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
 }
 
 .settings-tab {
@@ -2176,27 +2234,10 @@ button:disabled {
 }
 
 @media (max-width: 720px) {
-  .sidebar {
-    display: none;
-  }
-
-  .inspector {
-    position: absolute;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 30;
-    width: min(320px, 88vw);
-    box-shadow: var(--shadow-card);
-  }
-
+  /* The roster and the inspector become drawers; the phone layout at the end
+     of this file styles them in full. */
   .chat-main {
     position: relative;
-  }
-
-  .settings-rail {
-    flex-basis: 180px;
-    width: 180px;
   }
 }
 
@@ -2218,11 +2259,15 @@ button:disabled {
 .attachment-label span { color: var(--ink-tertiary); }
 .user-bubble-text { white-space: pre-wrap; }
 .user-bubble .prose { color: inherit; }
-.prose { min-width: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
-.prose h1, .prose h2, .prose h3 { line-height: 1.35; margin: 1em 0 .5em; }
+.prose { min-width: 0; overflow-wrap: anywhere; }
+.prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6 { line-height: 1.35; margin: 1em 0 .5em; font-weight: 600; }
 .prose h1 { font-size: 1.4em; }
 .prose h2 { font-size: 1.2em; }
 .prose h3 { font-size: 1.05em; }
+.prose h4, .prose h5, .prose h6 { font-size: 1em; }
+.prose hr { border: 0; border-top: 1px solid var(--hairline); margin: 1em 0; }
+.prose strong { font-weight: 600; }
+.prose del { color: var(--ink-secondary); }
 .prose > :first-child { margin-top: 0; }
 .prose > :last-child { margin-bottom: 0; }
 .prose blockquote { border-left: 3px solid var(--ink-tertiary); padding-left: 12px; margin-left: 0; color: var(--ink-secondary); }
@@ -2246,3 +2291,361 @@ button:disabled {
 .user-bubble .markdown-table th, .user-bubble .markdown-table td { border-color: rgb(0 0 0 / 18%); }
 .code-block { color: var(--ink); }
 .code-block pre code { padding: 0; background: none; border-radius: 0; }
+
+/* Phone layout ----------------------------------------------------------- */
+/**
+ * The web app is a phone app first: the reference we borrowed from is an iOS
+ * app, and the roster, the transcript and the composer are all reached with a
+ * thumb. Everything below 720px therefore stops being a squeezed desktop and
+ * becomes a single column with a drawer, a sheet and a floating composer.
+ */
+
+.mobile-only {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  :root {
+    --text-body: 15px;
+    --text-row-title: 15px;
+    --text-title: 16px;
+  }
+
+  .mobile-only {
+    display: inline-flex;
+  }
+
+  /* Roster: a drawer that slides over the conversation. */
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 60;
+    width: min(84vw, 320px);
+    flex: 0 0 auto;
+    padding-top: var(--safe-top);
+    padding-bottom: var(--safe-bottom);
+    box-shadow: 0 0 50px rgb(0 0 0 / 60%);
+    transform: translateX(-102%);
+    transition: transform 240ms cubic-bezier(0.2, 0.9, 0.3, 1);
+  }
+
+  .sidebar.open {
+    transform: none;
+  }
+
+  .sidebar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 56px;
+    padding: 0 10px 0 16px;
+  }
+
+  .sidebar-title {
+    display: block;
+    font-size: 17px;
+    font-weight: 600;
+  }
+
+  .sidebar-close {
+    display: inline-flex;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--surface);
+    color: var(--ink);
+  }
+
+  .sidebar-search {
+    height: 40px;
+    margin: 0 12px 12px;
+    padding: 0 12px;
+    border-radius: 12px;
+  }
+
+  .sidebar-search input {
+    /* 16px keeps iOS from zooming the viewport when the field is tapped. */
+    font-size: 16px;
+  }
+
+  .sidebar-row {
+    min-height: 58px;
+    padding: 8px 10px;
+    border-radius: 14px;
+  }
+
+  .sidebar-row-title {
+    font-size: 15px;
+  }
+
+  .sidebar-row-subtitle {
+    font-size: 12px;
+  }
+
+  .drawer-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 55;
+    background: rgb(0 0 0 / 55%);
+    backdrop-filter: blur(2px);
+  }
+
+  /* Header: a menu button, the agent, and two round actions. */
+  .thread-header {
+    flex: 0 0 56px;
+    height: 56px;
+    gap: 8px;
+    padding: 0 10px 0 6px;
+    padding-top: var(--safe-top);
+  }
+
+  .thread-header .icon-btn {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: var(--surface);
+    color: var(--ink-secondary);
+  }
+
+  .header-menu {
+    background: var(--surface);
+    color: var(--ink);
+  }
+
+  .thread-header-name {
+    font-size: 15px;
+  }
+
+  .popover {
+    top: 52px;
+    right: 8px;
+    left: 8px;
+    width: auto;
+  }
+
+  /* Transcript: tighter, bigger type, bubbles that hug their text. */
+  .transcript-inner {
+    gap: 10px;
+    padding: 12px var(--phone-gutter) 16px;
+  }
+
+  .message-row {
+    gap: 6px;
+  }
+
+  .assistant-bubble {
+    max-width: 100%;
+    padding: 10px 13px;
+    border-radius: var(--bubble-radius-phone);
+  }
+
+  .user-bubble {
+    max-width: 86%;
+    padding: 10px 13px;
+    border-radius: var(--bubble-radius-phone);
+  }
+
+  .user-bubble-text {
+    font-size: 15px;
+  }
+
+  .prose {
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  .day-divider {
+    padding: 2px 0;
+    font-size: 11px;
+  }
+
+  .form-option {
+    padding: 13px 12px;
+  }
+
+  /* Composer: a floating capsule, nothing else in the way. */
+  .composer-zone {
+    padding: 8px var(--phone-gutter) calc(8px + var(--safe-bottom));
+  }
+
+  .composer {
+    align-items: flex-end;
+    min-height: 50px;
+    gap: 6px;
+    padding: 0 6px 0 6px;
+    border-radius: var(--composer-radius);
+  }
+
+  .composer-plus {
+    width: 34px;
+    height: 34px;
+    margin-bottom: 6px;
+    background: transparent;
+    color: var(--ink-secondary);
+  }
+
+  .composer-input {
+    /* 16px: anything smaller makes iOS zoom on focus. */
+    font-size: 16px;
+    line-height: 1.4;
+    max-height: 160px;
+    padding: 12px 2px;
+  }
+
+  .composer-send,
+  .composer-stop {
+    width: 36px;
+    height: 36px;
+    margin-bottom: 5px;
+  }
+
+  .composer-send.is-mic {
+    background: transparent;
+    color: var(--ink-tertiary);
+    opacity: 1;
+  }
+
+  .composer-keys {
+    display: none;
+  }
+
+  .composer-popover {
+    left: var(--phone-gutter);
+    width: calc(100vw - 2 * var(--phone-gutter));
+  }
+
+  .slash-menu {
+    right: var(--phone-gutter);
+    left: var(--phone-gutter);
+  }
+
+  .draft-attachment {
+    max-width: 100%;
+  }
+
+  /* Inspector: a sheet over the chat instead of a third column. */
+  .inspector {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 60;
+    width: min(340px, 92vw);
+    padding: calc(16px + var(--safe-top)) 16px calc(16px + var(--safe-bottom));
+    box-shadow: var(--shadow-card);
+  }
+
+  /* Settings: a full-screen page with a scrolling tab bar. */
+  .settings-overlay {
+    flex-direction: column;
+  }
+
+  .settings-rail {
+    display: grid;
+    flex: 0 0 auto;
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      "title back"
+      "tabs tabs";
+    align-items: center;
+    row-gap: 8px;
+    width: 100%;
+    gap: 0;
+    padding: calc(8px + var(--safe-top)) 12px 8px;
+    border-bottom: 1px solid var(--hairline);
+  }
+
+  .settings-rail h2 {
+    display: block;
+    grid-area: title;
+    padding: 0;
+    font-size: 17px;
+  }
+
+  .settings-tabs {
+    grid-area: tabs;
+    flex-direction: row;
+    gap: 6px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+
+  .settings-tab {
+    flex: 0 0 auto;
+    padding: 8px 13px;
+    border-radius: 99px;
+    background: var(--surface);
+    font-size: 13px;
+  }
+
+  .settings-tab.active {
+    background: var(--ink);
+    color: var(--canvas);
+  }
+
+  .settings-rail-spacer {
+    display: none;
+  }
+
+  .settings-back {
+    grid-area: back;
+    flex: 0 0 auto;
+  }
+
+  .settings-body {
+    border-left: none;
+  }
+
+  .settings-content {
+    padding: 16px 14px calc(32px + var(--safe-bottom));
+  }
+
+  /* Dialogs: sheets from the bottom edge. */
+  .overlay {
+    padding: 0;
+    place-items: end stretch;
+  }
+
+  .dialog,
+  .dialog.wide {
+    width: 100% !important;
+    max-height: 88vh;
+    overflow-y: auto;
+    padding-bottom: calc(20px + var(--safe-bottom));
+    border-radius: 20px 20px 0 0;
+    border-bottom: none;
+  }
+
+  /* Touch targets. */
+  .btn {
+    min-height: 36px;
+  }
+
+  .btn.large {
+    min-height: var(--touch-target);
+  }
+
+  .text-input,
+  .text-area,
+  .select {
+    font-size: 16px;
+  }
+
+  .icon-btn {
+    width: 36px;
+    height: 36px;
+  }
+}
+
+/* Small phones: keep the composer clear of the home indicator. */
+@media (max-width: 400px) {
+  :root {
+    --phone-gutter: 11px;
+  }
+
+  .thread-header-identity {
+    max-width: 40vw;
+  }
+}

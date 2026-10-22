@@ -90,6 +90,8 @@ export interface AppSnapshot {
   isInspectorPresented: boolean;
   isSettingsPresented: boolean;
   isAgentSwitcherPresented: boolean;
+  /** Phone layout: the agent roster slides in over the conversation. */
+  isSidebarPresented: boolean;
   searchText: string;
   focusComposerToken: number;
   statusText: string | null;
@@ -170,6 +172,7 @@ export class AppModel {
   private isInspectorPresented = false;
   private isSettingsPresented = false;
   private isAgentSwitcherPresented = false;
+  private isSidebarPresented = false;
   private searchText = "";
   private focusComposerToken = 0;
   private statusText: string | null = null;
@@ -250,6 +253,7 @@ export class AppModel {
       isInspectorPresented: this.isInspectorPresented,
       isSettingsPresented: this.isSettingsPresented,
       isAgentSwitcherPresented: this.isAgentSwitcherPresented,
+      isSidebarPresented: this.isSidebarPresented,
       searchText: this.searchText,
       focusComposerToken: this.focusComposerToken,
       statusText: this.statusText,
@@ -748,6 +752,9 @@ export class AppModel {
   }
 
   selectAgent(agent: AgentInfo): void {
+    // On a phone the roster is a drawer over the conversation; picking an
+    // agent means going back to the conversation.
+    this.closeSidebar();
     if (agent.id === this.conversation.agentID && this.conversation.conversationID !== null) {
       this.reloadConversation();
       return;
@@ -931,6 +938,18 @@ export class AppModel {
 
   closeAgentSwitcher(): void {
     this.isAgentSwitcherPresented = false;
+    this.publish();
+  }
+
+  /** The phone roster drawer. */
+  openSidebar(): void {
+    this.isSidebarPresented = true;
+    this.publish();
+  }
+
+  closeSidebar(): void {
+    if (!this.isSidebarPresented) return;
+    this.isSidebarPresented = false;
     this.publish();
   }
 

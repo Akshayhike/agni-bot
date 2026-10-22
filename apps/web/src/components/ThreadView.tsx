@@ -253,9 +253,17 @@ function FormCard({ form, onAnswer }: { form: FormRow; onAnswer: (option: string
       </div>
       {form.options.length > 0 ? (
         <div className="form-options">
-          {form.options.map((option) => (
-            <button key={option} type="button" className="btn small" onClick={() => onAnswer(option)}>
-              {option}
+          {form.options.map((option, index) => (
+            <button
+              key={option}
+              type="button"
+              className="form-option"
+              onClick={() => onAnswer(option)}
+            >
+              <span className="form-option-key" aria-hidden="true">
+                {String.fromCharCode(65 + index)}
+              </span>
+              <span className="form-option-label">{option}</span>
             </button>
           ))}
         </div>

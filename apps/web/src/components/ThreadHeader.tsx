@@ -3,7 +3,7 @@
  * conversation export on demand at right.
  */
 import { useState, type ReactNode } from "react";
-import { Copy, Monitor, Share } from "lucide-react";
+import { Copy, Menu, Monitor, Share } from "lucide-react";
 import { format } from "@agni/client";
 import { useAppModel, useAppSnapshot } from "../state/use-app-model";
 import {
@@ -22,6 +22,14 @@ export function ThreadHeader() {
 
   return (
     <header className="thread-header">
+      <button
+        type="button"
+        className="icon-btn header-menu mobile-only"
+        aria-label="Open the agent list"
+        onClick={() => model.openSidebar()}
+      >
+        <Menu size={17} />
+      </button>
       <SidebarAgentBadge agent={model.agent} size={20} />
       <div className="thread-header-identity">
         <span className="thread-header-name">{model.agent?.name ?? "Agni"}</span>

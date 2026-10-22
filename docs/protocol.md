@@ -133,6 +133,14 @@ chunks. Clients seal the streaming bubble under the durable `msg.new` id and
 open a fresh bubble for the next chunks. `uiHint: "progress"` rows (`say`) are
 separate messages and never seal the answer.
 
+In the task lane the narration a model writes *between* its tool calls stays in
+the model's own context: it is never published as a message and never streamed
+to clients. Only `say` progress rows and the final answer become messages. A
+turn that is backed by a channel (the web and Mac clients) buffers the answer's
+deltas and emits it as one `token` frame before the `msg.new` that seals it, so
+a channel client shows one bubble per answer; a direct client (the CLI) keeps
+live streaming.
+
 ## Error codes (v2)
 
 `bad_frame`, `unauthorized`, `version_mismatch`, `unknown_thread`, `unknown_conversation`,

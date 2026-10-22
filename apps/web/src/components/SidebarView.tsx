@@ -22,15 +22,25 @@ export function SidebarView() {
   const owner = profileName(snapshot.settings.deviceName);
 
   return (
-    <aside className="sidebar">
-      <div className="sidebar-header" />
+    <aside className={`sidebar${snapshot.isSidebarPresented ? " open" : ""}`}>
+      <div className="sidebar-header">
+        <span className="sidebar-title">Agents</span>
+        <button
+          type="button"
+          className="icon-btn sidebar-close"
+          aria-label="Close the agent list"
+          onClick={() => model.closeSidebar()}
+        >
+          <X size={16} />
+        </button>
+      </div>
 
       <div className="sidebar-search">
-        <Search size={12} aria-hidden="true" />
+        <Search size={14} aria-hidden="true" />
         <input
           value={snapshot.searchText}
           onChange={(event) => model.setSearchText(event.target.value)}
-          placeholder="Search"
+          placeholder="Search agents"
           aria-label="Search agents"
         />
         {snapshot.searchText.length > 0 ? (

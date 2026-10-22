@@ -70,20 +70,22 @@ export function SettingsView() {
     <div className="settings-overlay" role="dialog" aria-label="Settings">
       <nav className="settings-rail">
         <h2>Settings</h2>
-        {SECTIONS.map((item) => {
-          const Icon = item.icon;
-          return (
-            <button
-              type="button"
-              key={item.id}
-              className={`settings-tab${section === item.id ? " active" : ""}`}
-              onClick={() => setSection(item.id)}
-            >
-              <Icon size={14} />
-              {item.title}
-            </button>
-          );
-        })}
+        <div className="settings-tabs">
+          {SECTIONS.map((item) => {
+            const Icon = item.icon;
+            return (
+              <button
+                type="button"
+                key={item.id}
+                className={`settings-tab${section === item.id ? " active" : ""}`}
+                onClick={() => setSection(item.id)}
+              >
+                <Icon size={14} />
+                {item.title}
+              </button>
+            );
+          })}
+        </div>
         <span className="settings-rail-spacer" />
         <button type="button" className="settings-back" onClick={() => model.closeSettings()}>
           <ArrowLeft size={13} />

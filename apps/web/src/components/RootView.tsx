@@ -65,9 +65,13 @@ export function RootView() {
 
 function ChatView() {
   const snapshot = useAppSnapshot();
+  const model = useAppModel();
   return (
     <>
       <SidebarView />
+      {snapshot.isSidebarPresented ? (
+        <div className="drawer-backdrop" onClick={() => model.closeSidebar()} />
+      ) : null}
       <main className="chat-main">
         <ThreadHeader />
         <ThreadView />
