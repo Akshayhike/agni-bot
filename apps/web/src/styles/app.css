@@ -883,6 +883,15 @@ button:disabled {
   text-align: center;
 }
 
+/* The clock, centred above a run of messages. */
+.time-divider {
+  align-self: center;
+  padding: 1px 0 3px;
+  color: var(--ink-tertiary);
+  font-size: 11px;
+  text-align: center;
+}
+
 .message-row {
   display: flex;
   flex-direction: column;

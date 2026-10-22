@@ -169,9 +169,12 @@ function MessageBlock({
     <>
       {isNewDay(messages, index) ? (
         <div className="day-divider">
-          {index === 0
-            ? format.stamp(message.createdAt ?? new Date())
-            : format.dayTitle(message.createdAt ?? new Date())}
+          {format.dayTitle(message.createdAt ?? new Date())}
+        </div>
+      ) : null}
+      {startsNewMoment(messages, index) ? (
+        <div className="time-divider">
+          {format.time(message.createdAt ?? new Date())}
         </div>
       ) : null}
       <MessageRowView
@@ -182,6 +185,20 @@ function MessageBlock({
       />
     </>
   );
+}
+
+/**
+ * A stamp of the clock, the way the reference app marks a moment in the
+ * thread: one small centred time above a run of messages, not a timestamp on
+ * every bubble. A new run starts after five quiet minutes.
+ */
+function startsNewMoment(messages: ChatMessage[], index: number): boolean {
+  const message = messages[index];
+  if (!message?.createdAt) return false;
+  if (index === 0) return true;
+  const previous = messages[index - 1]?.createdAt;
+  if (!previous) return true;
+  return message.createdAt.getTime() - previous.getTime() >= 5 * 60 * 1000;
 }
 
 function isNewDay(messages: ChatMessage[], index: number): boolean {
