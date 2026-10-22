@@ -57,11 +57,24 @@ export interface ApprovalRow {
   isLocal: boolean;
 }
 
+export interface FormEmail {
+  from?: string;
+  to: string;
+  subject: string;
+  body: string;
+}
+
 export interface FormRow {
   id: string;
   question: string;
   options: string[];
   answer: string | null;
+  /** What the card is: a list of choices, or an email draft to approve. */
+  kind: "choice" | "email";
+  /** More than one option may be chosen. */
+  multiple: boolean;
+  /** The draft, when the kind is "email". */
+  email: FormEmail | null;
 }
 
 /** A one-time password prompt. The value never lives in this row. */
@@ -624,6 +637,9 @@ export class Conversation {
           question: frame.question,
           options: frame.options ?? [],
           answer: null,
+          kind: frame.kind === "email" ? "email" : "choice",
+          multiple: frame.multiple === true,
+          email: frame.email ?? null,
         });
         return [
           { kind: "notify", title: "Agni asked a question", body: frame.question, sound: false },

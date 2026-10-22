@@ -755,9 +755,18 @@ export class AppModel {
       .catch(() => undefined);
   }
 
-  answerForm(form: FormRow, option: string): void {
-    this.conversation.resolveForm(form.id, option);
-    this.send(option);
+  /**
+   * Answer a question the agent asked. The answer goes back on its own frame
+   * so the turn waiting on it can carry on.
+   */
+  answerForm(form: FormRow, answer: string): void {
+    this.conversation.resolveForm(form.id, answer);
+    this.publish();
+    const connection = this.connection;
+    if (!connection) return;
+    void connection
+      .send({ type: "form.answer", requestID: form.id, answer })
+      .catch(() => undefined);
   }
 
   /**

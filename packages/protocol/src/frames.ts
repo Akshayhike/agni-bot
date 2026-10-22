@@ -430,6 +430,15 @@ export const ClientFrameSchema = z.discriminatedUnion("type", [
     id: z.string().max(64).optional(),
     color: z.string().max(16).optional(),
   }),
+  /**
+   * The owner answered a question the agent asked. The answer is the option
+   * they chose, or their own words if they typed instead of choosing.
+   */
+  z.object({
+    type: z.literal("form.answer"),
+    requestID: z.string().min(1),
+    answer: z.string().min(1).max(4_000),
+  }),
 ]);
 export type ClientFrame = z.infer<typeof ClientFrameSchema>;
 export type ClientFrameType = ClientFrame["type"];
@@ -506,6 +515,19 @@ export const ServerFrameSchema = z.discriminatedUnion("type", [
     requestID: z.string(),
     question: z.string(),
     options: z.array(z.string()).optional(),
+    /** More than one option may be chosen; the answer is then a list. */
+    multiple: z.boolean().optional(),
+    /** Which card the client draws: a list of choices, or an email draft. */
+    kind: z.enum(["choice", "email"]).optional(),
+    /** The draft, when `kind` is "email". */
+    email: z
+      .object({
+        from: z.string().optional(),
+        to: z.string(),
+        subject: z.string(),
+        body: z.string(),
+      })
+      .optional(),
   }),
   z.object({ type: z.literal("notify"), seq, title: z.string(), body: z.string(), sound: z.boolean().optional(), threadID: z.string().optional() }),
   z.object({

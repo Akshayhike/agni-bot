@@ -22,6 +22,7 @@ import {
 } from "@agni/protocol";
 import { defaultPersona, getPersona, personaInfo, mentionRoster, defaultResolvedPersona, resolvePersona, canonicalAgentID, updatePersona } from "../agent/personas";
 import { createAgentPersona } from "../agent/creation";
+import { answerFormAndWake } from "../agent/form-broker";
 import { renameAgent } from "../agent/identity";
 import { resolveAgentMention } from "../agent/mentions";
 import { cancelThreadTurn, isThreadActive, runTaskTurn } from "../agent/task-loop";
@@ -123,6 +124,8 @@ export async function dispatch(deps: DispatchDeps, session: Session, raw: string
       return handleMsgCancel(deps, session, frame);
     case "approve.reply":
       return handleApproveReply(deps, session, frame);
+    case "form.answer":
+      return handleFormAnswer(deps, session, frame);
     case "secret.reply":
       return handleSecretReply(deps, session, frame);
     case "secret.cancel":
@@ -1071,6 +1074,21 @@ function handleApproveReply(
  * The secret is consumed here and handed straight to the waiting tool. It is
  * deliberately not logged, persisted, or echoed back in any frame.
  */
+/**
+ * The owner answered a question the agent asked. The answer lands on the form
+ * row and wakes the turn that is waiting on it.
+ */
+function handleFormAnswer(
+  deps: DispatchDeps,
+  session: Session,
+  frame: Extract<ClientFrame, { type: "form.answer" }>,
+): void {
+  if (!requireAuth(deps, session)) return;
+  if (!answerFormAndWake(deps.db, frame.requestID, frame.answer)) {
+    sendError(deps, session, "unknown_request", `no pending form ${frame.requestID}`);
+  }
+}
+
 function handleSecretReply(
   deps: DispatchDeps,
   session: Session,
