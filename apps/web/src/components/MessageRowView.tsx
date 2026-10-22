@@ -223,8 +223,9 @@ function SystemNote({ message }: { message: ChatMessage }) {
   return (
     <>
       <div className="incoming-from">
+        <span>Message from</span>
         {sender ? <SidebarAgentBadge agent={sender} size={16} /> : null}
-        <span>Message from {brief.from}</span>
+        <span className="incoming-name">{brief.from}</span>
       </div>
       <div className="assistant-bubble">
         <MarkdownText text={brief.body} />

@@ -161,7 +161,8 @@ describe("the thread", () => {
       </AppModelProvider>,
     );
 
-    expect(screen.getByText("Message from Vision")).toBeInTheDocument();
+    expect(screen.getByText("Message from")).toBeInTheDocument();
+    expect(screen.getByText("Vision")).toBeInTheDocument();
     // The brief itself reads as a message, not as a log line.
     expect(screen.getByText("draft the reply to the invoice")).toBeInTheDocument();
     expect(screen.queryByText(/Vision messaged you/)).not.toBeInTheDocument();
