@@ -2,9 +2,10 @@
  * The root: pairing or the two-column chat window, plus the overlays that can
  * appear over either. Keyboard commands mirror the Agni menu in the Mac app.
  */
-import { useEffect } from "react";
+import { useEffect, type CSSProperties } from "react";
 import { AlertTriangle, BellRing, X } from "lucide-react";
 import { useAppModel, useAppSnapshot } from "../state/use-app-model";
+import { themeFor, themeVariables } from "../theme";
 import { AgentSwitcherView } from "./AgentSwitcherView";
 import { AgentProfileView } from "./AgentProfileView";
 import { PairingView } from "./PairingView";
@@ -57,7 +58,7 @@ export function RootView() {
   }, [model, snapshot.isAgentSwitcherPresented, snapshot.isSettingsPresented, snapshot.isAgentProfilePresented]);
 
   return (
-    <div className="app">
+    <div className="app" style={themeVariables(themeFor(model.agent?.color)) as CSSProperties}>
       {snapshot.screen === "pairing" ? <PairingView /> : <ChatView />}
       {snapshot.isAgentSwitcherPresented ? <AgentSwitcherView /> : null}
       {snapshot.isSettingsPresented ? <SettingsView /> : null}

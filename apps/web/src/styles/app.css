@@ -369,11 +369,12 @@ button:disabled {
   background: var(--surface-raised);
   color: var(--ink);
   font-size: var(--text-body);
-  transition: background var(--motion-snappy);
+  transition: background var(--motion-snappy), border-color var(--motion-snappy);
 }
 
 .agent-pill:hover {
   background: #26262b;
+  border-color: color-mix(in srgb, var(--agent-accent, #ff3146) 45%, var(--hairline));
 }
 
 .agent-pill-name {
@@ -397,7 +398,7 @@ button:disabled {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--ember);
+  background: var(--agent-accent, var(--ember));
   box-shadow: 0 0 0 2px var(--surface-raised);
   animation: agent-pulse 1.1s ease-in-out infinite alternate;
 }
@@ -481,7 +482,7 @@ button:disabled {
 }
 
 .sidebar-row.selected {
-  background: var(--surface-raised);
+  background: color-mix(in srgb, var(--agent-accent, #ff3146) 14%, var(--surface-raised));
 }
 
 .sidebar-row-top {
@@ -692,7 +693,14 @@ button:disabled {
   flex-direction: column;
   min-width: 0;
   height: 100%;
-  background: var(--canvas);
+  /* The agent's colour glows into the room from the top. */
+  background:
+    radial-gradient(
+      120% 52% at 50% -12%,
+      color-mix(in srgb, var(--agent-accent, #ff3146) 11%, transparent),
+      transparent 72%
+    ),
+    var(--canvas);
 }
 
 /* The header floats over the conversation: no rule, a blur that diffuses the
@@ -895,18 +903,18 @@ button:disabled {
 
 .message-row.selected {
   padding: 4px 5px;
-  background: rgb(255 49 70 / 12%);
+  background: color-mix(in srgb, var(--agent-accent, #ff3146) 14%, transparent);
 }
 
 .user-bubble {
   max-width: min(78%, 720px);
   padding: 12px 16px;
   border-radius: var(--bubble-radius);
-  background: var(--outgoing-bubble);
+  background: var(--agent-bubble, var(--outgoing-bubble));
 }
 
 .user-bubble-text {
-  color: #18181b;
+  color: var(--agent-bubble-ink, #18181b);
   font-size: var(--text-body);
   line-height: 1.45;
   white-space: pre-wrap;
@@ -916,15 +924,17 @@ button:disabled {
 
 .user-bubble-error {
   margin-top: 5px;
-  color: #55554f;
+  color: var(--agent-bubble-ink, #55554f);
   font-size: var(--text-caption);
+  opacity: 0.72;
 }
 
 .assistant-bubble {
   max-width: min(100%, 960px);
   padding: 12px 16px;
   border-radius: var(--bubble-radius);
-  background: var(--incoming-bubble);
+  /* The agent's colour reaches even its own words, as a whisper. */
+  background: color-mix(in srgb, var(--incoming-bubble) 93%, var(--agent-accent, #ff3146));
   animation: bubble-arrive var(--motion-snappy) both;
 }
 
@@ -2717,13 +2727,15 @@ button:disabled {
 .markdown-table th, .markdown-table td { border: 1px solid var(--hairline); padding: 8px 10px; text-align: left; }
 .markdown-table th { background: var(--surface-raised); }
 
-.user-bubble .attachment-card { color: #18181b; border-color: rgb(0 0 0 / 15%); }
-.user-bubble .attachment-label span { color: #52525b; }
-.user-bubble .attachment-error { color: #9f1239; }
-.user-bubble .prose a { color: #1d4ed8; }
-.user-bubble .prose blockquote { color: #52525b; }
+.user-bubble .attachment-card { color: var(--agent-bubble-ink, #18181b); border-color: rgb(0 0 0 / 15%); }
+.user-bubble .attachment-label span { color: color-mix(in srgb, var(--agent-bubble-ink, #18181b) 65%, transparent); }
+.user-bubble .attachment-error { color: color-mix(in srgb, var(--agent-bubble-ink, #18181b) 70%, #9f1239); }
+.user-bubble .prose a { color: color-mix(in srgb, var(--agent-bubble-ink, #18181b) 80%, #1d4ed8); }
+.user-bubble .prose blockquote { color: color-mix(in srgb, var(--agent-bubble-ink, #18181b) 62%, transparent); }
 .user-bubble .markdown-table th { background: rgb(0 0 0 / 7%); }
 .user-bubble .markdown-table th, .user-bubble .markdown-table td { border-color: rgb(0 0 0 / 18%); }
+.user-bubble .code-block { background: rgb(0 0 0 / 12%); border-color: rgb(0 0 0 / 18%); }
+.user-bubble .code-block pre code { color: var(--agent-bubble-ink, #18181b); }
 .code-block { color: var(--ink); }
 .code-block pre code { padding: 0; background: none; border-radius: 0; }
 

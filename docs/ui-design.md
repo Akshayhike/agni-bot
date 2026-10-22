@@ -28,6 +28,7 @@ agents you talk to in one continuous thread each. What we took from it:
 | Grouped inset settings rows, sheets from the bottom | Settings is a full-screen page on a phone: title, back, a scrollable row of pill tabs. Dialogs are bottom sheets. |
 | Attachments you can open | Tapping an image opens a preview sheet with the file, its size, and a download. |
 | Tiny centred day stamps | Day dividers stay centred and small; nothing else centres but the thread's own seams. |
+| The whole room takes the agent's colour | Every agent's colour is a theme: your bubbles carry it, the assistant's answers take a whisper of it, the top of the column glows with it, and the working dot on its mark is it. The colours are tuned for a near-black room: accents are lifted until they read, and bubbles are pushed down until white text on them still does. |
 
 We did **not** take the blue accent. Ember is Agni's.
 
@@ -48,6 +49,11 @@ We did **not** take the blue accent. Ember is Agni's.
    instead of centred dialogs.
 6. **A switch that does nothing is a lie.** Every toggle in Settings changes
    behaviour the moment it is flipped.
+7. **The agent's colour is the theme.** It is applied as CSS custom
+   properties on the app root (`apps/web/src/theme.ts`), so one rule can move
+   a surface. Dark mode is the constraint: an accent is lifted until it reads
+   on near-black, and a bubble is pushed down until white text on it clears
+   4.5:1. The tests hold that line.
 
 ## Where the code lives
 
