@@ -162,7 +162,6 @@ export function SidebarView() {
           >
             <span className="sidebar-owner-avatar">{initials(owner)}</span>
           </button>
-          <span className="sidebar-owner-name">{owner}</span>
           {snapshot.connectionState.kind !== "ready" ? (
             <span
               className="presence-dot"

@@ -602,11 +602,6 @@ button:disabled {
   transition: filter var(--motion-snappy);
 }
 
-.sidebar-owner-name {
-  color: var(--ink-secondary);
-  font-size: var(--text-meta);
-}
-
 .sidebar-owner-row {
   display: flex;
   align-items: center;
