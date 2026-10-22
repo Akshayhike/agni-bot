@@ -212,6 +212,7 @@ function ActivityStrip({ message }: { message: ChatMessage }) {
  * mark and their name, the way the reference app heads an incoming message.
  */
 function SystemNote({ message }: { message: ChatMessage }) {
+  const model = useAppModel();
   const snapshot = useAppSnapshot();
   const brief = parseIncomingBrief(message.text);
   if (!brief) return <div className="system-note">{message.text}</div>;
@@ -222,10 +223,22 @@ function SystemNote({ message }: { message: ChatMessage }) {
 
   return (
     <>
-      <div className="incoming-from">
-        <span>Message from</span>
+      {/* The same shape as the outgoing "Messaged <agent>" notice. */}
+      <div className="handoff-notice">
+        <span className="handoff-flow">Message from</span>
         {sender ? <SidebarAgentBadge agent={sender} size={16} /> : null}
-        <span className="incoming-name">{brief.from}</span>
+        {sender ? (
+          <button
+            type="button"
+            className="handoff-link"
+            onClick={() => model.selectAgent(sender)}
+            aria-label={`Open ${sender.name} chat`}
+          >
+            {brief.from}
+          </button>
+        ) : (
+          <span className="handoff-link">{brief.from}</span>
+        )}
       </div>
       <div className="assistant-bubble">
         <MarkdownText text={brief.body} />
