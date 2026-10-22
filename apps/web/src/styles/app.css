@@ -1047,6 +1047,18 @@ button:disabled {
   overflow-wrap: anywhere;
 }
 
+/* A message that arrived from another agent: their mark, their name. */
+.incoming-from {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  align-self: center;
+  max-width: 100%;
+  padding: 2px 0 4px;
+  color: var(--ink-secondary);
+  font-size: var(--text-meta);
+}
+
 .handoff-notice {
   display: inline-flex;
   align-items: center;

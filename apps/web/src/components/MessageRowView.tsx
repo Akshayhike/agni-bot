@@ -59,7 +59,7 @@ export function MessageRowView({
       ) : message.uiHint === "handoff_notice" ? (
         <HandoffNotice message={message} />
       ) : (
-        <div className="system-note">{message.text}</div>
+        <SystemNote message={message} />
       )}
 
       {onboardingHint === "onboarding_name_prompt" ? (
@@ -203,6 +203,44 @@ function ActivityStrip({ message }: { message: ChatMessage }) {
       ) : null}
     </div>
   );
+}
+
+/**
+ * A note in the thread. The one that matters is the brief another agent sent
+ * us — the daemon writes it as "Vision messaged you: …". The client reads
+ * that as what it is: a message *from* someone, so it is headed with their
+ * mark and their name, the way the reference app heads an incoming message.
+ */
+function SystemNote({ message }: { message: ChatMessage }) {
+  const snapshot = useAppSnapshot();
+  const brief = parseIncomingBrief(message.text);
+  if (!brief) return <div className="system-note">{message.text}</div>;
+
+  const sender =
+    snapshot.agents.find((agent) => agent.name === brief.from) ??
+    snapshot.mentionAgents.find((agent) => agent.name === brief.from);
+
+  return (
+    <>
+      <div className="incoming-from">
+        {sender ? <SidebarAgentBadge agent={sender} size={16} /> : null}
+        <span>Message from {brief.from}</span>
+      </div>
+      <div className="assistant-bubble">
+        <MarkdownText text={brief.body} />
+      </div>
+    </>
+  );
+}
+
+/** "Vision messaged you: do the thing" → who sent it and what they said. */
+export function parseIncomingBrief(text: string): { from: string; body: string } | null {
+  const match = /^(.+?) messaged you: ([\s\S]+)$/.exec(text.trim());
+  if (!match) return null;
+  const from = match[1]?.trim();
+  const body = match[2]?.trim();
+  if (!from || !body) return null;
+  return { from, body };
 }
 
 /**
