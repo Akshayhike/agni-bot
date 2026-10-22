@@ -44,6 +44,7 @@ never reason about thread ids.
 | `msg.send` | `{threadID?, text, files?, conversationID?, channelId?, toAgentId?, texts?}` | Channel clients target a channel (default `main`) and may address an agent. `texts` batches multiple bodies; legacy clients continue to send `text`. A message sent while its thread is mid-turn is queued and runs when the turn ends; `stop` (or `cancel`, `never mind`) is a control message that interrupts that turn instead. |
 | `user.typing` | `{channelId?, isTyping}` | Extends server-side message coalescing while the user is typing. |
 | `agent.rename` | `{agentId, name}` | Renames an agent and completes primary-agent onboarding. |
+| `agent.profile` | `{agentId, role?, visibility?}` | Edits an agent's profile from the app: `role` is the tag the roster shows ("chief of staff"), `visibility` is what other agents may see of its work (`private \| summary \| shared`). At least one field is required. The answer is an `agent.updated` carrying the new `role` and `visibility`; the same change the `update_agent` chat tool makes, so the two cannot drift apart. |
 | `msg.cancel` | `{turnID}` | Interrupts the turn: providers abort, partial output is kept. |
 | `approve.reply` | `{requestID, decision}` | `decision`: `once \| always \| reject`. |
 | `secret.reply` | `{requestID, value}` | The owner's one-time password for a `secret.request`. Consumed server-side; never persisted, replayed, logged, or sent to the model. |
@@ -124,7 +125,7 @@ accountLabel?, error?, connectedAt?}`.
 | `presence` | `{state}` | `online \| offline`. |
 | `status.update` | `{channelId, agentId?, text, transient}` | Activity text; transient updates clear on the next message. |
 | `msg.new` | `{id, channelId, fromType, fromId, senderName, senderColor?, text, internal, uiHint?, toAgentId?, taskId?, questionId?, createdAt}` | Durable channel message; `uiHint` can be `onboarding_name_prompt`, `handoff_notice`, `progress`, `needs_input`, or `normal`. `toAgentId` names the agent a handoff notice is about, so the client can render the name as a link to that agent's chat. `taskId` + `questionId` mark a question from a delegated task: the client renders an answer field that sends `task.answer`. |
-| `agent.updated` | `{agentId, displayName, onboarded}` | Agent rename/onboarding state changed. |
+| `agent.updated` | `{agentId, displayName, onboarded, role?, visibility?}` | Agent rename/onboarding state changed. `role` and `visibility` are present when the change touched them (an `agent.profile` edit). |
 | `error` | `{code, message, retryAfter?}` | See codes below. |
 
 A task turn speaks in messages, not one growing reply: each completed assistant

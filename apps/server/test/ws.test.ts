@@ -264,6 +264,28 @@ describe("websocket end-to-end", () => {
     expect(prompt?.senderName).toBe("Vision");
   });
 
+  test("edits an agent's tag and visibility over the socket", async () => {
+    await startTestServer();
+    client!.send({ type: "agent.profile", agentId: "ea", role: "chief of staff", visibility: "private" });
+    const updated = await client!.next("agent.updated");
+    expect(updated.agentId).toBe("ea");
+    expect(updated.role).toBe("chief of staff");
+    expect(updated.visibility).toBe("private");
+
+    const row = db!.query<{ role_detail: string | null; visibility: string | null }, [string]>(
+      "SELECT role_detail, visibility FROM agents WHERE id = 'ea'",
+    ).get("ea");
+    expect(row?.role_detail).toBe("chief of staff");
+    expect(row?.visibility).toBe("private");
+  });
+
+  test("refuses a profile edit that changes nothing", async () => {
+    await startTestServer();
+    client!.send({ type: "agent.profile", agentId: "ea" });
+    const error = await client!.next("error");
+    expect(error.code).toBe("bad_frame");
+  });
+
   test("opens a direct channel for a specialist", async () => {
     await startTestServer();
     client!.send({ type: "msg.send", channelId: "dm:researcher", toAgentId: "researcher", text: "hello researcher" });

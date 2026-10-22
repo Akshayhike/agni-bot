@@ -6,6 +6,7 @@ import { useEffect } from "react";
 import { AlertTriangle, BellRing, X } from "lucide-react";
 import { useAppModel, useAppSnapshot } from "../state/use-app-model";
 import { AgentSwitcherView } from "./AgentSwitcherView";
+import { AgentProfileView } from "./AgentProfileView";
 import { PairingView } from "./PairingView";
 import { SettingsView } from "./SettingsView";
 import { SidebarView } from "./SidebarView";
@@ -46,12 +47,14 @@ export function RootView() {
           model.closeSettings();
         } else if (snapshot.isAgentSwitcherPresented) {
           model.closeAgentSwitcher();
+        } else if (snapshot.isAgentProfilePresented) {
+          model.closeAgentProfile();
         }
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [model, snapshot.isAgentSwitcherPresented, snapshot.isSettingsPresented]);
+  }, [model, snapshot.isAgentSwitcherPresented, snapshot.isSettingsPresented, snapshot.isAgentProfilePresented]);
 
   return (
     <div className="app">
@@ -76,6 +79,7 @@ function ChatView() {
         <ThreadHeader />
         <ThreadView />
       </main>
+      {snapshot.isAgentProfilePresented ? <AgentProfileView /> : null}
       {snapshot.isInspectorPresented ? <InspectorView /> : null}
     </>
   );

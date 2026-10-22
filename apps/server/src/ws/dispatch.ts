@@ -20,7 +20,7 @@ import {
   type ServerFrameBody,
   type TaskInfo,
 } from "@agni/protocol";
-import { defaultPersona, getPersona, personaInfo, mentionRoster, defaultResolvedPersona, resolvePersona, canonicalAgentID } from "../agent/personas";
+import { defaultPersona, getPersona, personaInfo, mentionRoster, defaultResolvedPersona, resolvePersona, canonicalAgentID, updatePersona } from "../agent/personas";
 import { renameAgent } from "../agent/identity";
 import { resolveAgentMention } from "../agent/mentions";
 import { cancelThreadTurn, isThreadActive, runTaskTurn } from "../agent/task-loop";
@@ -176,6 +176,8 @@ export async function dispatch(deps: DispatchDeps, session: Session, raw: string
       return handleUserTyping(deps, session, frame);
     case "agent.rename":
       return handleAgentRename(deps, session, frame);
+    case "agent.profile":
+      return handleAgentProfile(deps, session, frame);
   }
 }
 
@@ -1382,6 +1384,36 @@ function handleAgentRename(deps: DispatchDeps, session: Session, frame: Extract<
   if (!requireAuth(deps, session)) return;
   const ok = completeAgentRename(deps, frame.agentId, frame.name);
   if (!ok) sendError(deps, session, "bad_frame", "agent name must be 1–64 characters");
+}
+
+function handleAgentProfile(
+  deps: DispatchDeps,
+  session: Session,
+  frame: Extract<ClientFrame, { type: "agent.profile" }>,
+): void {
+  if (!requireAuth(deps, session)) return;
+  const role = frame.role?.trim();
+  if (!role && !frame.visibility) {
+    sendError(deps, session, "bad_frame", "give a role or a visibility to change");
+    return;
+  }
+  try {
+    const updated = updatePersona(deps.db, frame.agentId, { role, visibility: frame.visibility });
+    if (!updated) {
+      sendError(deps, session, "unknown_agent", `no agent with id ${frame.agentId}`);
+      return;
+    }
+    deps.emit({
+      type: "agent.updated",
+      agentId: updated.id,
+      displayName: updated.name,
+      onboarded: true,
+      role: updated.role,
+      visibility: updated.visibility,
+    });
+  } catch (error) {
+    sendError(deps, session, "bad_frame", error instanceof Error ? error.message : "could not update the agent");
+  }
 }
 
 function completeAgentRename(deps: DispatchDeps, agentID: string, proposedName: string): boolean {

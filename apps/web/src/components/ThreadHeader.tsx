@@ -30,13 +30,18 @@ export function ThreadHeader() {
       >
         <Menu size={17} />
       </button>
-      <SidebarAgentBadge agent={model.agent} size={20} />
-      <div className="thread-header-identity">
-        <span className="thread-header-name">{model.agent?.name ?? "Agni"}</span>
+      <button
+        type="button"
+        className="agent-pill"
+        aria-label={`Open ${model.agent?.name ?? "the agent"}'s profile`}
+        onClick={() => model.openAgentProfile()}
+      >
+        <SidebarAgentBadge agent={model.agent} size={22} />
+        <span className="agent-pill-name">{model.agent?.name ?? "Agni"}</span>
         {snapshot.conversation.isStreaming ? (
-          <span className="thread-header-status">Writing…</span>
+          <span className="agent-pill-status">Writing…</span>
         ) : null}
-      </div>
+      </button>
       <span className="thread-header-spacer" />
 
       <button

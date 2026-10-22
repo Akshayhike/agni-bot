@@ -59,8 +59,22 @@ export function ThreadView() {
     return () => cancelAnimationFrame(frame);
   }, [messages.length, lastText, lastID, conversation.threadID]);
 
-  const toggleSelection = (id: string) => {
-    setSelected((current) => {
+  // Search picks a message: bring it into view and stop following the tail.
+  useEffect(() => {
+    const target = snapshot.focusMessageID;
+    if (!target) return;
+    pinned.current = false;
+    const frame = requestAnimationFrame(() => {
+      const element = scrollRef.current?.querySelector<HTMLElement>(
+        `[data-message-id="${CSS.escape(target)}"]`,
+      );
+      element?.scrollIntoView({ block: "center", behavior: "smooth" });
+    });
+    model.clearFocusMessage();
+    return () => cancelAnimationFrame(frame);
+  }, [snapshot.focusMessageID, model]);
+
+  const toggleSelection = (id: string) => {    setSelected((current) => {
       const next = new Set(current);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -324,7 +338,7 @@ function SecretCard({
             if (event.key === "Escape") onCancel();
           }}
         />
-        <button type="button" className="btn small primary" onClick={submit} disabled={!value}>
+        <button type="button" className="btn small ink" onClick={submit} disabled={!value}>
           Authorize
         </button>
         <button type="button" className="btn small" onClick={onCancel}>

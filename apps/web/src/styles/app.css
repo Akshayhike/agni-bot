@@ -155,6 +155,18 @@ button:disabled {
   color: var(--ink);
 }
 
+/* A single, quiet, black action — the reference app's "Authorize". */
+.btn.ink {
+  border-color: transparent;
+  background: var(--ink);
+  color: var(--canvas);
+  font-weight: 600;
+}
+
+.btn.ink:hover:not(:disabled) {
+  background: #fff;
+}
+
 .icon-btn {
   display: inline-flex;
   align-items: center;
@@ -342,6 +354,38 @@ button:disabled {
 .presence-dot.online {
   background: var(--ember);
   box-shadow: 0 0 4px rgb(255 49 70 / 70%);
+}
+
+/* The agent pill: the identity in the header, the way the reference app draws
+   it — a mark and a name in one rounded chip that opens the profile. */
+.agent-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 260px;
+  padding: 3px 14px 3px 3px;
+  border: 1px solid var(--hairline);
+  border-radius: 99px;
+  background: var(--surface-raised);
+  color: var(--ink);
+  font-size: var(--text-body);
+  transition: background var(--motion-snappy);
+}
+
+.agent-pill:hover {
+  background: #26262b;
+}
+
+.agent-pill-name {
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-pill-status {
+  color: var(--ink-tertiary);
+  font-size: var(--text-caption);
 }
 
 /* Sidebar --------------------------------------------------------------- */
@@ -616,6 +660,21 @@ button:disabled {
 
 .thread-header-spacer {
   flex: 1;
+}
+
+/* Header actions are round, the way the reference app draws them — on every
+   width, not only on a phone. */
+.thread-header .icon-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--ink-secondary);
+}
+
+.thread-header .icon-btn:hover:not(:disabled) {
+  background: var(--surface-raised);
+  color: var(--ink);
 }
 
 .popover-backdrop {
@@ -1102,11 +1161,16 @@ button:disabled {
 .secret-card {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 14px;
+  gap: 12px;
+  padding: 16px;
   border: 1px solid var(--hairline);
-  border-radius: var(--card-radius);
+  border-radius: 16px;
   background: var(--surface);
+}
+
+.form-card .card-heading {
+  font-size: 16px;
+  font-weight: 600;
 }
 
 .card-heading {
@@ -1115,6 +1179,15 @@ button:disabled {
   gap: 8px;
   font-size: var(--text-row-title);
   font-weight: 500;
+}
+
+/* The icon sits in a tile, the way the reference app draws the app it is
+   asking you to connect. */
+.card-heading > svg:first-child {
+  padding: 7px;
+  border-radius: 10px;
+  background: var(--surface-raised);
+  box-sizing: content-box;
 }
 
 .card-heading .spacer {
@@ -1194,14 +1267,20 @@ button:disabled {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 26px;
+  height: 26px;
   flex: 0 0 auto;
-  border-radius: 7px;
+  border-radius: 8px;
   background: var(--surface-raised);
   color: var(--ink-secondary);
-  font-size: var(--text-caption);
+  font-size: var(--text-meta);
   font-weight: 600;
+  transition: background var(--motion-snappy), color var(--motion-snappy);
+}
+
+.form-option:hover .form-option-key {
+  background: var(--ember);
+  color: #fff;
 }
 
 .form-option-label {
@@ -1444,6 +1523,131 @@ button:disabled {
 
 .composer-popover button:hover {
   background: rgb(255 255 255 / 7%);
+}
+
+/* Search ----------------------------------------------------------------- */
+
+.search-overlay {
+  align-items: flex-start;
+  padding-top: min(14vh, 120px);
+}
+
+.search-dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(520px, 100%);
+  max-height: 70vh;
+  overflow: hidden;
+  border: 1px solid var(--hairline);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+
+.search-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--hairline);
+  color: var(--ink-tertiary);
+}
+
+.search-field input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--ink);
+  font-size: 15px;
+}
+
+.search-field input::placeholder {
+  color: var(--ink-tertiary);
+}
+
+.search-results {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px;
+}
+
+.search-group + .search-group {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--hairline);
+}
+
+.search-group-title {
+  padding: 6px 8px 4px;
+  color: var(--ink-tertiary);
+  font-size: var(--text-caption);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.search-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+}
+
+.search-row.highlighted {
+  background: var(--surface-raised);
+}
+
+.search-row-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--surface-raised);
+  color: var(--ink-secondary);
+}
+
+.search-row-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.search-row-title {
+  overflow: hidden;
+  font-size: var(--text-body);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-row-subtitle {
+  overflow: hidden;
+  color: var(--ink-tertiary);
+  font-size: var(--text-caption);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-row-check {
+  margin-left: auto;
+  color: var(--ember);
+}
+
+.search-empty {
+  padding: 18px 10px;
+  color: var(--ink-tertiary);
+  font-size: var(--text-meta);
+  text-align: center;
 }
 
 /* Inspector ------------------------------------------------------------- */
@@ -1791,6 +1995,70 @@ button:disabled {
 
 .settings-group-head .spacer {
   flex: 1;
+}
+
+/* Preferences ------------------------------------------------------------ */
+
+/* A switch, the way the reference app sets one: a pill that fills green. */
+.switch {
+  position: relative;
+  width: 44px;
+  height: 26px;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 1px solid var(--hairline);
+  border-radius: 99px;
+  background: var(--surface-raised);
+  transition: background var(--motion-snappy), border-color var(--motion-snappy);
+}
+
+.switch.on {
+  border-color: transparent;
+  background: #2ea043;
+}
+
+.switch-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 35%);
+  transition: transform var(--motion-snappy);
+}
+
+.switch.on .switch-knob {
+  transform: translateX(18px);
+}
+
+.preference-group {
+  gap: 0;
+}
+
+.preference-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.preference-row:last-child {
+  border-bottom: none;
+}
+
+.preference-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.preference-label {
+  font-size: var(--text-body);
 }
 
 .settings-row {
@@ -2253,6 +2521,62 @@ button:disabled {
 .draft-attachment span { min-width: 0; font-size: 12px; overflow-wrap: anywhere; }
 .draft-attachment small { display: block; color: var(--ink-tertiary); }
 .draft-attachment button, .attachment-download { background: transparent; color: inherit; border: 0; cursor: pointer; }
+.attachment-open {
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  line-height: 0;
+}
+
+/* A preview sheet: the file, opened, with the chrome to close or take it. */
+.preview-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  background: rgb(0 0 0 / 82%);
+  backdrop-filter: blur(6px);
+}
+
+.preview-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: calc(10px + var(--safe-top)) 14px 10px;
+  color: var(--ink);
+}
+
+.preview-name {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  font-size: var(--text-meta);
+}
+
+.preview-name span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preview-bar .icon-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 10%);
+  color: var(--ink);
+}
+
+.preview-image {
+  flex: 1;
+  min-height: 0;
+  padding: 0 14px calc(16px + var(--safe-bottom));
+  object-fit: contain;
+}
+
 .attachment-card { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px; margin-top: 10px; border: 1px solid var(--hairline); border-radius: 12px; }
 .attachment-image { width: 100%; max-height: 280px; object-fit: contain; border-radius: 8px; }
 .attachment-label { display: flex; flex: 1; min-width: 0; flex-direction: column; font-size: 12px; overflow-wrap: anywhere; }
@@ -2292,8 +2616,228 @@ button:disabled {
 .code-block { color: var(--ink); }
 .code-block pre code { padding: 0; background: none; border-radius: 0; }
 
-/* Phone layout ----------------------------------------------------------- */
-/**
+/* Agent profile ---------------------------------------------------------- */
+
+.profile-panel {
+  display: flex;
+  flex: 0 0 340px;
+  flex-direction: column;
+  width: 340px;
+  height: 100%;
+  overflow-y: auto;
+  border-left: 1px solid var(--hairline);
+  background: var(--canvas);
+}
+
+.profile-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 52px;
+  padding: 0 12px 0 18px;
+}
+
+.profile-top-title {
+  color: var(--ink-tertiary);
+  font-size: var(--text-caption);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.profile-close {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--ink-secondary);
+}
+
+.profile-identity {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 18px 18px;
+  text-align: center;
+}
+
+.profile-avatar {
+  display: flex;
+  justify-content: center;
+  padding: 6px 0 2px;
+}
+
+.profile-name-block,
+.profile-tag-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+}
+
+.profile-field-label {
+  color: var(--ink-tertiary);
+  font-size: var(--text-caption);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.profile-name-input,
+.profile-tag-input {
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink);
+  text-align: center;
+  font-size: 17px;
+  font-weight: 600;
+  padding: 6px 8px;
+}
+
+.profile-tag-input {
+  font-size: var(--text-body);
+  font-weight: 400;
+  color: var(--ink-secondary);
+}
+
+.profile-name-input:hover,
+.profile-tag-input:hover {
+  border-color: var(--hairline);
+}
+
+.profile-name-input:focus,
+.profile-tag-input:focus {
+  border-color: var(--ember);
+  outline: none;
+}
+
+.profile-by {
+  color: var(--ink-tertiary);
+  font-size: var(--text-caption);
+}
+
+.profile-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 0 18px 12px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.profile-tab {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 99px;
+  background: transparent;
+  color: var(--ink-secondary);
+  font-size: var(--text-meta);
+}
+
+.profile-tab.active {
+  background: var(--surface-raised);
+  color: var(--ink);
+}
+
+.profile-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 18px calc(24px + var(--safe-bottom));
+}
+
+.profile-rows {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--hairline);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.profile-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 13px;
+  border-bottom: 1px solid var(--hairline);
+  font-size: var(--text-meta);
+}
+
+.profile-row:last-child {
+  border-bottom: none;
+}
+
+.profile-row-label {
+  color: var(--ink-tertiary);
+}
+
+.profile-row-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.profile-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.profile-section-title {
+  color: var(--ink-tertiary);
+  font-size: var(--text-caption);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.profile-segments {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 99px;
+  background: var(--surface);
+}
+
+.profile-segment {
+  flex: 1;
+  padding: 7px 8px;
+  border: none;
+  border-radius: 99px;
+  background: transparent;
+  color: var(--ink-secondary);
+  font-size: var(--text-meta);
+}
+
+.profile-segment.active {
+  background: var(--ink);
+  color: var(--canvas);
+  font-weight: 600;
+}
+
+.profile-saved {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-secondary);
+  font-size: var(--text-caption);
+}
+
+.profile-empty {
+  padding: 14px;
+  border: 1px solid var(--hairline);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--ink-tertiary);
+  font-size: var(--text-meta);
+  text-align: center;
+}
+
+/* Phone layout ----------------------------------------------------------- *//**
  * The web app is a phone app first: the reference we borrowed from is an iOS
  * app, and the roster, the transcript and the composer are all reached with a
  * thumb. Everything below 720px therefore stops being a squeezed desktop and
@@ -2409,13 +2953,16 @@ button:disabled {
     color: var(--ink-secondary);
   }
 
-  .header-menu {
-    background: var(--surface);
-    color: var(--ink);
-  }
-
   .thread-header-name {
     font-size: 15px;
+  }
+
+  .header-menu {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: var(--surface);
+    color: var(--ink);
   }
 
   .popover {
@@ -2507,10 +3054,6 @@ button:disabled {
     opacity: 1;
   }
 
-  .composer-keys {
-    display: none;
-  }
-
   .composer-popover {
     left: var(--phone-gutter);
     width: calc(100vw - 2 * var(--phone-gutter));
@@ -2523,6 +3066,20 @@ button:disabled {
 
   .draft-attachment {
     max-width: 100%;
+  }
+
+  /* The profile panel is a sheet on a phone, the way the reference app opens
+     the agent it is talking to. */
+  .profile-panel {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 60;
+    width: min(360px, 94vw);
+    flex: 0 0 auto;
+    padding-top: var(--safe-top);
+    box-shadow: var(--shadow-card);
   }
 
   /* Inspector: a sheet over the chat instead of a third column. */
@@ -2647,5 +3204,94 @@ button:disabled {
 
   .thread-header-identity {
     max-width: 40vw;
+  }
+}
+
+/* Desktop: the reference's shape --------------------------------------- */
+/**
+ * On a wide screen the roster becomes what the reference app shows: a narrow
+ * rail of agent marks, the agent's name in a pill at the top of the column,
+ * and the conversation filling the rest. The names live in the pill and in
+ * the search overlay; the rail only needs to say which one you are with.
+ */
+@media (min-width: 721px) {
+  :root {
+    --sidebar-width: 76px;
+  }
+
+  .sidebar {
+    align-items: center;
+    padding: 14px 0 calc(14px + var(--safe-bottom));
+  }
+
+  .sidebar-header,
+  .sidebar-search,
+  .sidebar-section-title,
+  .sidebar-row-text,
+  .connect-apps-label,
+  .connect-apps-icons {
+    display: none;
+  }
+
+  .sidebar-sections {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .sidebar-row {
+    position: relative;
+    width: 48px;
+    height: 48px;
+    justify-content: center;
+    padding: 0;
+    border-radius: 16px;
+  }
+
+  .sidebar-row.selected {
+    background: var(--surface-raised);
+  }
+
+  .sidebar-row .unread-dot {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+  }
+
+  .sidebar-footer {
+    flex-direction: column;
+    gap: 8px;
+    align-items: center;
+    padding: 0;
+  }
+
+  .sidebar-owner {
+    padding: 0;
+  }
+
+  .connect-apps {
+    width: 48px;
+    height: 48px;
+    justify-content: center;
+    padding: 0;
+    border-radius: 16px;
+  }
+
+  .connect-apps:hover {
+    background: var(--surface-raised);
+  }
+
+  /* The pill sits in the middle of the column, as it does in the reference. */
+  .thread-header {
+    justify-content: flex-end;
+  }
+
+  .agent-pill {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
   }
 }

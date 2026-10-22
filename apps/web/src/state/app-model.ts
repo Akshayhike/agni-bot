@@ -40,6 +40,11 @@ import {
   type ThreadInfo,
 } from "@agni/client";
 import { browserNotifications, type NotificationBridge } from "./notifications";
+import {
+  loadPreferences,
+  savePreferences,
+  type Preferences,
+} from "./preferences";
 
 export type AppScreen = "pairing" | "chat";
 
@@ -92,6 +97,12 @@ export interface AppSnapshot {
   isAgentSwitcherPresented: boolean;
   /** Phone layout: the agent roster slides in over the conversation. */
   isSidebarPresented: boolean;
+  /** The agent's own profile panel, opened from the header pill. */
+  isAgentProfilePresented: boolean;
+  /** Browser-local preferences: the switches in Settings. */
+  preferences: Preferences;
+  /** A message the transcript should scroll to (from search). */
+  focusMessageID: string | null;
   searchText: string;
   focusComposerToken: number;
   statusText: string | null;
@@ -173,6 +184,9 @@ export class AppModel {
   private isSettingsPresented = false;
   private isAgentSwitcherPresented = false;
   private isSidebarPresented = false;
+  private isAgentProfilePresented = false;
+  private preferences: Preferences = loadPreferences();
+  private focusMessageID: string | null = null;
   private searchText = "";
   private focusComposerToken = 0;
   private statusText: string | null = null;
@@ -254,6 +268,9 @@ export class AppModel {
       isSettingsPresented: this.isSettingsPresented,
       isAgentSwitcherPresented: this.isAgentSwitcherPresented,
       isSidebarPresented: this.isSidebarPresented,
+      isAgentProfilePresented: this.isAgentProfilePresented,
+      preferences: this.preferences,
+      focusMessageID: this.focusMessageID,
       searchText: this.searchText,
       focusComposerToken: this.focusComposerToken,
       statusText: this.statusText,
@@ -698,11 +715,23 @@ export class AppModel {
     void connection.send({ type: "agent.rename", agentId: agentID, name }).catch(() => undefined);
   }
 
+  /** Change an agent's tag (what it is for) and how much other agents see. */
+  updateAgentProfile(
+    agentID: string,
+    changes: { role?: string; visibility?: "private" | "summary" | "shared" },
+  ): void {
+    const connection = this.connection;
+    if (!connection) return;
+    void connection.send({ type: "agent.profile", agentId: agentID, ...changes }).catch(() => undefined);
+  }
+
   updateTypingState(isTyping: boolean): void {
     if (this.typingTimer !== null) clearTimeout(this.typingTimer);
     this.typingTimer = null;
     const connection = this.connection;
     if (!connection || !isReady(this.connectionState)) return;
+    // The browser-local preference decides whether we tell the server at all.
+    if (isTyping && !this.preferences.typingIndicator) return;
     const channelID = this.conversation.agentID === "ea" ? "main" : `dm:${this.conversation.agentID}`;
     void connection.send({ type: "user.typing", channelId: channelID, isTyping }).catch(() => undefined);
     if (!isTyping) return;
@@ -947,9 +976,42 @@ export class AppModel {
     this.publish();
   }
 
+  /** The agent's profile panel. */
+  openAgentProfile(): void {
+    this.isAgentProfilePresented = true;
+    this.publish();
+  }
+
+  closeAgentProfile(): void {
+    if (!this.isAgentProfilePresented) return;
+    this.isAgentProfilePresented = false;
+    this.publish();
+  }
+
   closeSidebar(): void {
     if (!this.isSidebarPresented) return;
     this.isSidebarPresented = false;
+    this.publish();
+  }
+
+  /** A preference switch, applied and stored at once. */
+  setPreference<K extends keyof Preferences>(key: K, value: Preferences[K]): void {
+    if (this.preferences[key] === value) return;
+    this.preferences = { ...this.preferences, [key]: value };
+    savePreferences(this.preferences);
+    if (key === "typingIndicator" && !value) this.updateTypingState(false);
+    this.publish();
+  }
+
+  /** Scroll the transcript to a message (search results). */
+  focusMessage(messageID: string): void {
+    this.focusMessageID = messageID;
+    this.publish();
+  }
+
+  clearFocusMessage(): void {
+    if (this.focusMessageID === null) return;
+    this.focusMessageID = null;
     this.publish();
   }
 
@@ -1084,7 +1146,13 @@ export class AppModel {
     if (frame.type === "agent.updated") {
       const rename = (agent: AgentInfo): AgentInfo =>
         agent.id === frame.agentId
-          ? { ...agent, name: frame.displayName, onboarded: frame.onboarded }
+          ? {
+              ...agent,
+              name: frame.displayName,
+              onboarded: frame.onboarded,
+              role: frame.role ?? agent.role,
+              visibility: frame.visibility ?? agent.visibility,
+            }
           : agent;
       this.agents = this.agents.map(rename);
       this.mentionAgents = this.mentionAgents.map(rename);
@@ -1366,6 +1434,7 @@ export class AppModel {
 
   private notifyUser(title: string, body: string, sound = false, threadID?: string): void {
     this.showToast(notice("info", title, body, threadID ?? null));
+    if (!this.preferences.notifications) return;
     this.notifier.post(title, body, sound, threadID, (id) => this.openThreadFromNotification(id));
   }
 

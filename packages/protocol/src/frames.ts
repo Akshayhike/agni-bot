@@ -404,6 +404,18 @@ export const ClientFrameSchema = z.discriminatedUnion("type", [
     agentId: z.string().min(1),
     name: z.string().min(1).max(64),
   }),
+  /**
+   * Edit an agent's profile: what it is for (the tag shown under its name) and
+   * how much of its work other agents may see. The same change the
+   * `update_agent` chat tool makes, so a rename from the app and a rename from
+   * chat cannot drift apart.
+   */
+  z.object({
+    type: z.literal("agent.profile"),
+    agentId: z.string().min(1),
+    role: z.string().max(160).optional(),
+    visibility: z.enum(["private", "summary", "shared"]).optional(),
+  }),
 ]);
 export type ClientFrame = z.infer<typeof ClientFrameSchema>;
 export type ClientFrameType = ClientFrame["type"];
@@ -625,6 +637,10 @@ export const ServerFrameSchema = z.discriminatedUnion("type", [
     agentId: z.string(),
     displayName: z.string(),
     onboarded: z.boolean(),
+    /** What the agent is for, when the change touched it. */
+    role: z.string().optional(),
+    /** What other agents may see of its work, when the change touched it. */
+    visibility: z.enum(["private", "summary", "shared"]).optional(),
   }),
   z.object({ type: z.literal("error"), seq, code: z.string(), message: z.string(), retryAfter: z.number().optional() }),
 ]);
