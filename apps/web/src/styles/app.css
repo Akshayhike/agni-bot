@@ -2216,9 +2216,9 @@ button:disabled {
 .attachment-image { width: 100%; max-height: 280px; object-fit: contain; border-radius: 8px; }
 .attachment-label { display: flex; flex: 1; min-width: 0; flex-direction: column; font-size: 12px; overflow-wrap: anywhere; }
 .attachment-label span { color: var(--ink-tertiary); }
-.user-bubble-text { white-space: normal; }
+.user-bubble-text { white-space: pre-wrap; }
 .user-bubble .prose { color: inherit; }
-.prose { min-width: 0; overflow-wrap: anywhere; white-space: normal; }
+.prose { min-width: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
 .prose h1, .prose h2, .prose h3 { line-height: 1.35; margin: 1em 0 .5em; }
 .prose h1 { font-size: 1.4em; }
 .prose h2 { font-size: 1.2em; }
