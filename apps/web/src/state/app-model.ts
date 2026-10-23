@@ -134,6 +134,36 @@ function seedAgents(): AgentInfo[] {
   return [{ id: "ea", name: "Agni Bot", color: "#f0b95a", tools: [] }];
 }
 
+/** What the "+" button makes: an agent with a placeholder name, not a form. */
+const NEW_AGENT_NAME = "New bot";
+const NEW_AGENT_ROLE = "unnamed";
+const NEW_AGENT_PROMPT = `You are {name}, an agent {user} just created in the app. You have no job description yet.
+
+Open with one short line, then ask two things: what they want to call you, and what you should do for them.
+When they give you a name, call rename_agent so the app shows it — do not simply agree in prose.
+When they describe your job, call update_agent with a short role and a prompt written as instructions to yourself.
+Until then, answer what is asked, briefly.`;
+
+/** The slug the daemon derives from a name, so both sides land on one id. */
+function agentSlug(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40) || "agent";
+}
+
+/**
+ * The name and id for the next placeholder bot: "New bot", then "New bot 2",
+ * and so on past any the roster already has — including ones renamed since,
+ * whose id still holds the slot.
+ */
+export function nextNewAgent(known: readonly AgentInfo[]): { id: string; name: string } {
+  const takenIDs = new Set(known.map((agent) => agent.id));
+  const takenNames = new Set(known.map((agent) => agent.name.trim().toLowerCase()));
+  let name = NEW_AGENT_NAME;
+  for (let n = 2; takenIDs.has(agentSlug(name)) || takenNames.has(name.toLowerCase()); n += 1) {
+    name = `${NEW_AGENT_NAME} ${n}`;
+  }
+  return { id: agentSlug(name), name };
+}
+
 function notice(kind: NoticeKind, title: string, body: string, threadID: string | null = null): NoticeRow {
   return {
     id: `${kind}_${Math.random().toString(36).slice(2)}`,
@@ -1114,18 +1144,33 @@ export class AppModel {
     this.setPreference("favorites", favorites);
   }
 
-  /** Make a new agent, the way the roster's "+" button does. */
-  createAgent(spec: { name: string; prompt: string; role?: string }): void {
+  /**
+   * Make a new agent, the way the roster's "+" button does.
+   *
+   * Nothing is filled in first: the bot exists the moment you ask for it, as
+   * "New bot", and the conversation opens so it can be named afterwards — by
+   * telling it in chat (`rename_agent`) or in its profile. The id is asked for
+   * here, rather than left to the server's slug, so the header has a real agent
+   * to show while the frame is in flight; the roster then arrives from
+   * `agents.update` and replaces this stand-in with the daemon's row.
+   */
+  startNewAgent(): void {
     const connection = this.connection;
     if (!connection) return;
+    const { id, name } = nextNewAgent([...this.agents, ...this.mentionAgents]);
+    const agent: AgentInfo = { id, name, role: NEW_AGENT_ROLE, tools: [] };
+    this.agents = [...this.agents, agent];
+    this.mentionAgents = [...this.mentionAgents, agent];
     void connection
       .send({
         type: "agent.create",
-        name: spec.name.trim(),
-        prompt: spec.prompt.trim(),
-        role: spec.role?.trim() || undefined,
+        id: agent.id,
+        name,
+        role: NEW_AGENT_ROLE,
+        prompt: NEW_AGENT_PROMPT,
       })
       .catch(() => undefined);
+    this.selectAgent(agent);
   }
 
   /** Scroll the transcript to a message (search results). */

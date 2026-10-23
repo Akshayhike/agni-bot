@@ -2,13 +2,14 @@
  * New chat: pressing the roster's "+" clears the conversation and puts the
  * recipient where the agent's name was.
  *
- * One field searches the agents you can message and offers to make a new one;
- * picking an agent brings the conversation straight back, and "New agent"
- * turns the pane into the three fields that define it. It is a place in the
- * chat column, not a dialog floating over one (blueprint v3 §5).
+ * One field searches the agents you can message, and the first row makes a new
+ * one on the spot — no form to fill in first. The bot that appears is literally
+ * named "New bot"; it is named afterwards, by telling it in chat or from its
+ * profile. It is a place in the chat column, not a dialog floating over one
+ * (blueprint v3 §5).
  */
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { ArrowLeft, Check, Plus, X } from "lucide-react";
+import { Check, Plus, X } from "lucide-react";
 import { useAppModel, useAppSnapshot } from "../state/use-app-model";
 import { SidebarAgentBadge } from "./bits";
 
@@ -18,12 +19,7 @@ export function NewChatView() {
 
   const [query, setQuery] = useState("");
   const [highlight, setHighlight] = useState(0);
-  const [mode, setMode] = useState<"list" | "create">("list");
-  const [name, setName] = useState("");
-  const [role, setRole] = useState("");
-  const [prompt, setPrompt] = useState("");
   const queryRef = useRef<HTMLInputElement>(null);
-  const nameRef = useRef<HTMLInputElement>(null);
 
   /** The roster, pinned agents first — the same order the sidebar keeps. */
   const agents = useMemo(() => {
@@ -52,21 +48,13 @@ export function NewChatView() {
     return newest?.preview;
   };
 
-  // Every open starts clean, so a half-typed agent never reappears later.
+  // Every open starts clean, so a half-typed search never reappears later.
   useEffect(() => {
     setQuery("");
     setHighlight(0);
-    setMode("list");
-    setName("");
-    setRole("");
-    setPrompt("");
     const frame = requestAnimationFrame(() => queryRef.current?.focus());
     return () => cancelAnimationFrame(frame);
   }, []);
-
-  useEffect(() => {
-    if (mode === "create") nameRef.current?.focus();
-  }, [mode]);
 
   useEffect(() => {
     setHighlight(0);
@@ -74,10 +62,11 @@ export function NewChatView() {
 
   const close = () => model.closeNewChat();
 
-  // Row 0 is "New agent"; the roster follows, so arrow keys walk one list.
+  // Row 0 makes a new bot; the roster follows, so arrow keys walk one list.
   const choose = (index: number) => {
     if (index === 0) {
-      setMode("create");
+      // The pane closes itself once the new agent is the conversation.
+      model.startNewAgent();
       return;
     }
     const agent = agents[index - 1];
@@ -105,157 +94,81 @@ export function NewChatView() {
     }
   };
 
-  const canCreate = name.trim().length > 0 && prompt.trim().length > 0;
-  const create = () => {
-    if (!canCreate) return;
-    model.createAgent({ name, prompt, role });
-    close();
-  };
-
   return (
     <div className="new-chat">
       <div className="new-chat-surface">
-        {mode === "list" ? (
-          <>
-            <span className="new-chat-label">To:</span>
-            <input
-              ref={queryRef}
-              className="new-chat-input"
-              value={query}
-              role="combobox"
-              aria-expanded="true"
-              aria-controls="new-chat-results"
-              aria-autocomplete="list"
-              aria-activedescendant={`new-chat-option-${highlight}`}
-              aria-label="Start a chat with"
-              placeholder="Search agents, or start a new one"
-              onChange={(event) => setQuery(event.target.value)}
-              onKeyDown={onQueryKeyDown}
-            />
-          </>
-        ) : (
-          <>
-            <button
-              type="button"
-              className="icon-btn"
-              aria-label="Back to the agent list"
-              onClick={() => setMode("list")}
-            >
-              <ArrowLeft size={15} />
-            </button>
-            <span className="new-chat-title">New agent</span>
-          </>
-        )}
-        {mode === "create" ? <span className="new-chat-spacer" /> : null}
+        <span className="new-chat-label">To:</span>
+        <input
+          ref={queryRef}
+          className="new-chat-input"
+          value={query}
+          role="combobox"
+          aria-expanded="true"
+          aria-controls="new-chat-results"
+          aria-autocomplete="list"
+          aria-activedescendant={`new-chat-option-${highlight}`}
+          aria-label="Start a chat with"
+          placeholder="Search agents, or start a new one"
+          onChange={(event) => setQuery(event.target.value)}
+          onKeyDown={onQueryKeyDown}
+        />
         <button type="button" className="icon-btn" aria-label="Close" onClick={close}>
           <X size={15} />
         </button>
       </div>
 
       <div className="new-chat-list">
-        {mode === "list" ? (
-          <div className="new-chat-rows" id="new-chat-results" role="listbox" aria-label="Start a chat">
-            <button
-              type="button"
-              role="option"
-              id="new-chat-option-0"
-              aria-selected={highlight === 0}
-              className={`new-chat-row${highlight === 0 ? " highlighted" : ""}`}
-              onMouseEnter={() => setHighlight(0)}
-              onClick={() => setMode("create")}
-            >
-              <span className="new-chat-row-icon">
-                <Plus size={15} />
-              </span>
-              <span className="new-chat-row-text">
-                <span className="new-chat-row-title">New agent</span>
-                <span className="new-chat-row-subtitle">Name it, say what it should do</span>
-              </span>
-            </button>
-
-            <div className="new-chat-separator" role="separator" />
-
-            {agents.length === 0 ? (
-              <div className="new-chat-empty">No agents match “{query.trim()}”.</div>
-            ) : (
-              agents.map((agent, index) => {
-                const selected = snapshot.conversation.agentID === agent.id;
-                const subtitle = previewFor(agent.id) ?? agent.role ?? agent.model ?? "Assistant";
-                return (
-                  <button
-                    type="button"
-                    role="option"
-                    id={`new-chat-option-${index + 1}`}
-                    aria-selected={highlight === index + 1}
-                    key={agent.id}
-                    className={`new-chat-row${highlight === index + 1 ? " highlighted" : ""}${
-                      selected ? " selected" : ""
-                    }`}
-                    onMouseEnter={() => setHighlight(index + 1)}
-                    onClick={() => choose(index + 1)}
-                  >
-                    <SidebarAgentBadge agent={agent} size={26} />
-                    <span className="new-chat-row-text">
-                      <span className="new-chat-row-title">{agent.name}</span>
-                      <span className="new-chat-row-subtitle">{subtitle}</span>
-                    </span>
-                    {selected ? <Check size={13} className="new-chat-row-check" /> : null}
-                  </button>
-                );
-              })
-            )}
-          </div>
-        ) : (
-          <form
-            className="new-chat-form"
-            onSubmit={(event) => {
-              event.preventDefault();
-              create();
-            }}
+        <div className="new-chat-rows" id="new-chat-results" role="listbox" aria-label="Start a chat">
+          <button
+            type="button"
+            role="option"
+            id="new-chat-option-0"
+            aria-selected={highlight === 0}
+            className={`new-chat-row${highlight === 0 ? " highlighted" : ""}`}
+            onMouseEnter={() => setHighlight(0)}
+            onClick={() => choose(0)}
           >
-            <label className="field">
-              <span className="field-label">Name</span>
-              <input
-                ref={nameRef}
-                className="text-input"
-                value={name}
-                maxLength={64}
-                placeholder="FRIDAY"
-                onChange={(event) => setName(event.target.value)}
-              />
-            </label>
-            <label className="field">
-              <span className="field-label">Tag</span>
-              <input
-                className="text-input"
-                value={role}
-                maxLength={160}
-                placeholder="inbox manager"
-                onChange={(event) => setRole(event.target.value)}
-              />
-            </label>
-            <label className="field">
-              <span className="field-label">What it should do</span>
-              <textarea
-                className="text-area"
-                rows={3}
-                value={prompt}
-                maxLength={8000}
-                placeholder="You are FRIDAY. You read my inbox, draft replies, and never send without asking."
-                onChange={(event) => setPrompt(event.target.value)}
-              />
-            </label>
-            <div className="dialog-actions">
-              <span className="spacer" />
-              <button type="button" className="btn plain" onClick={close}>
-                Cancel
-              </button>
-              <button type="submit" className="btn primary" disabled={!canCreate}>
-                Create
-              </button>
-            </div>
-          </form>
-        )}
+            <span className="new-chat-row-icon">
+              <Plus size={15} />
+            </span>
+            <span className="new-chat-row-text">
+              <span className="new-chat-row-title">New bot</span>
+              <span className="new-chat-row-subtitle">Starts as “New bot” — name it in chat or its profile</span>
+            </span>
+          </button>
+
+          <div className="new-chat-separator" role="separator" />
+
+          {agents.length === 0 ? (
+            <div className="new-chat-empty">No agents match “{query.trim()}”.</div>
+          ) : (
+            agents.map((agent, index) => {
+              const selected = snapshot.conversation.agentID === agent.id;
+              const subtitle = previewFor(agent.id) ?? agent.role ?? agent.model ?? "Assistant";
+              return (
+                <button
+                  type="button"
+                  role="option"
+                  id={`new-chat-option-${index + 1}`}
+                  aria-selected={highlight === index + 1}
+                  key={agent.id}
+                  className={`new-chat-row${highlight === index + 1 ? " highlighted" : ""}${
+                    selected ? " selected" : ""
+                  }`}
+                  onMouseEnter={() => setHighlight(index + 1)}
+                  onClick={() => choose(index + 1)}
+                >
+                  <SidebarAgentBadge agent={agent} size={26} />
+                  <span className="new-chat-row-text">
+                    <span className="new-chat-row-title">{agent.name}</span>
+                    <span className="new-chat-row-subtitle">{subtitle}</span>
+                  </span>
+                  {selected ? <Check size={13} className="new-chat-row-check" /> : null}
+                </button>
+              );
+            })
+          )}
+        </div>
       </div>
     </div>
   );

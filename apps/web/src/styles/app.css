@@ -1828,12 +1828,6 @@ button:disabled {
   font-size: var(--text-title);
 }
 
-.new-chat-title {
-  flex: 0 0 auto;
-  font-size: var(--text-title);
-  font-weight: 600;
-}
-
 .new-chat-input {
   flex: 1;
   min-width: 0;
@@ -1847,10 +1841,6 @@ button:disabled {
 
 .new-chat-input::placeholder {
   color: var(--ink-tertiary);
-}
-
-.new-chat-spacer {
-  flex: 1;
 }
 
 .new-chat-list {
@@ -1932,13 +1922,6 @@ button:disabled {
   padding: 10px;
   color: var(--ink-tertiary);
   font-size: var(--text-meta);
-}
-
-.new-chat-form {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  width: min(560px, 100%);
 }
 
 /* Search ----------------------------------------------------------------- */

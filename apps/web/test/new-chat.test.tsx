@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { AppModel } from "../src/state/app-model";
+import { AppModel, nextNewAgent } from "../src/state/app-model";
 import { AppModelProvider, useAppSnapshot } from "../src/state/use-app-model";
 import { NewChatView } from "../src/components/NewChatView";
 import { SidebarView } from "../src/components/SidebarView";
@@ -29,7 +29,7 @@ function newChat() {
 it("the To field greets you with the roster, not a modal form", async () => {
   newChat();
   expect(screen.getByRole("listbox", { name: "Start a chat" })).toBeInTheDocument();
-  expect(screen.getByRole("option", { name: /New agent/ })).toBeInTheDocument();
+  expect(screen.getByRole("option", { name: /New bot/ })).toBeInTheDocument();
   expect(screen.getByRole("option", { name: /Agni Bot/ })).toBeInTheDocument();
   const input = screen.getByRole("combobox");
   await waitFor(() => expect(input).toHaveFocus());
@@ -52,16 +52,26 @@ it("arrow keys pick the agent under the cursor and close the field", () => {
   expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
 });
 
-it("making an agent happens in the same top panel", () => {
+it("New bot is made on the spot — there is nothing to fill in", () => {
   const model = newChat();
-  const create = vi.spyOn(model, "createAgent").mockImplementation(() => undefined);
-  fireEvent.click(screen.getByRole("option", { name: /New agent/ }));
-  fireEvent.change(screen.getByLabelText("Name"), { target: { value: "FRIDAY" } });
-  fireEvent.change(screen.getByLabelText("Tag"), { target: { value: "inbox manager" } });
-  fireEvent.change(screen.getByLabelText("What it should do"), { target: { value: "You read my inbox." } });
-  fireEvent.click(screen.getByRole("button", { name: "Create" }));
-  expect(create).toHaveBeenCalledWith({ name: "FRIDAY", role: "inbox manager", prompt: "You read my inbox." });
+  const start = vi.spyOn(model, "startNewAgent").mockImplementation(() => undefined);
+  fireEvent.click(screen.getByRole("option", { name: /New bot/ }));
+  expect(start).toHaveBeenCalledTimes(1);
+  // The old create form is gone: naming happens in chat or the profile.
   expect(screen.queryByLabelText("Name")).not.toBeInTheDocument();
+  expect(screen.queryByLabelText("What it should do")).not.toBeInTheDocument();
+});
+
+it("numbers the placeholder bots so a new one never collides", () => {
+  expect(nextNewAgent([])).toEqual({ id: "new_bot", name: "New bot" });
+  // Renamed bots keep their id, so the second one has to move past it.
+  expect(nextNewAgent([{ id: "new_bot", name: "Bobby" }])).toEqual({ id: "new_bot_2", name: "New bot 2" });
+  expect(
+    nextNewAgent([
+      { id: "new_bot", name: "New bot" },
+      { id: "vb", name: "New bot 2" },
+    ]),
+  ).toEqual({ id: "new_bot_3", name: "New bot 3" });
 });
 
 it("the roster's + opens the same field", () => {
@@ -73,10 +83,10 @@ it("the roster's + opens the same field", () => {
   expect(screen.queryByRole("listbox", { name: "Start a chat" })).not.toBeInTheDocument();
 });
 
-it("query narrows the roster and keeps New agent reachable", () => {
+it("query narrows the roster and keeps New bot reachable", () => {
   newChat();
   fireEvent.change(screen.getByRole("combobox"), { target: { value: "zzz" } });
-  expect(screen.getByRole("option", { name: /New agent/ })).toBeInTheDocument();
+  expect(screen.getByRole("option", { name: /New bot/ })).toBeInTheDocument();
   expect(screen.queryByRole("option", { name: /Agni Bot/ })).not.toBeInTheDocument();
   expect(screen.getByText(/No agents match/)).toBeInTheDocument();
 });
