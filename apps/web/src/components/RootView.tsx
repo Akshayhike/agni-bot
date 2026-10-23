@@ -10,6 +10,7 @@ import { AgentSwitcherView } from "./AgentSwitcherView";
 import { AgentProfileView } from "./AgentProfileView";
 import { PairingView } from "./PairingView";
 import { SettingsView } from "./SettingsView";
+import { NewChatView } from "./NewChatView";
 import { SidebarView } from "./SidebarView";
 import { ThreadHeader } from "./ThreadHeader";
 import { ThreadView } from "./ThreadView";
@@ -51,12 +52,20 @@ export function RootView() {
           model.closeAgentSwitcher();
         } else if (snapshot.isAgentProfilePresented) {
           model.closeAgentProfile();
+        } else if (snapshot.isNewChatPresented) {
+          model.closeNewChat();
         }
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [model, snapshot.isAgentSwitcherPresented, snapshot.isSettingsPresented, snapshot.isAgentProfilePresented]);
+  }, [
+    model,
+    snapshot.isAgentSwitcherPresented,
+    snapshot.isSettingsPresented,
+    snapshot.isAgentProfilePresented,
+    snapshot.isNewChatPresented,
+  ]);
 
   return (
     <div className="app" style={themeVariables(themeFor(model.agent?.color)) as CSSProperties}>
@@ -79,8 +88,14 @@ function ChatView() {
         <div className="drawer-backdrop" onClick={() => model.closeSidebar()} />
       ) : null}
       <main className="chat-main">
-        <ThreadHeader />
-        <ThreadView />
+        {snapshot.isNewChatPresented ? (
+          <NewChatView />
+        ) : (
+          <>
+            <ThreadHeader />
+            <ThreadView />
+          </>
+        )}
       </main>
       {snapshot.isAgentProfilePresented ? <AgentProfileView /> : null}
       {snapshot.isInspectorPresented ? <InspectorView /> : null}

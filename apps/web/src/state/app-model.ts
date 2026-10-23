@@ -100,6 +100,8 @@ export interface AppSnapshot {
   isInspectorPresented: boolean;
   isSettingsPresented: boolean;
   isAgentSwitcherPresented: boolean;
+  /** The composer's "To:" list: pick who the chat is with, or make a new agent. */
+  isNewChatPresented: boolean;
   /** Phone layout: the agent roster slides in over the conversation. */
   isSidebarPresented: boolean;
   /** The agent's own profile panel, opened from the header pill. */
@@ -194,6 +196,7 @@ export class AppModel {
   private isInspectorPresented = false;
   private isSettingsPresented = false;
   private isAgentSwitcherPresented = false;
+  private isNewChatPresented = false;
   private isSidebarPresented = false;
   private isAgentProfilePresented = false;
   private preferences: Preferences = loadPreferences();
@@ -282,6 +285,7 @@ export class AppModel {
       isInspectorPresented: this.isInspectorPresented,
       isSettingsPresented: this.isSettingsPresented,
       isAgentSwitcherPresented: this.isAgentSwitcherPresented,
+      isNewChatPresented: this.isNewChatPresented,
       isSidebarPresented: this.isSidebarPresented,
       isAgentProfilePresented: this.isAgentProfilePresented,
       preferences: this.preferences,
@@ -808,9 +812,10 @@ export class AppModel {
   }
 
   selectAgent(agent: AgentInfo): void {
-    // On a phone the roster is a drawer over the conversation; picking an
-    // agent means going back to the conversation.
+    // Picking an agent from anywhere — the roster, the switcher, the new-chat
+    // field — means the conversation is the surface again.
     this.closeSidebar();
+    this.isNewChatPresented = false;
     if (agent.id === this.conversation.agentID && this.conversation.conversationID !== null) {
       this.reloadConversation();
       return;
@@ -1041,12 +1046,30 @@ export class AppModel {
   }
 
   openAgentSwitcher(): void {
+    this.isNewChatPresented = false;
     this.isAgentSwitcherPresented = true;
     this.publish();
   }
 
   closeAgentSwitcher(): void {
     this.isAgentSwitcherPresented = false;
+    this.publish();
+  }
+
+  /**
+   * The "To:" line at the top of the chat, opened by the roster's "+": one
+   * field that both picks a conversation and makes a new agent.
+   */
+  openNewChat(): void {
+    this.isAgentSwitcherPresented = false;
+    this.isSidebarPresented = false;
+    this.isNewChatPresented = true;
+    this.publish();
+  }
+
+  closeNewChat(): void {
+    if (!this.isNewChatPresented) return;
+    this.isNewChatPresented = false;
     this.publish();
   }
 
